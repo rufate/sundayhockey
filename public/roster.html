@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Roster - Phan's Sunday Hockey</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text: #ffffff;
+            --accent: #ff6b00;
+            --white-team: #ffffff;
+            --dark-team: #666666;
+            --success: #4CAF50;
+            --warning: #ff9800;
+        }
+
+        * { 
+            box-sizing: border-box; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid #444;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--accent);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        h2 {
+            text-align: center;
+            font-size: 1.1rem;
+            color: #888;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+
+        .game-info {
+            text-align: center;
+            color: #aaa;
+            margin-bottom: 20px;
+            font-size: 1rem;
+        }
+
+        .game-date {
+            font-weight: bold;
+            color: #fff;
+            font-size: 1.2rem;
+            margin-bottom: 5px;
+        }
+
+        .pending-notice {
+            background: linear-gradient(135deg, #3a2a1a, #4d3d2d);
+            border: 2px solid #ff9800;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .pending-notice h3 {
+            color: #ff9800;
+            margin: 0 0 10px 0;
+            font-size: 1.5rem;
+        }
+
+        .pending-notice p {
+            color: #ccc;
+            margin: 0;
+            font-size: 1.1rem;
+        }
+
+        .check-back-message {
+            background: linear-gradient(135deg, #1a3a1a, #2d4d2d);
+            border: 2px solid var(--success);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+            color: var(--success);
+        }
+
+        .check-back-message strong {
+            color: #fff;
+            font-size: 1.2rem;
+        }
+
+        .teams-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .team-box {
+            background: linear-gradient(135deg, #2a2a2a, #333);
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid;
+        }
+
+        .team-white {
+            border-color: var(--white-team);
+        }
+
+        .team-dark {
+            border-color: var(--dark-team);
+        }
+
+        .team-header {
+            text-align: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #444;
+        }
+
+        .team-name {
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .team-white .team-name {
+            color: var(--white-team);
+            text-shadow: 0 0 10px rgba(255,255,255,0.3);
+        }
+
+        .team-dark .team-name {
+            color: var(--dark-team);
+        }
+
+        .team-rating {
+            font-size: 0.9rem;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .player-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .player-item {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 5px;
+            border-left: 3px solid transparent;
+        }
+
+        .player-item.goalie {
+            border-left-color: #ff6b00;
+            background: rgba(255, 107, 0, 0.1);
+        }
+
+        .player-name {
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .goalie-badge {
+            background: #ff6b00;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #444;
+        }
+
+        .back-link a {
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 1.1rem;
+        }
+
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+
+        .refresh-info {
+            text-align: center;
+            color: #666;
+            font-size: 0.85rem;
+            margin-top: 15px;
+        }
+
+        @media (max-width: 600px) {
+            .container { padding: 20px; }
+            .teams-container { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1 id="pageTitle">Phan's Hockey</h1>
+        <h2>Team Roster</h2>
+        
+        <div class="game-info" id="gameInfo">
+            <div class="game-date" id="gameDate">Loading...</div>
+            <div id="gameLocationTime">Loading...</div>
+        </div>
+
+        <div id="contentArea">
+            <div class="pending-notice" id="pendingNotice">
+                <h3>⏳ Roster Not Yet Released</h3>
+                <p>Teams will be posted here after admin releases the roster</p>
+            </div>
+
+            <div class="check-back-message" id="checkBackMessage" style="display:none;">
+                <strong id="checkBackStrong">📅 Check Back</strong><br>
+                <span id="checkBackDetail">Team rosters are released every game day at 5:00 PM ET</span>
+            </div>
+
+            <div id="teamsDisplay" style="display:none;">
+                <div class="teams-container">
+                    <div class="team-box team-white">
+                        <div class="team-header">
+                            <div class="team-name">Team White</div>
+                            <div class="team-rating"><span id="whiteCount">0</span> players</div>
+                        </div>
+                        <ul class="player-list" id="whiteTeamList"></ul>
+                    </div>
+
+                    <div class="team-box team-dark">
+                        <div class="team-header">
+                            <div class="team-name">Team Dark</div>
+                            <div class="team-rating"><span id="darkCount">0</span> players</div>
+                        </div>
+                        <ul class="player-list" id="darkTeamList"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="back-link">
+            <a href="/">← Back to Signup</a>
+        </div>
+
+        <div class="refresh-info">
+            Auto-refreshes every 60 seconds
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+
+        let scheduleInfo = null;
+
+        async function loadScheduleInfo() {
+            try {
+                const res = await fetch(`${API_URL}/api/status`);
+                const status = await res.json();
+                scheduleInfo = status;
+
+                // Page title
+                const titleEl = document.getElementById('pageTitle');
+                if (titleEl && status.customTitle) titleEl.textContent = status.customTitle;
+
+                // "Check back" message
+                const strongEl = document.getElementById('checkBackStrong');
+                const detailEl = document.getElementById('checkBackDetail');
+
+                if (status.rosterReleaseLine) {
+                    if (strongEl) strongEl.textContent = status.rosterReleaseHeadline || '📅 Check Back';
+                    if (detailEl) detailEl.textContent = status.rosterReleaseLine;
+                }
+            } catch (e) {
+                // Non-fatal: keep defaults
+                console.warn('Could not load schedule info', e);
+            }
+        }
+
+        loadScheduleInfo();
+
+        async function loadRoster() {
+            try {
+                const res = await fetch(`${API_URL}/api/roster`);
+                const data = await res.json();
+
+                if (data.location && data.time) {
+                    document.getElementById('gameDate').innerText = data.formattedDate || data.date;
+                    document.getElementById('gameLocationTime').innerText = `${data.location} | ${data.time}`;
+                }
+
+                if (!data.released) {
+                    document.getElementById('pendingNotice').style.display = 'block';
+                    document.getElementById('checkBackMessage').style.display = 'block';
+                    document.getElementById('teamsDisplay').style.display = 'none';
+                    return;
+                }
+
+                document.getElementById('pendingNotice').style.display = 'none';
+                document.getElementById('checkBackMessage').style.display = 'none';
+                document.getElementById('teamsDisplay').style.display = 'block';
+
+                document.getElementById('whiteCount').innerText = data.whiteTeam.length;
+                document.getElementById('darkCount').innerText = data.darkTeam.length;
+
+                // White Team
+                const whiteList = document.getElementById('whiteTeamList');
+                whiteList.innerHTML = '';
+                data.whiteTeam.forEach(player => {
+                    const li = document.createElement('li');
+                    li.className = 'player-item' + (player.isGoalie ? ' goalie' : '');
+                    
+                    const goalieBadge = player.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
+                    
+                    li.innerHTML = `
+                        <span class="player-name">${player.firstName} ${player.lastName} ${goalieBadge}</span>
+                    `;
+                    whiteList.appendChild(li);
+                });
+
+                // Dark Team
+                const darkList = document.getElementById('darkTeamList');
+                darkList.innerHTML = '';
+                data.darkTeam.forEach(player => {
+                    const li = document.createElement('li');
+                    li.className = 'player-item' + (player.isGoalie ? ' goalie' : '');
+                    
+                    const goalieBadge = player.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
+                    
+                    li.innerHTML = `
+                        <span class="player-name">${player.firstName} ${player.lastName} ${goalieBadge}</span>
+                    `;
+                    darkList.appendChild(li);
+                });
+
+            } catch (err) {
+                console.error("Error loading roster", err);
+            }
+        }
+
+        loadRoster();
+        setInterval(loadRoster, 60000);
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,3323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Phan's Hockey</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text: #ffffff;
+            --accent: #ff6b00;
+            --success: #4CAF50;
+            --danger: #ff4444;
+            --warning: #ff9800;
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid #444;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        /* MAINTENANCE BULLETIN - FLASHING */
+        .maintenance-bulletin {
+            display: none;
+            background: linear-gradient(90deg, #ff4444, #ff6b00, #ff4444);
+            background-size: 200% 100%;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.3rem;
+            animation: flash 1s infinite, slideDown 0.5s ease;
+            border: 3px solid #ff4444;
+            box-shadow: 0 0 30px rgba(255, 68, 68, 0.6);
+        }
+
+        .maintenance-bulletin.active {
+            display: block;
+        }
+
+        @keyframes flash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .maintenance-bulletin::before {
+            content: "⚠️ ";
+            font-size: 1.5rem;
+        }
+
+        .maintenance-bulletin::after {
+            content: " ⚠️";
+            font-size: 1.5rem;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            background: #3d3d3d;
+            border: 1px solid #555;
+            color: white;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+
+        button {
+            padding: 12px 20px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button:hover { background: #ff8533; }
+
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .admin-panel { display: none; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #444;
+        }
+
+        th { color: var(--accent); }
+        
+        .goalie-badge {
+            background: #ff6b00;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            margin-left: 8px;
+        }
+        
+        .protected-badge {
+            background: #4CAF50;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            margin-left: 8px;
+        }
+        
+        .paid-input {
+            width: 70px;
+            padding: 5px;
+            background: #3d3d3d;
+            border: 1px solid #555;
+            color: white;
+            border-radius: 3px;
+            text-align: right;
+            font-size: 0.9rem;
+        }
+
+        .paid-input:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+
+        .total-paid-display {
+            color: var(--success);
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        
+        .remove-btn {
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            width: auto;
+            background: var(--danger);
+            margin: 0;
+        }
+
+        .remove-btn:hover { background: #ff6666; }
+
+        .promote-btn {
+            padding: 5px 10px;
+            font-size: 0.8rem;
+            width: auto;
+            background: var(--success);
+            margin: 0;
+            margin-right: 5px;
+        }
+
+        .promote-btn:hover {
+            background: #45a049;
+        }
+
+        .control-box {
+            background: linear-gradient(135deg, #2a2a2a, #333);
+            border: 2px solid var(--accent);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .control-box h3 {
+            margin: 0 0 15px 0;
+            color: var(--accent);
+            font-size: 1.1rem;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .control-input {
+            width: 100px;
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin: 0;
+        }
+
+        .control-btn {
+            width: auto;
+            padding: 10px 15px;
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        .status-display {
+            margin-left: auto;
+            font-size: 1rem;
+            color: #aaa;
+        }
+
+        .status-display span {
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        .status-open {
+            color: var(--success) !important;
+        }
+
+        .status-locked {
+            color: var(--danger) !important;
+        }
+
+        .toggle-btn {
+            min-width: 120px;
+        }
+
+        .toggle-btn.locked-state {
+            background: var(--danger);
+        }
+
+        .toggle-btn.open-state {
+            background: var(--success);
+        }
+
+        .schedule-info {
+            background: #1a2a3a;
+            border-left: 4px solid var(--accent);
+            padding: 10px 15px;
+            margin-top: 10px;
+            font-size: 0.85rem;
+            color: #aaa;
+        }
+
+        .manual-override-warning {
+            background: #3a2a1a;
+            border-left: 4px solid var(--warning);
+            padding: 10px 15px;
+            margin-top: 10px;
+            font-size: 0.85rem;
+            color: #ff9800;
+        }
+
+        .manual-override-warning.active-lock {
+            background: #3a1a1a;
+            border-left-color: #ff4444;
+            color: #ff4444;
+        }
+
+        .restore-btn {
+            background: #666;
+            font-size: 0.8rem;
+            padding: 8px 12px;
+        }
+
+        .details-box {
+            background: linear-gradient(135deg, #1a2a3a, #2a3a4a);
+            border: 2px solid #4a90e2;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .details-box h3 {
+            margin: 0 0 15px 0;
+            color: #4a90e2;
+            font-size: 1.1rem;
+        }
+
+        .add-player-form {
+            background: linear-gradient(135deg, #1a3a1a, #2d4d2d);
+            border: 2px solid var(--success);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .add-player-form h3 {
+            margin: 0 0 15px 0;
+            color: var(--success);
+            font-size: 1.1rem;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .add-btn {
+            background: var(--success);
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .section-header {
+            color: var(--accent);
+            margin: 30px 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #444;
+        }
+
+        .waitlist-section {
+            background: linear-gradient(135deg, #3a1a1a, #2d1a1a);
+            border: 2px solid #ff4444;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .waitlist-section h3 {
+            margin: 0 0 15px 0;
+            color: #ff6b00;
+            font-size: 1.1rem;
+        }
+
+        .logout-btn {
+            background: #666;
+            width: auto;
+            padding: 8px 15px;
+            font-size: 0.9rem;
+            float: right;
+        }
+
+        .roster-status {
+            background: linear-gradient(135deg, #1a3a1a, #2d4d2d);
+            border: 2px solid var(--success);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .roster-status h3 {
+            margin: 0 0 15px 0;
+            color: var(--success);
+            font-size: 1.1rem;
+        }
+
+        .roster-released {
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        .roster-pending {
+            color: var(--warning);
+            font-weight: bold;
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .checkbox-container input {
+            width: auto;
+            margin: 0;
+        }
+
+        .code-display {
+            background: #1a1a1a;
+            padding: 10px 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 1.2rem;
+            color: var(--accent);
+            border: 1px solid #444;
+        }
+
+        .count-box {
+            display: inline-block;
+            margin-right: 15px;
+        }
+
+        .count-label {
+            font-size: 0.85rem;
+            color: #888;
+        }
+
+        .count-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        .payment-summary-box {
+            background: linear-gradient(135deg, #1a3a1a, #2d4d2d);
+            border: 2px solid #4CAF50;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .payment-summary-box h3 {
+            margin: 0 0 15px 0;
+            color: #4CAF50;
+            font-size: 1.1rem;
+        }
+
+        .payment-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .payment-stat {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .payment-stat-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .payment-stat-value.unpaid {
+            color: #ff4444;
+        }
+
+        .payment-stat-label {
+            font-size: 0.85rem;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .export-btn {
+            background: #4a90e2;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .export-btn:hover {
+            background: #5aa0f2;
+        }
+
+        .security-notice {
+            color: #888;
+            font-size: 0.8rem;
+            text-align: center;
+            margin-top: 10px;
+            font-style: italic;
+        }
+
+        /* Goalies Section */
+        .goalies-section {
+            background: linear-gradient(135deg, #1a3a3a, #2d4d4d);
+            border: 2px solid #4CAF50;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .goalies-section h3 {
+            margin: 0 0 15px 0;
+            color: #4CAF50;
+            font-size: 1.1rem;
+        }
+
+        .goalie-list {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .goalie-item {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid #4CAF50;
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .goalie-checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .goalie-checkbox-wrapper input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background: white;
+            border: 2px solid #4CAF50;
+            border-radius: 4px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .goalie-checkbox-wrapper input[type="checkbox"]:checked {
+            background: #4CAF50;
+        }
+
+        .goalie-checkbox-wrapper input[type="checkbox"]:checked::after {
+            content: '✓';
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .goalie-checkbox-wrapper label {
+            cursor: pointer;
+            color: #4CAF50;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
+        .goalie-rating {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: 30px;
+        }
+
+        .goalie-rating label {
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+
+        .goalie-rating input {
+            width: 60px;
+            margin: 0;
+        }
+
+        .add-goalies-btn {
+            width: 100%;
+            margin-top: 15px;
+            background: #4CAF50;
+        }
+
+        .add-goalies-btn:hover {
+            background: #45a049;
+        }
+
+        /* Backup Goalies Section */
+        .backup-goalies-section {
+            background: linear-gradient(135deg, #3a2a1a, #4d3d2d);
+            border: 2px solid #ff9800;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .backup-goalies-section h3 {
+            margin: 0 0 15px 0;
+            color: #ff9800;
+            font-size: 1.1rem;
+        }
+
+        .backup-goalie-select {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .backup-goalie-select select {
+            flex: 1;
+            margin: 0;
+        }
+
+        .add-backup-btn {
+            background: #ff9800;
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        .add-backup-btn:hover {
+            background: #ffb347;
+        }
+
+        /* Add Goalie On The Fly */
+        .add-goalie-fly-section {
+            background: linear-gradient(135deg, #1a1a3a, #2d2d4d);
+            border: 2px solid #9c27b0;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .add-goalie-fly-section h3 {
+            margin: 0 0 15px 0;
+            color: #9c27b0;
+            font-size: 1.1rem;
+        }
+
+        .fly-goalie-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .fly-goalie-form input {
+            margin: 0;
+        }
+
+        .add-fly-btn {
+            background: #9c27b0;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .add-fly-btn:hover {
+            background: #ab47bc;
+        }
+
+        /* Title Editor Section */
+        .title-editor-section {
+            background: linear-gradient(135deg, #2a1a3a, #3d2d4d);
+            border: 2px solid #e91e63;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .title-editor-section h3 {
+            margin: 0 0 15px 0;
+            color: #e91e63;
+            font-size: 1.1rem;
+        }
+
+        .title-preview {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 1.3rem;
+            color: var(--accent);
+            margin-bottom: 15px;
+            border: 1px solid #444;
+        }
+
+        .title-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .title-control-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .title-control-group label {
+            color: #aaa;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+
+        .update-title-btn {
+            background: #e91e63;
+            width: 100%;
+            margin-top: 15px;
+        }
+
+        .update-title-btn:hover {
+            background: #f06292;
+        }
+
+        /* Maintenance Control */
+        .maintenance-control {
+            background: linear-gradient(135deg, #3a1a1a, #4d2d2d);
+            border: 2px solid #ff4444;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .maintenance-control h3 {
+            margin: 0 0 15px 0;
+            color: #ff4444;
+            font-size: 1.1rem;
+        }
+
+        .maintenance-toggle {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+        }
+
+        .maintenance-checkbox {
+            width: 30px !important;
+            height: 30px !important;
+            cursor: pointer;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background: #333;
+            border: 3px solid #ff4444;
+            border-radius: 5px;
+            position: relative;
+        }
+
+        .maintenance-checkbox:checked {
+            background: #ff4444;
+        }
+
+        .maintenance-checkbox:checked::after {
+            content: '✓';
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .maintenance-label {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #ff4444;
+            cursor: pointer;
+        }
+
+        .maintenance-status {
+            margin-left: auto;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .maintenance-status.active {
+            background: #ff4444;
+            color: white;
+            animation: pulse 1s infinite;
+        }
+
+        .maintenance-status.inactive {
+            background: #4CAF50;
+            color: white;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* Arena Selector */
+        .arena-section {
+            background: linear-gradient(135deg, #1a3a2a, #2d4d3d);
+            border: 2px solid #00bcd4;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .arena-section h3 {
+            margin: 0 0 15px 0;
+            color: #00bcd4;
+            font-size: 1.1rem;
+        }
+
+        .arena-select-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .arena-select-group select {
+            flex: 1;
+            margin: 0;
+        }
+
+        .update-arena-btn {
+            background: #00bcd4;
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        .update-arena-btn:hover {
+            background: #26c6da;
+        }
+
+        .current-arena-display {
+            margin-top: 10px;
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+
+        .current-arena-display span {
+            color: #00bcd4;
+            font-weight: bold;
+        }
+
+        /* Released Roster Preview */
+        .released-roster-preview {
+            background: linear-gradient(135deg, #1a3a1a, #2d4d2d);
+            border: 3px solid var(--success);
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .released-roster-preview.active {
+            display: block;
+            animation: slideDown 0.5s ease;
+        }
+
+        .preview-header {
+            text-align: center;
+            color: var(--success);
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--success);
+        }
+
+        .preview-teams {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .preview-team {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 15px;
+            border: 2px solid;
+        }
+
+        .preview-team.white { border-color: #ffffff; }
+        .preview-team.dark { border-color: #666666; }
+
+        .preview-team h4 {
+            margin: 0 0 10px 0;
+            text-align: center;
+            font-size: 1.2rem;
+        }
+
+        .preview-team.white h4 { color: #ffffff; }
+        .preview-team.dark h4 { color: #888888; }
+
+        .preview-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        .preview-list li {
+            padding: 5px;
+            border-bottom: 1px solid #444;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .success-message {
+            background: var(--success);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 15px;
+            display: none;
+            font-weight: bold;
+        }
+
+        .success-message.active {
+            display: block;
+            animation: pulse 2s infinite;
+        }
+
+        .error-message {
+            background: var(--danger);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 15px;
+            display: none;
+            font-weight: bold;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        /* History Management Section */
+        .history-delete-box {
+            background: linear-gradient(135deg, #3a1a1a, #4d2d2d);
+            border: 2px solid #ff4444;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .history-delete-box h3 {
+            margin: 0 0 15px 0;
+            color: #ff4444;
+            font-size: 1.1rem;
+        }
+
+        .history-select {
+            background: #3d3d3d;
+            border: 1px solid #555;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 1rem;
+            flex: 1;
+        }
+
+        .delete-btn {
+            background: #ff4444;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .delete-btn:hover {
+            background: #ff6666;
+        }
+
+        .delete-result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            display: none;
+        }
+
+        .delete-result.success {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid #4CAF50;
+            color: #4CAF50;
+            display: block;
+        }
+
+        .delete-result.error {
+            background: rgba(255, 68, 68, 0.2);
+            border: 1px solid #ff4444;
+            color: #ff4444;
+            display: block;
+        }
+
+        /* Remove notification */
+        .remove-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--danger);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+            max-width: 300px;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .remove-notification.success {
+            background: var(--success);
+        }
+
+        @media (max-width: 600px) {
+            .container { padding: 20px; }
+            th, td { padding: 8px; font-size: 0.8rem; }
+            .control-row { flex-direction: column; align-items: stretch; }
+            .form-row { grid-template-columns: 1fr; }
+            .preview-teams { grid-template-columns: 1fr; }
+            .goalie-list { grid-template-columns: 1fr; }
+            .paid-input { width: 60px; }
+            .payment-stats { grid-template-columns: 1fr; }
+            .fly-goalie-form { grid-template-columns: 1fr; }
+            .title-controls { grid-template-columns: 1fr; }
+            .title-editor-section, .backup-goalies-section, .add-goalie-fly-section { padding: 15px; }
+        }
+    
+        .schedule-editor { margin-top: 12px; padding-top: 12px; border-top: 1px solid #444; }
+        .schedule-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (max-width: 900px) { .schedule-grid { grid-template-columns: 1fr; } }
+        .schedule-card { background: #262626; border: 1px solid #3a3a3a; border-radius: 10px; padding: 12px; }
+        .schedule-title { font-weight: 700; margin-bottom: 8px; }
+        .schedule-label { display:flex; gap:8px; align-items:center; color:#ddd; margin-bottom:10px; }
+        .schedule-row { display:flex; gap:10px; flex-wrap:wrap; }
+        .schedule-field { flex: 1; min-width: 220px; }
+        .schedule-label2 { font-size: 0.85rem; color:#bbb; margin-bottom: 4px; }
+        .schedule-hint { margin-top:8px; font-size:0.8rem; color:#aaa; }
+
+    
+/* Hide Game Details section */
+.details-box { display:none !important; }
+
+
+
+        /* Enhanced date + analog time picker */
+        .enhanced-datetime-hidden {
+            position: absolute !important;
+            left: -9999px !important;
+            width: 1px !important;
+            height: 1px !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+
+        .enhanced-datetime {
+            display: grid;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .enhanced-datetime-row {
+            display: grid;
+            grid-template-columns: minmax(160px, 1fr) minmax(150px, 170px);
+            gap: 10px;
+            align-items: center;
+        }
+
+        .enhanced-datetime .date-input,
+        .enhanced-datetime .time-trigger {
+            width: 100%;
+            margin: 0;
+        }
+
+        .enhanced-datetime .time-trigger {
+            background: #3d3d3d;
+            border: 1px solid #555;
+            color: white;
+            border-radius: 5px;
+            padding: 12px;
+            font-size: 1rem;
+            text-align: center;
+        }
+
+        .enhanced-datetime .time-trigger:hover {
+            background: #4a4a4a;
+        }
+
+        .enhanced-datetime .picker-summary {
+            color: #aaa;
+            font-size: 0.85rem;
+            min-height: 1.2em;
+        }
+
+        .clock-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 20px;
+        }
+
+        .clock-modal.active { display: flex; }
+
+        .clock-modal-card {
+            width: min(360px, 100%);
+            background: linear-gradient(135deg, #222, #2f2f2f);
+            border: 2px solid var(--accent);
+            border-radius: 16px;
+            padding: 18px;
+            box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+        }
+
+        .clock-modal-title {
+            color: var(--accent);
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .clock-readout {
+            text-align: center;
+            font-size: 1.6rem;
+            font-weight: bold;
+            margin-bottom: 12px;
+            color: white;
+        }
+
+        .clock-mode-row,
+        .clock-ampm-row,
+        .clock-action-row {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .clock-pill {
+            background: #3d3d3d;
+            border: 1px solid #555;
+            color: white;
+            border-radius: 999px;
+            padding: 8px 14px;
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+
+        .clock-pill.active {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .analog-clock {
+            position: relative;
+            width: 250px;
+            height: 250px;
+            border-radius: 50%;
+            margin: 8px auto 14px;
+            background: radial-gradient(circle at center, #444 0 12%, #262626 12% 100%);
+            border: 3px solid #666;
+            user-select: none;
+            touch-action: none;
+        }
+
+        .clock-center-dot {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--accent);
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 4;
+        }
+
+        .clock-hand {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 4px;
+            height: 82px;
+            background: var(--accent);
+            transform-origin: 50% calc(100% - 10px);
+            border-radius: 999px;
+            margin-left: -2px;
+            margin-top: -72px;
+            z-index: 3;
+        }
+
+        .clock-number {
+            position: absolute;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.95rem;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+        }
+
+        .clock-number.active {
+            background: var(--accent);
+            font-weight: bold;
+        }
+
+        .clock-help {
+            text-align: center;
+            color: #aaa;
+            font-size: 0.82rem;
+            margin-bottom: 8px;
+        }
+
+        @media (max-width: 640px) {
+            .enhanced-datetime-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+</style>
+</head>
+<body>
+
+    <!-- MAINTENANCE BULLETIN - Shows when activated -->
+    <div class="maintenance-bulletin" id="maintenanceBulletin">
+        Portal is down for maintenance, check back later
+    </div>
+
+    <div class="container" id="loginBox">
+        <h1>Admin Portal</h1>
+        <p style="text-align:center; color:#888;">Phan's Hockey</p>
+        <input type="password" id="adminPass" placeholder="Enter Admin Password">
+        <button onclick="login()" style="width:100%;">Access Dashboard</button>
+        <p id="errorMsg" style="color:#ff4444; text-align:center; display:none;">Wrong Password</p>
+    </div>
+
+    <div class="container admin-panel" id="adminPanel">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h1 style="margin:0;">Admin Dashboard</h1>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <div class="success-message" id="releaseSuccess">
+            ✅ Roster Released Successfully! Players can now see the teams.
+        </div>
+
+        <div class="error-message" id="releaseError">
+            ❌ Error releasing roster. Check console for details.
+        </div>
+
+        <!-- MAINTENANCE MODE CONTROL -->
+        <div class="maintenance-control">
+            <h3>🔧 Maintenance Mode Control</h3>
+            <div class="maintenance-toggle">
+                <input type="checkbox" id="maintenanceCheckbox" class="maintenance-checkbox" onchange="toggleMaintenance()">
+                <label for="maintenanceCheckbox" class="maintenance-label">Enable Maintenance Mode</label>
+                <div class="maintenance-status inactive" id="maintenanceStatus">PORTAL ACTIVE</div>
+            </div>
+            <p style="color:#888; font-size:0.85rem; margin-top:10px;">
+                When enabled, a flashing alert will appear on all pages warning users that the portal is down for maintenance.
+            </p>
+        </div>
+
+        <!-- TITLE EDITOR -->
+        <div class="title-editor-section">
+            <h3>🏷️ Title Editor</h3>
+            <div class="title-preview" id="titlePreview">Phan's Friday Hockey</div>
+            <div class="title-controls">
+                <div class="title-control-group">
+                    <label for="titleDayTime">Select day and time:</label>
+                    <input type="datetime-local" id="titleDayTime" class="control-input" onchange="updateTitlePreview()">
+                    <div style="color:#888; font-size:0.85rem; margin-top:6px;">
+                        Pick any date/time — it will be interpreted as <strong>weekday + time (ET)</strong>.
+                    </div>
+                </div>
+                <div class="title-control-group">
+                    <label>Preview:</label>
+                    <div id="dynamicTitlePreview" style="color:#aaa; font-size:1rem; padding:10px 0;">
+                        Phan's Friday Hockey
+                    </div>
+                </div>
+            </div>
+            <button class="update-title-btn" onclick="updateTitle()">Update Title & Time</button>
+        </div>
+
+        <!-- ARENA SELECTOR -->
+        <div class="arena-section">
+            <h3>🏟️ Arena Selection</h3>
+            <div class="arena-select-group">
+                <select id="arenaSelect">
+                    <option value="WFCU Bowl">WFCU Bowl</option>
+                    <option value="WFCU Greenshield">WFCU Greenshield</option>
+                    <option value="WFCU Grenon">WFCU Grenon</option>
+                    <option value="WFCU AM800">WFCU AM800</option>
+                    <option value="Capri Recreation Complex">Capri Recreation Complex</option>
+                    <option value="Vollmer Lasalle Arena">Vollmer Lasalle Arena</option>
+                    <option value="Atlas Tube Lakeshore">Atlas Tube Lakeshore</option>
+                </select>
+                <button class="update-arena-btn" onclick="updateArena()">Update Arena</button>
+            </div>
+            <div class="current-arena-display">
+                Current Arena: <span id="currentArenaDisplay">--</span>
+            </div>
+        </div>
+
+        <!-- GAME DETAILS -->
+        <div class="details-box">
+            <h3>📍 Game Details</h3>
+            <div class="control-row">
+                <input type="text" id="locationInput" placeholder="Location" style="flex:1;" readonly>
+                <input type="text" id="timeInput" placeholder="Time" style="flex:1;" readonly>
+            </div>
+            <div class="control-row" style="margin-top:10px;">
+                <input type="date" id="dateInput" style="flex:1;">
+                <button class="control-btn" onclick="updateDetails()">Update Date Only</button>
+            </div>
+            <div class="status-display" style="margin-top:10px; margin-left:0;">
+                <span id="currentDateDisplay">--</span> | <span id="currentLocation">--</span> | <span id="currentTime">--</span>
+            </div>
+        </div>
+
+        <div class="control-box">
+            <h3>🔧 Player Spots</h3>
+            <div class="control-row">
+                <input type="number" id="playerSpotInput" class="control-input" min="0" max="30" value="20">
+                <button class="control-btn" onclick="updatePlayerSpots()">Update</button>
+                <div class="status-display">
+                    <div class="count-box">
+                        <div class="count-label">Player Spots</div>
+                        <div class="count-value" id="currentPlayerSpotsDisplay">20</div>
+                    </div>
+                    <div class="count-box">
+                        <div class="count-label">Players</div>
+                        <div class="count-value" id="currentPlayerCount">0</div>
+                    </div>
+                    <div class="count-box">
+                        <div class="count-label">Goalies</div>
+                        <div class="count-value" id="currentGoalieCount" style="color:#4CAF50;">0/2</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-box">
+            <h3>🔒 Signup Code Control</h3>
+            <div class="control-row" style="margin-bottom: 15px;">
+                <div class="code-display" id="currentCodeDisplay">----</div>
+                <button class="control-btn" onclick="toggleCode()" id="toggleCodeBtn">Toggle Lock</button>
+                <button class="control-btn restore-btn" id="restoreBtn" onclick="restoreSchedule()" style="display:none;">Restore Auto</button>
+            </div>
+            <div class="control-row">
+                <input type="text" id="codeInput" class="control-input" maxlength="4" placeholder="New 4-digit code" style="width:120px;">
+                <button class="control-btn" onclick="updateCode()" style="background: #4a90e2;">Change Code</button>
+                <button class="control-btn" onclick="generateNewCode()" style="background: #ff6b00;">🎲 Generate New</button>
+                <div class="status-display">
+                    Status: <span id="codeStatusDisplay">...</span>
+                </div>
+            </div>
+            
+            <div class="schedule-editor">
+                <h4 style="margin:10px 0 8px 0;">🗓️ Schedules (ET)</h4>
+
+                <div class="schedule-grid">
+                    <div class="schedule-card">
+                        <div class="schedule-title">🔒 Signup Lock Window</div>
+                        <label class="schedule-label">
+                            <input type="checkbox" id="signupLockEnabled">
+                            Enable scheduled lock window
+                        </label>
+
+                        <div class="schedule-row">
+                            <div class="schedule-field">
+                                <div class="schedule-label2">Lock starts</div>
+                                <input type="datetime-local" id="signupLockStart" class="control-input">
+                            </div>
+                            <div class="schedule-field">
+                                <div class="schedule-label2">Lock ends</div>
+                                <input type="datetime-local" id="signupLockEnd" class="control-input">
+                            </div>
+                        </div>
+
+                        <div class="schedule-hint">Uses the exact ET date and time selected above.</div>
+                    </div>
+
+                    <div class="schedule-card">
+                        <div class="schedule-title">📋 Auto Roster Release</div>
+                        <label class="schedule-label">
+                            <input type="checkbox" id="rosterReleaseEnabled">
+                            Enable auto roster release
+                        </label>
+
+                        <div class="schedule-row">
+                            <div class="schedule-field">
+                                <div class="schedule-label2">Release at</div>
+                                <input type="datetime-local" id="rosterReleaseAt" class="control-input">
+                            </div>
+                        </div>
+
+                        <div class="schedule-hint">Uses the exact ET date and time selected above.</div>
+                    </div>
+
+                    <div class="schedule-card">
+                        <div class="schedule-title">♻️ Weekly Reset</div>
+                        <label class="schedule-label">
+                            <input type="checkbox" id="resetWeekEnabled">
+                            Enable scheduled weekly reset
+                        </label>
+
+                        <div class="schedule-row">
+                            <div class="schedule-field">
+                                <div class="schedule-label2">Reset at</div>
+                                <input type="datetime-local" id="resetWeekAt" class="control-input">
+                            </div>
+                        </div>
+
+                        <div class="schedule-hint">This clears players and waitlist, then auto-adds the default players at the exact ET date and time selected above.</div>
+                    </div>
+                </div>
+
+                <div class="control-row" style="margin-top:10px; gap:10px; flex-wrap:wrap;">
+                    <button class="control-btn" onclick="saveSchedules()" style="background:#4a90e2;">💾 Save Schedules</button>
+                    <button class="control-btn" onclick="refreshSettings()" style="background:#555;">↻ Reload</button>
+                    <div class="status-display" style="margin-left:0;">Now: <span id="etNowLine">--</span></div>
+                </div>
+
+                <div class="schedule-info" id="scheduleInfo">Loading schedule...</div>
+            </div>
+
+            <div class="manual-override-warning" id="overrideWarning" style="display:none;">
+                <strong>⚠️ Manual Override Active</strong>
+                <div id="overrideDetails"></div>
+            </div>
+        </div>
+
+        <div class="roster-status">
+            <h3>📋 Team Roster Status</h3>
+            <div class="control-row">
+                <div class="status-display" style="margin-left:0;">
+                    Status: <span id="rosterStatusDisplay" class="roster-pending">Pending</span>
+                </div>
+                <button class="control-btn" onclick="releaseRoster()" id="releaseRosterBtn" style="background: var(--success);">Release Roster Now</button>
+                <button class="control-btn" onclick="manualReset()" style="background: var(--danger);">Reset Week</button>
+            </div>
+            <div style="margin-top:10px; font-size: 0.85rem; color: #aaa;">
+                Click "Release Roster Now" to generate teams and make them visible to all players instantly.
+            </div>
+        </div>
+
+        <!-- Released Roster Preview -->
+        <div class="released-roster-preview" id="releasedRosterPreview">
+            <div class="preview-header">
+                <h3>🏒 Released Roster</h3>
+                <p id="previewGameInfo">--</p>
+            </div>
+            <div class="preview-teams">
+                <div class="preview-team white">
+                    <h4>Team White <span id="whiteAvgPreview"></span></h4>
+                    <ul class="preview-list" id="whiteTeamPreview"></ul>
+                </div>
+                <div class="preview-team dark">
+                    <h4>Team Dark <span id="darkAvgPreview"></span></h4>
+                    <ul class="preview-list" id="darkTeamPreview"></ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Summary -->
+        <div class="payment-summary-box">
+            <h3>💰 Payment Summary (Admin Only)</h3>
+            <div class="payment-stats">
+                <div class="payment-stat">
+                    <div class="payment-stat-value" id="totalCollected">$0.00</div>
+                    <div class="payment-stat-label">Total Collected</div>
+                </div>
+                <div class="payment-stat">
+                    <div class="payment-stat-value" id="paidCountDisplay">0</div>
+                    <div class="payment-stat-label">Paid Players</div>
+                </div>
+                <div class="payment-stat">
+                    <div class="payment-stat-value unpaid" id="unpaidCountDisplay">0</div>
+                    <div class="payment-stat-label">Unpaid Players</div>
+                </div>
+            </div>
+            <button class="export-btn" onclick="exportToExcel()">
+                📥 Download Full Payment Report (CSV)
+            </button>
+            <p class="security-notice">
+                ⚠️ Payment and rating data is hidden from public view. Only admins can see this information.
+            </p>
+        </div>
+
+        <!-- Pre-defined Goalies Section - AUTO ADD -->
+        <div class="goalies-section">
+            <h3>🥅 Auto-Add Regular Goalies (Weekly Reset)</h3>
+            <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">
+                These goalies are automatically added on weekly/manual reset. Check to add manually now.
+            </p>
+            <div class="goalie-list" id="predefinedGoalies">
+                <div class="goalie-item">
+                    <div class="goalie-checkbox-wrapper">
+                        <input type="checkbox" id="goalieCraig" value="Craig Scolack">
+                        <label for="goalieCraig">Craig Scolack</label>
+                    </div>
+                    <div class="goalie-rating">
+                        <label>Rating:</label>
+                        <input type="number" id="ratingCraig" min="1" max="10" value="9">
+                    </div>
+                </div>
+                <div class="goalie-item">
+                    <div class="goalie-checkbox-wrapper">
+                        <input type="checkbox" id="goalieHao" value="Hao Chau">
+                        <label for="goalieHao">Hao Chau</label>
+                    </div>
+                    <div class="goalie-rating">
+                        <label>Rating:</label>
+                        <input type="number" id="ratingHao" min="1" max="10" value="8">
+                    </div>
+                </div>
+            </div>
+            <button class="add-goalies-btn" onclick="addSelectedGoalies()">➕ Add Selected Goalies Now</button>
+        </div>
+
+        <!-- Backup Goalies Section - FOR SUBSTITUTIONS -->
+        <div class="backup-goalies-section">
+            <h3>🔄 Backup Goalies (Substitutions)</h3>
+            <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">
+                Select a backup goalie to substitute for Craig or Hao when needed.
+            </p>
+            <div class="backup-goalie-select">
+                <select id="backupGoalieSelect">
+                    <option value="">-- Select Backup Goalie --</option>
+                    <option value="0">Mat Carriere (Rating: 7, 226-350-0217)</option>
+                    <option value="1">Jesse Laframboise (Rating: 7, 519-566-6711)</option>
+                    <option value="2">Kent Nelson (Rating: 7, 250-884-6609)</option>
+                </select>
+                <button class="add-backup-btn" onclick="addBackupGoalie()">Add as Substitute</button>
+            </div>
+            <p style="color: #888; font-size: 0.8rem; margin-top: 10px;">
+                * Backup goalies will be added with "N/A" payment method and auto-marked as paid.
+            </p>
+        </div>
+
+        <!-- Add Goalie On The Fly -->
+        <div class="add-goalie-fly-section">
+            <h3>✨ Add/Edit Goalie On The Fly</h3>
+            <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">
+                Quickly add a new goalie not in the system. Edit by removing and re-adding.
+            </p>
+            <div class="fly-goalie-form">
+                <input type="text" id="flyGoalieFirstName" placeholder="First Name">
+                <input type="text" id="flyGoalieLastName" placeholder="Last Name">
+                <input type="tel" id="flyGoaliePhone" placeholder="Phone Number">
+            </div>
+            <div class="fly-goalie-form" style="grid-template-columns: 1fr 2fr; margin-top:10px;">
+                <input type="number" id="flyGoalieRating" min="1" max="10" value="7" placeholder="Rating (1-10)">
+                <input type="text" id="flyGoalieNote" placeholder="Notes (optional)">
+            </div>
+            <button class="add-fly-btn" onclick="addGoalieOnTheFly()">➕ Add New Goalie</button>
+        </div>
+
+        <div class="control-box">
+            <h3>📚 History</h3>
+            <div class="control-row">
+                <button class="control-btn" onclick="window.open('/history', '_blank')" style="background: #4a90e2;">
+                    View Roster History
+                </button>
+                <div class="status-display">
+                    Past weeks are automatically archived
+                </div>
+            </div>
+        </div>
+
+        <!-- History Management -->
+        <div class="history-delete-box">
+            <h3>🗑️ Delete Old History</h3>
+            <div class="control-row" style="margin-bottom: 10px;">
+                <select id="historySelect" class="history-select">
+                    <option value="">-- Select a week to delete --</option>
+                </select>
+                <button class="control-btn" onclick="loadHistoryList()" style="background: #4a90e2; margin-left: 10px;">
+                    🔄 Refresh
+                </button>
+            </div>
+            <button class="delete-btn" onclick="deleteSelectedHistory()">
+                ❌ Delete Selected Week from History
+            </button>
+            <div id="deleteResult" class="delete-result"></div>
+        </div>
+
+        <!-- Add Player Form -->
+        <div class="add-player-form">
+            <h3>➕ Add Player Manually</h3>
+            <div class="form-row">
+                <input type="text" id="newFirstName" placeholder="First Name">
+                <input type="text" id="newLastName" placeholder="Last Name">
+            </div>
+            <input type="tel" id="newPhone" placeholder="Phone Number">
+            <div class="form-row">
+                <input type="number" id="newRating" placeholder="Rating (1-10)" min="1" max="10">
+                <select id="newPayment">
+                    <option value="Cash">Cash</option>
+                    <option value="E-Transfer">E-Transfer</option>
+                    <option value="PIA">PIA (Pay In Advance)</option>
+                </select>
+            </div>
+            <label style="display:flex; align-items:center; gap:10px; margin:10px 0; color:#aaa;">
+                <input type="checkbox" id="addToWaitlist" style="width:auto;">
+                Add to Waitlist
+            </label>
+            <button class="add-btn" onclick="addPlayer()">Add Player</button>
+        </div>
+
+        <h3 class="section-header">🏒 Registered Players (<span id="playerCount">0</span> Players, <span id="goalieCountDisplay">0</span> Goalies)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Rating</th>
+                    <th>Payment</th>
+                    <th>Paid ($) <span id="totalPaidDisplay" class="total-paid-display">($0.00)</span></th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="playerList"></tbody>
+        </table>
+
+        <div class="waitlist-section">
+            <h3>⏳ Waitlist (<span id="waitlistCount">0</span>)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Name</th>
+                        <th>Phone</th>
+                        <th>Rating</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="waitlistList"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+        const SESSION_KEY = 'hockey_admin_session';
+        let sessionToken = localStorage.getItem(SESSION_KEY) || "";
+        let maxGoalies = 2;
+        function pad2(n){ return String(n).padStart(2,'0'); }
+
+        function getETNowDate() {
+            // Creates a Date object representing "now" in America/New_York (approx).
+            return new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+        }
+
+        function nextOccurrenceDate(dow, hour, minute) {
+            const etNow = getETNowDate();
+            const currentDow = etNow.getDay();
+            let daysAhead = (dow - currentDow + 7) % 7;
+
+            // If today but time passed, jump a week
+            const past = (daysAhead === 0) && (
+                etNow.getHours() > hour || (etNow.getHours() === hour && etNow.getMinutes() >= minute)
+            );
+            if (past) daysAhead = 7;
+
+            const next = new Date(etNow);
+            next.setDate(etNow.getDate() + daysAhead);
+            next.setHours(hour, minute, 0, 0);
+            return next;
+        }
+
+        function toDatetimeLocalValue(d) {
+            const yyyy = d.getFullYear();
+            const mm = pad2(d.getMonth()+1);
+            const dd = pad2(d.getDate());
+            const hh = pad2(d.getHours());
+            const mi = pad2(d.getMinutes());
+            return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+        }
+
+        function dayName(dow){
+            return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dow] || "?";
+        }
+
+        function formatDayTimeFromDatetimeLocal(dtLocalValue) {
+            if (!dtLocalValue) return "";
+            const d = new Date(dtLocalValue);
+            // Format using ET regardless of client locale.
+            const parts = new Intl.DateTimeFormat("en-US", {
+                timeZone: "America/New_York",
+                weekday: "long",
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true
+            }).formatToParts(d);
+            const get = (t) => (parts.find(p => p.type === t)?.value || "");
+            const weekday = get("weekday");
+            const hour = get("hour");
+            const minute = get("minute");
+            const dayPeriod = get("dayPeriod");
+            if (!weekday || !hour || !minute || !dayPeriod) return "";
+            return `${weekday} ${hour}:${minute} ${dayPeriod}`;
+        }
+
+        
+        const ENHANCED_DT_IDS = ['titleDayTime', 'signupLockStart', 'signupLockEnd', 'rosterReleaseAt', 'resetWeekAt'];
+        let activeClockTargetId = null;
+        let clockMode = 'hour';
+        let clockState = { hour24: 12, minute: 0 };
+        let clockPointerDown = false;
+
+        function formatTime12(hour24, minute) {
+            const period = hour24 >= 12 ? 'PM' : 'AM';
+            const hour12 = (hour24 % 12) || 12;
+            return `${hour12}:${pad2(minute)} ${period}`;
+        }
+
+        function parseDatetimeLocalValue(dtVal) {
+            if (!dtVal || !dtVal.includes('T')) return null;
+            const [datePart, timePart] = dtVal.split('T');
+            const [year, month, day] = datePart.split('-').map(Number);
+            const [hour, minute] = timePart.split(':').map(Number);
+            if ([year, month, day, hour, minute].some(v => !Number.isFinite(v))) return null;
+            return { year, month, day, hour, minute };
+        }
+
+        function buildDatetimeLocal(dateVal, hour24, minute) {
+            if (!dateVal) return '';
+            return `${dateVal}T${pad2(hour24)}:${pad2(minute)}`;
+        }
+
+        function ensureDateForInput(input) {
+            const parsed = parseDatetimeLocalValue(input.value);
+            if (parsed) return `${parsed.year}-${pad2(parsed.month)}-${pad2(parsed.day)}`;
+            const now = new Date();
+            return `${now.getFullYear()}-${pad2(now.getMonth()+1)}-${pad2(now.getDate())}`;
+        }
+
+        function syncEnhancedControl(targetId) {
+            const input = document.getElementById(targetId);
+            const wrapper = document.querySelector(`.enhanced-datetime[data-target="${targetId}"]`);
+            if (!input || !wrapper) return;
+            const dateInput = wrapper.querySelector('.date-input');
+            const timeBtn = wrapper.querySelector('.time-trigger');
+            const summary = wrapper.querySelector('.picker-summary');
+            const parsed = parseDatetimeLocalValue(input.value);
+            if (parsed) {
+                dateInput.value = `${parsed.year}-${pad2(parsed.month)}-${pad2(parsed.day)}`;
+                timeBtn.textContent = formatTime12(parsed.hour, parsed.minute);
+                const dayTime = formatDayTimeFromDatetimeLocal(input.value);
+                summary.textContent = dayTime ? `ET: ${dayTime}` : '';
+            } else {
+                dateInput.value = '';
+                timeBtn.textContent = 'Select time';
+                summary.textContent = '';
+            }
+        }
+
+        function syncAllEnhancedControls() {
+            ENHANCED_DT_IDS.forEach(syncEnhancedControl);
+        }
+
+        function updateHiddenDatetimeFromEnhanced(targetId, triggerChange = true) {
+            const input = document.getElementById(targetId);
+            const wrapper = document.querySelector(`.enhanced-datetime[data-target="${targetId}"]`);
+            if (!input || !wrapper) return;
+            const dateVal = wrapper.querySelector('.date-input').value;
+            const timeText = wrapper.querySelector('.time-trigger').textContent;
+            const parsed = parseDatetimeLocalValue(input.value);
+            let hour24 = parsed ? parsed.hour : 12;
+            let minute = parsed ? parsed.minute : 0;
+            const m = String(timeText).match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+            if (m) {
+                let hour12 = parseInt(m[1], 10) % 12;
+                minute = parseInt(m[2], 10);
+                if (m[3].toUpperCase() === 'PM') hour12 += 12;
+                hour24 = hour12;
+            }
+            input.value = buildDatetimeLocal(dateVal, hour24, minute);
+            syncEnhancedControl(targetId);
+            if (triggerChange) input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function initializeEnhancedDateTimeControls() {
+            ENHANCED_DT_IDS.forEach((id) => {
+                const input = document.getElementById(id);
+                if (!input || input.dataset.enhanced === 'true') return;
+                input.dataset.enhanced = 'true';
+                input.classList.add('enhanced-datetime-hidden');
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'enhanced-datetime';
+                wrapper.dataset.target = id;
+                wrapper.innerHTML = `
+                    <div class="enhanced-datetime-row">
+                        <input type="date" class="date-input">
+                        <button type="button" class="time-trigger">Select time</button>
+                    </div>
+                    <div class="picker-summary"></div>
+                `;
+                input.insertAdjacentElement('afterend', wrapper);
+
+                const dateInput = wrapper.querySelector('.date-input');
+                const timeBtn = wrapper.querySelector('.time-trigger');
+                dateInput.addEventListener('change', () => updateHiddenDatetimeFromEnhanced(id));
+                timeBtn.addEventListener('click', () => openClockModal(id));
+                input.addEventListener('change', () => syncEnhancedControl(id));
+                syncEnhancedControl(id);
+            });
+
+            const analogClock = document.getElementById('analogClock');
+            if (analogClock && !analogClock.dataset.ready) {
+                analogClock.dataset.ready = 'true';
+                renderClockFace();
+                analogClock.addEventListener('pointerdown', handleClockPointerStart);
+                analogClock.addEventListener('pointermove', handleClockPointerMove);
+                window.addEventListener('pointerup', handleClockPointerEnd);
+            }
+        }
+
+        function renderClockFace() {
+            const clock = document.getElementById('analogClock');
+            if (!clock) return;
+            clock.querySelectorAll('.clock-number').forEach(el => el.remove());
+            const mode = clockMode;
+            const radius = 98;
+            const values = mode === 'hour'
+                ? Array.from({ length: 12 }, (_, i) => i + 1)
+                : Array.from({ length: 12 }, (_, i) => i * 5);
+
+            values.forEach((value, index) => {
+                const angle = ((index * 30) - 60) * Math.PI / 180;
+                const el = document.createElement('div');
+                el.className = 'clock-number';
+                el.textContent = mode === 'hour' ? value : pad2(value);
+                el.style.left = `${125 + Math.cos(angle) * radius}px`;
+                el.style.top = `${125 + Math.sin(angle) * radius}px`;
+                el.onclick = () => {
+                    if (mode === 'hour') {
+                        const isPM = clockState.hour24 >= 12;
+                        const selected = value % 12;
+                        clockState.hour24 = selected + (isPM ? 12 : 0);
+                    } else {
+                        clockState.minute = value;
+                    }
+                    refreshClockUi();
+                };
+                clock.appendChild(el);
+            });
+            refreshClockUi();
+        }
+
+        function refreshClockUi() {
+            document.getElementById('clockReadout').textContent = formatTime12(clockState.hour24, clockState.minute);
+            document.getElementById('clockHourBtn').classList.toggle('active', clockMode === 'hour');
+            document.getElementById('clockMinuteBtn').classList.toggle('active', clockMode === 'minute');
+            document.getElementById('clockAmBtn').classList.toggle('active', clockState.hour24 < 12);
+            document.getElementById('clockPmBtn').classList.toggle('active', clockState.hour24 >= 12);
+            document.getElementById('clockHelp').textContent = clockMode === 'hour'
+                ? 'Tap or drag on the clock to set the hour.'
+                : 'Tap or drag on the clock to set minutes in 5-minute steps.';
+
+            const hand = document.getElementById('clockHand');
+            const angle = clockMode === 'hour'
+                ? (((clockState.hour24 % 12) || 12) * 30)
+                : (clockState.minute * 6);
+            hand.style.transform = `rotate(${angle}deg)`;
+
+            document.querySelectorAll('.clock-number').forEach(el => {
+                const value = parseInt(el.textContent, 10);
+                const active = clockMode === 'hour'
+                    ? value === (((clockState.hour24 % 12) || 12))
+                    : value === clockState.minute;
+                el.classList.toggle('active', active);
+            });
+        }
+
+        function setClockMode(mode) {
+            clockMode = mode;
+            renderClockFace();
+        }
+
+        function setClockPeriod(period) {
+            let hour12 = clockState.hour24 % 12;
+            if (period === 'PM') hour12 += 12;
+            clockState.hour24 = hour12;
+            refreshClockUi();
+        }
+
+        function openClockModal(targetId) {
+            activeClockTargetId = targetId;
+            const input = document.getElementById(targetId);
+            const parsed = parseDatetimeLocalValue(input.value);
+            clockState = {
+                hour24: parsed ? parsed.hour : 12,
+                minute: parsed ? parsed.minute : 0
+            };
+            clockMode = 'hour';
+            renderClockFace();
+            document.getElementById('clockModal').classList.add('active');
+        }
+
+        function closeClockModal() {
+            document.getElementById('clockModal').classList.remove('active');
+            activeClockTargetId = null;
+            clockPointerDown = false;
+        }
+
+        function confirmClockSelection() {
+            if (!activeClockTargetId) return closeClockModal();
+            const wrapper = document.querySelector(`.enhanced-datetime[data-target="${activeClockTargetId}"]`);
+            if (!wrapper) return closeClockModal();
+            wrapper.querySelector('.time-trigger').textContent = formatTime12(clockState.hour24, clockState.minute);
+            if (!wrapper.querySelector('.date-input').value) {
+                wrapper.querySelector('.date-input').value = ensureDateForInput(document.getElementById(activeClockTargetId));
+            }
+            updateHiddenDatetimeFromEnhanced(activeClockTargetId);
+            closeClockModal();
+        }
+
+        function updateClockFromPointer(event) {
+            const clock = document.getElementById('analogClock');
+            const rect = clock.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            const dx = event.clientX - cx;
+            const dy = event.clientY - cy;
+            let deg = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+            if (deg < 0) deg += 360;
+            if (clockMode === 'hour') {
+                let hour12 = Math.round(deg / 30) % 12;
+                if (hour12 === 0) hour12 = 12;
+                const isPM = clockState.hour24 >= 12;
+                clockState.hour24 = (hour12 % 12) + (isPM ? 12 : 0);
+            } else {
+                clockState.minute = (Math.round(deg / 30) % 12) * 5;
+            }
+            refreshClockUi();
+        }
+
+        function handleClockPointerStart(event) {
+            clockPointerDown = true;
+            updateClockFromPointer(event);
+        }
+        function handleClockPointerMove(event) {
+            if (!clockPointerDown) return;
+            updateClockFromPointer(event);
+        }
+        function handleClockPointerEnd() {
+            clockPointerDown = false;
+        }
+
+        function parseSelectedDayTime(str) {
+            // Expects like: "Friday 9:30 PM"
+            if (!str || typeof str !== 'string') return null;
+            const m = str.trim().match(/^(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\s+(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+            if (!m) return null;
+            const day = m[1];
+            let hour = parseInt(m[2], 10);
+            const minute = parseInt(m[3], 10);
+            const ap = m[4].toUpperCase();
+            if (ap === 'PM' && hour !== 12) hour += 12;
+            if (ap === 'AM' && hour === 12) hour = 0;
+            const dowMap = { Sunday:0, Monday:1, Tuesday:2, Wednesday:3, Thursday:4, Friday:5, Saturday:6 };
+            return { dow: dowMap[day], hour, minute };
+        }
+
+        function formatScheduleInfo(sData) {
+            if (!sData) return "—";
+
+            const lockEnabled = !!sData.signupLockSchedule?.enabled;
+            const rrEnabled = !!sData.rosterReleaseSchedule?.enabled;
+            const resetEnabled = !!sData.resetWeekSchedule?.enabled;
+
+            const lockLine = lockEnabled && sData.signupLockStartAt && sData.signupLockEndAt
+                ? `${formatDayTimeFromDatetimeLocal(sData.signupLockStartAt)} → ${formatDayTimeFromDatetimeLocal(sData.signupLockEndAt)}`
+                : "OFF";
+
+            const rrLine = rrEnabled && sData.rosterReleaseAt
+                ? formatDayTimeFromDatetimeLocal(sData.rosterReleaseAt)
+                : "OFF";
+
+            const resetLine = resetEnabled && sData.resetWeekAt
+                ? formatDayTimeFromDatetimeLocal(sData.resetWeekAt)
+                : "OFF";
+
+            return `
+                <strong>🔒 Signup Lock Window:</strong> ${lockLine}<br>
+                <strong>📋 Auto Roster Release:</strong> ${rrLine}<br>
+                <strong>♻️ Weekly Reset:</strong> ${resetLine}<br>
+                <span style="color:#aaa;">Times use the exact ET date and time selected in the scheduler.</span>
+            `;
+        }
+
+        async function saveSchedules() {
+            try {
+                const payload = {
+                    sessionToken,
+                    signupLockEnabled: document.getElementById('signupLockEnabled').checked,
+                    signupLockStart: document.getElementById('signupLockStart').value,
+                    signupLockEnd: document.getElementById('signupLockEnd').value,
+                    rosterReleaseEnabled: document.getElementById('rosterReleaseEnabled').checked,
+                    rosterReleaseAt: document.getElementById('rosterReleaseAt').value,
+                    resetWeekEnabled: document.getElementById('resetWeekEnabled').checked,
+                    resetWeekAt: document.getElementById('resetWeekAt').value
+                };
+
+                const res = await fetch(`${API_URL}/api/admin/update-schedules`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) {
+                    alert("Failed to save schedules.");
+                    return;
+                }
+                const data = await res.json();
+                document.getElementById('scheduleInfo').innerHTML = formatScheduleInfo(data);
+                await refreshSettings();
+            } catch (e) {
+                console.error(e);
+                alert("Error saving schedules (see console).");
+            }
+        }
+
+        async function refreshSettings() {
+            // re-run the existing settings refresh flow
+            try {
+                await loadAdminData();
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        let currentGoalies = 0;
+        let playersCount = 0;
+        let currentTotalPaid = 0;
+        let backupGoaliesData = [];
+
+        // Pre-defined goalie data
+        const PREDEFINED_GOALIES = [
+            { id: 'goalieCraig', name: 'Craig Scolack', phone: '(519) 982-6311', defaultRating: 9 },
+            { id: 'goalieHao', name: 'Hao Chau', phone: '(519) 995-9884', defaultRating: 8 }
+        ];
+
+        async function checkSession() {
+            if (!sessionToken) {
+                showLogin();
+                return;
+            }
+            try {
+                const res = await fetch(`${API_URL}/api/admin/check-session`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: sessionToken })
+                });
+                const data = await res.json();
+                if (data.loggedIn) {
+                    showDashboard();
+                    loadData();
+                    loadSettings();
+                    loadAppSettings();
+                    setTimeout(loadHistoryList, 500);
+                } else {
+                    localStorage.removeItem(SESSION_KEY);
+                    sessionToken = "";
+                    showLogin();
+                }
+            } catch (err) {
+                console.error("Session check error:", err);
+                showLogin();
+            }
+        }
+
+        function showLogin() {
+            document.getElementById('loginBox').style.display = 'block';
+            document.getElementById('adminPanel').style.display = 'none';
+        }
+
+        function showDashboard() {
+            document.getElementById('loginBox').style.display = 'none';
+            document.getElementById('adminPanel').style.display = 'block';
+        }
+
+        async function login() {
+            try {
+                const pass = document.getElementById('adminPass').value;
+                const res = await fetch(`${API_URL}/api/admin/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: pass })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    sessionToken = data.sessionToken;
+                    localStorage.setItem(SESSION_KEY, sessionToken);
+                    showDashboard();
+                    loadData();
+                    loadSettings();
+                    loadAppSettings();
+                    setTimeout(loadHistoryList, 500);
+                } else {
+                    document.getElementById('errorMsg').style.display = 'block';
+                }
+            } catch (err) {
+                console.error("Login error:", err);
+                alert("Login failed. Check console.");
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem(SESSION_KEY);
+            sessionToken = "";
+            showLogin();
+        }
+
+        document.getElementById('adminPass').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') login();
+        });
+
+        // Load app settings (maintenance mode, title, etc.)
+        async function loadAppSettings() {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/app-settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: sessionToken })
+                });
+                
+                if (!res.ok) return;
+                
+                const data = await res.json();
+                
+                // Update maintenance mode UI
+                const maintenanceCheckbox = document.getElementById('maintenanceCheckbox');
+                const maintenanceStatus = document.getElementById('maintenanceStatus');
+                const maintenanceBulletin = document.getElementById('maintenanceBulletin');
+                
+                maintenanceCheckbox.checked = data.maintenanceMode;
+                if (data.maintenanceMode) {
+                    maintenanceStatus.innerText = 'MAINTENANCE MODE ACTIVE';
+                    maintenanceStatus.className = 'maintenance-status active';
+                    maintenanceBulletin.classList.add('active');
+                } else {
+                    maintenanceStatus.innerText = 'PORTAL ACTIVE';
+                    maintenanceStatus.className = 'maintenance-status inactive';
+                    maintenanceBulletin.classList.remove('active');
+                }
+                
+                // Update title editor
+                if (data.selectedDayTime) {
+                    const parsed = parseSelectedDayTime(data.selectedDayTime);
+                    if (parsed) {
+                        const next = nextOccurrenceDate(parsed.dow, parsed.hour, parsed.minute);
+                        document.getElementById('titleDayTime').value = toDatetimeLocalValue(next);
+                        syncEnhancedControl('titleDayTime');
+                    }
+                }
+                if (data.customTitle) {
+                    document.getElementById('titlePreview').innerText = data.customTitle;
+                    document.getElementById('dynamicTitlePreview').innerText = data.customTitle;
+                }
+                
+                // Update arena selector
+                if (data.selectedArena) {
+                    document.getElementById('arenaSelect').value = data.selectedArena;
+                    document.getElementById('currentArenaDisplay').innerText = data.selectedArena;
+                }
+                
+                // Store backup goalies data
+                if (data.backupGoalies) {
+                    backupGoaliesData = data.backupGoalies;
+                }
+                
+                updateTitlePreview();
+            } catch (err) {
+                console.error("Error loading app settings:", err);
+            }
+        }
+
+        // Toggle maintenance mode
+        async function toggleMaintenance() {
+            const checkbox = document.getElementById('maintenanceCheckbox');
+            const newState = checkbox.checked;
+            
+            try {
+                const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        sessionToken: sessionToken,
+                        maintenanceMode: newState
+                    })
+                });
+                
+                if (res.ok) {
+                    loadAppSettings(); // Refresh UI
+                    alert(newState ? '🔧 Maintenance Mode ACTIVATED - Portal is now down' : '✅ Portal is now ACTIVE');
+                } else {
+                    checkbox.checked = !newState; // Revert on error
+                    alert('Failed to update maintenance mode');
+                }
+            } catch (err) {
+                console.error("Error toggling maintenance:", err);
+                checkbox.checked = !newState;
+            }
+        }
+
+        // Update title preview based on selection
+        function updateTitlePreview() {
+            const dtVal = document.getElementById('titleDayTime')?.value || '';
+            const dayTime = formatDayTimeFromDatetimeLocal(dtVal);
+            const day = (dayTime.split(' ')[0] || "Friday");
+            const newTitle = `Phan's ${day} Hockey`;
+            document.getElementById('dynamicTitlePreview').innerText = newTitle;
+        }
+
+        // Update title and time
+        async function updateTitle() {
+            const dtVal = document.getElementById('titleDayTime')?.value || '';
+            const dayTime = formatDayTimeFromDatetimeLocal(dtVal);
+            if (!dayTime) {
+                alert('Please select a day and time first.');
+                return;
+            }
+            const day = dayTime.split(' ')[0];
+            const newTitle = `Phan's ${day} Hockey`;
+            const selectedGameDate = dtVal ? dtVal.split('T')[0] : '';
+            
+            try {
+                const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        sessionToken: sessionToken,
+                        customTitle: newTitle,
+                        selectedDayTime: dayTime,
+                        gameDate: selectedGameDate
+                    })
+                });
+                
+                if (res.ok) {
+                    document.getElementById('titlePreview').innerText = newTitle;
+                    document.getElementById('timeInput').value = dayTime;
+                    alert(`✅ Title updated to: ${newTitle}\nTime updated to: ${dayTime}\nDate updated to: ${selectedGameDate}`);
+                    loadSettings(); // Refresh other displays
+                } else {
+                    alert('Failed to update title');
+                }
+            } catch (err) {
+                console.error("Error updating title:", err);
+                alert('Error updating title');
+            }
+        }
+
+        // Update arena
+        async function updateArena() {
+            const arena = document.getElementById('arenaSelect').value;
+            
+            try {
+                const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        sessionToken: sessionToken,
+                        selectedArena: arena
+                    })
+                });
+                
+                if (res.ok) {
+                    document.getElementById('currentArenaDisplay').innerText = arena;
+                    document.getElementById('locationInput').value = arena;
+                    alert(`✅ Arena updated to: ${arena}`);
+                    loadSettings();
+                } else {
+                    alert('Failed to update arena');
+                }
+            } catch (err) {
+                console.error("Error updating arena:", err);
+                alert('Error updating arena');
+            }
+        }
+
+        // Add backup goalie (substitute)
+        async function addBackupGoalie() {
+            const select = document.getElementById('backupGoalieSelect');
+            const goalieIndex = select.value;
+            
+            if (goalieIndex === "") {
+                alert("Please select a backup goalie");
+                return;
+            }
+            
+            if (currentGoalies >= maxGoalies) {
+                alert(`Cannot add backup goalie - maximum ${maxGoalies} goalies allowed. Remove a goalie first.`);
+                return;
+            }
+            
+            try {
+                const res = await fetch(`${API_URL}/api/admin/add-backup-goalie`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        sessionToken: sessionToken,
+                        goalieIndex: parseInt(goalieIndex)
+                    })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(`✅ ${data.goalie.firstName} ${data.goalie.lastName} added as substitute goalie!`);
+                    loadData();
+                    select.value = "";
+                } else {
+                    const err = await res.json();
+                    alert("Error: " + (err.error || "Failed to add backup goalie"));
+                }
+            } catch (err) {
+                console.error("Error adding backup goalie:", err);
+                alert("Error adding backup goalie");
+            }
+        }
+
+        // Add goalie on the fly
+        async function addGoalieOnTheFly() {
+            const firstName = document.getElementById('flyGoalieFirstName').value.trim();
+            const lastName = document.getElementById('flyGoalieLastName').value.trim();
+            const phone = document.getElementById('flyGoaliePhone').value.trim();
+            const rating = parseInt(document.getElementById('flyGoalieRating').value) || 7;
+            
+            if (!firstName || !lastName || !phone) {
+                alert("Please fill in all required fields (First Name, Last Name, Phone)");
+                return;
+            }
+            
+            if (currentGoalies >= maxGoalies) {
+                alert(`Cannot add goalie - maximum ${maxGoalies} goalies allowed. Remove a goalie first.`);
+                return;
+            }
+            
+            try {
+                const res = await fetch(`${API_URL}/api/admin/add-player`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        sessionToken: sessionToken,
+                        firstName: firstName,
+                        lastName: lastName,
+                        phone: phone,
+                        rating: rating,
+                        paymentMethod: 'N/A',
+                        isGoalie: true,
+                        toWaitlist: false
+                    })
+                });
+                
+                if (res.ok) {
+                    alert(`✅ Goalie ${firstName} ${lastName} added successfully!`);
+                    // Clear form
+                    document.getElementById('flyGoalieFirstName').value = '';
+                    document.getElementById
+                    document.getElementById('flyGoalieLastName').value = '';
+                    document.getElementById('flyGoaliePhone').value = '';
+                    document.getElementById('flyGoalieRating').value = '7';
+                    document.getElementById('flyGoalieNote').value = '';
+                    loadData();
+                } else {
+                    const err = await res.json();
+                    alert("Error: " + (err.error || "Failed to add goalie"));
+                }
+            } catch (err) {
+                console.error("Error adding goalie:", err);
+                alert("Error adding goalie");
+            }
+        }
+
+        // Add selected predefined goalies (Craig and Hao)
+        async function addSelectedGoalies() {
+            const selectedGoalies = [];
+            
+            PREDEFINED_GOALIES.forEach(goalie => {
+                const checkbox = document.getElementById(goalie.id);
+                if (checkbox && checkbox.checked) {
+                    const ratingInput = document.getElementById('rating' + goalie.id.replace('goalie', ''));
+                    const rating = parseInt(ratingInput.value) || goalie.defaultRating;
+                    selectedGoalies.push({
+                        ...goalie,
+                        rating: rating
+                    });
+                }
+            });
+
+            if (selectedGoalies.length === 0) {
+                alert("Please select at least one goalie to add.");
+                return;
+            }
+
+            if (selectedGoalies.length > maxGoalies) {
+                alert(`You can only add up to ${maxGoalies} goalies. Please uncheck some goalies.`);
+                return;
+            }
+
+            if (currentGoalies + selectedGoalies.length > maxGoalies) {
+                alert(`Only ${maxGoalies - currentGoalies} goalie spot(s) remaining. Please uncheck some goalies.`);
+                return;
+            }
+
+            let addedCount = 0;
+            let errors = [];
+
+            for (const goalie of selectedGoalies) {
+                try {
+                    const res = await fetch(`${API_URL}/api/admin/add-player`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            sessionToken: sessionToken, 
+                            firstName: goalie.name.split(' ')[0], 
+                            lastName: goalie.name.split(' ').slice(1).join(' '), 
+                            phone: goalie.phone, 
+                            rating: goalie.rating,
+                            paymentMethod: 'N/A', 
+                            isGoalie: true,
+                            toWaitlist: false 
+                        })
+                    });
+
+                    if (res.ok) {
+                        addedCount++;
+                    } else {
+                        const err = await res.json();
+                        errors.push(`${goalie.name}: ${err.error}`);
+                    }
+                } catch (err) {
+                    console.error("Add goalie error:", err);
+                    errors.push(`${goalie.name}: Network error`);
+                }
+            }
+
+            // Uncheck all
+            PREDEFINED_GOALIES.forEach(goalie => {
+                const checkbox = document.getElementById(goalie.id);
+                if (checkbox) checkbox.checked = false;
+            });
+
+            loadData();
+
+            if (addedCount > 0) {
+                alert(`✅ Successfully added ${addedCount} goalie(s)!\n${errors.length > 0 ? '\nErrors:\n' + errors.join('\n') : ''}`);
+            } else {
+                alert(`❌ Failed to add goalies:\n${errors.join('\n')}`);
+            }
+        }
+
+        async function loadSettings() {
+            // Update schedule display dynamically (based on selected game day)
+            try {
+                const sRes = await fetch(`${API_URL}/api/status`);
+                const sData = await sRes.json();
+                const el = document.getElementById('scheduleInfo');
+                if (el && sData) {
+                    el.innerHTML = formatScheduleInfo(sData);
+                }
+            } catch (e) { /* ignore */ }
+
+            try {
+                const res = await fetch(`${API_URL}/api/admin/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: sessionToken })
+                });
+                if (!res.ok) {
+                    console.error("Settings load failed:", res.status);
+                    return;
+                }
+                const data = await res.json();
+                
+                document.getElementById('currentLocation').innerText = data.location;
+                document.getElementById('currentTime').innerText = data.time;
+                document.getElementById('currentDateDisplay').innerText = data.date || '--';
+                document.getElementById('locationInput').value = data.location;
+                document.getElementById('timeInput').value = data.time;
+                document.getElementById('dateInput').value = data.date || '';
+                document.getElementById('currentCodeDisplay').innerText = data.code;
+                document.getElementById('codeInput').value = '';
+
+                // Populate schedules
+                if (data.signupLockSchedule) {
+                    document.getElementById('signupLockEnabled').checked = !!data.signupLockSchedule.enabled;
+                    document.getElementById('signupLockStart').value = data.signupLockStartAt || '';
+                    document.getElementById('signupLockEnd').value = data.signupLockEndAt || '';
+                    syncEnhancedControl('signupLockStart');
+                    syncEnhancedControl('signupLockEnd');
+                }
+                if (data.rosterReleaseSchedule) {
+                    document.getElementById('rosterReleaseEnabled').checked = !!data.rosterReleaseSchedule.enabled;
+                    document.getElementById('rosterReleaseAt').value = data.rosterReleaseAt || '';
+                    syncEnhancedControl('rosterReleaseAt');
+                }
+                if (data.resetWeekSchedule) {
+                    document.getElementById('resetWeekEnabled').checked = !!data.resetWeekSchedule.enabled;
+                    document.getElementById('resetWeekAt').value = data.resetWeekAt || '';
+                    syncEnhancedControl('resetWeekAt');
+                }
+                document.getElementById('scheduleInfo').innerHTML = formatScheduleInfo(data);
+                const etNow = getETNowDate();
+                document.getElementById('etNowLine').innerText = `${dayName(etNow.getDay())} ${pad2(etNow.getHours())}:${pad2(etNow.getMinutes())} ET`;
+                
+                const statusSpan = document.getElementById('codeStatusDisplay');
+                const toggleBtn = document.getElementById('toggleCodeBtn');
+                
+                if (data.requireCode) {
+                    statusSpan.innerText = "LOCKED (Code Required)";
+                    statusSpan.className = "status-locked";
+                    toggleBtn.innerText = "Unlock Signup";
+                    toggleBtn.className = "control-btn toggle-btn locked-state";
+                } else {
+                    statusSpan.innerText = "OPEN (No Code)";
+                    statusSpan.className = "status-open";
+                    toggleBtn.innerText = "Lock Signup";
+                    toggleBtn.className = "control-btn toggle-btn open-state";
+                }
+
+                const overrideWarning = document.getElementById('overrideWarning');
+                const restoreBtn = document.getElementById('restoreBtn');
+                const overrideDetails = document.getElementById('overrideDetails');
+                
+                if (data.manualOverride) {
+                    overrideWarning.style.display = 'block';
+                    restoreBtn.style.display = 'inline-block';
+                    
+                    if (data.isLockedWindow) {
+                        overrideWarning.classList.add('active-lock');
+                        overrideDetails.innerHTML = `
+                            <div style="margin-top:8px; font-size:0.8rem; color:#ff4444;">
+                                <strong>⚠️ CRITICAL:</strong> Signup should be LOCKED right now (scheduled lock window)!<br>
+                                Auto-schedule is disabled. Players can signup without code!
+                            </div>
+                        `;
+                    } else {
+                        overrideWarning.classList.remove('active-lock');
+                        overrideDetails.innerHTML = '';
+                    }
+                } else {
+                    overrideWarning.style.display = 'none';
+                    restoreBtn.style.display = 'none';
+                    overrideDetails.innerHTML = '';
+                }
+
+                const rosterStatus = document.getElementById('rosterStatusDisplay');
+                if (data.rosterReleased) {
+                    rosterStatus.innerText = "RELEASED";
+                    rosterStatus.className = "roster-released";
+                    document.getElementById('releaseRosterBtn').disabled = true;
+                    document.getElementById('releaseRosterBtn').innerText = "Roster Already Released";
+                    loadReleasedRosterPreview();
+                } else {
+                    rosterStatus.innerText = "PENDING";
+                    rosterStatus.className = "roster-pending";
+                    document.getElementById('releaseRosterBtn').disabled = false;
+                    document.getElementById('releaseRosterBtn').innerText = "Release Roster Now";
+                    document.getElementById('releasedRosterPreview').classList.remove('active');
+                }
+            } catch (err) {
+                console.error("Error loading settings:", err);
+            }
+        }
+
+        async function loadReleasedRosterPreview() {
+            try {
+                const res = await fetch(`${API_URL}/api/roster`);
+                const data = await res.json();
+                
+                if (!data.released) return;
+                
+                document.getElementById('previewGameInfo').innerText = 
+                    `${data.formattedDate || data.date} | ${data.location} | ${data.time}`;
+                
+                document.getElementById('whiteAvgPreview').innerText = `(Avg: ${data.whiteRating || '--'})`;
+                document.getElementById('darkAvgPreview').innerText = `(Avg: ${data.darkRating || '--'})`;
+                
+                const whiteList = document.getElementById('whiteTeamPreview');
+                whiteList.innerHTML = '';
+                if (data.whiteTeam && Array.isArray(data.whiteTeam)) {
+                    data.whiteTeam.forEach(player => {
+                        const li = document.createElement('li');
+                        const goalieTag = player.isGoalie ? ' (G)' : '';
+                        li.innerHTML = `
+                            <span>${player.firstName} ${player.lastName}${goalieTag}</span>
+                            <span>Rating Hidden</span>
+                        `;
+                        whiteList.appendChild(li);
+                    });
+                }
+                
+                const darkList = document.getElementById('darkTeamPreview');
+                darkList.innerHTML = '';
+                if (data.darkTeam && Array.isArray(data.darkTeam)) {
+                    data.darkTeam.forEach(player => {
+                        const li = document.createElement('li');
+                        const goalieTag = player.isGoalie ? ' (G)' : '';
+                        li.innerHTML = `
+                            <span>${player.firstName} ${player.lastName}${goalieTag}</span>
+                            <span>Rating Hidden</span>
+                        `;
+                        darkList.appendChild(li);
+                    });
+                }
+                
+                document.getElementById('releasedRosterPreview').classList.add('active');
+            } catch (err) {
+                console.error("Error loading roster preview:", err);
+            }
+        }
+
+        async function updateDetails() {
+            try {
+                const date = document.getElementById('dateInput').value;
+                const res = await fetch(`${API_URL}/api/admin/update-details`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    // Date-only update (do not reference gameLocation/gameTime globals)
+                    body: JSON.stringify({ sessionToken: sessionToken, date: date })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('currentDateDisplay').innerText = data.formattedDate || data.date;
+                    alert("Game date updated!");
+                } else if (res.status === 401) {
+                    logout();
+                }
+            } catch (err) {
+                console.error("Update details error:", err);
+            }
+        }
+
+        function generateRandomCode() {
+            return Math.floor(1000 + Math.random() * 9000).toString();
+        }
+
+        async function generateNewCode() {
+            const newCode = generateRandomCode();
+            document.getElementById('codeInput').value = newCode;
+            await updateCode();
+        }
+
+        async function updateCode() {
+            try {
+                const newCode = document.getElementById('codeInput').value.trim();
+                
+                if (!newCode || !/^\d{4}$/.test(newCode)) {
+                    alert("Please enter a valid 4-digit code (numbers only)");
+                    return;
+                }
+                
+                const res = await fetch(`${API_URL}/api/admin/update-code`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: sessionToken, newCode: newCode })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('currentCodeDisplay').innerText = data.code;
+                    document.getElementById('codeInput').value = '';
+                    alert("Code updated successfully to: " + data.code);
+                } else if (res.status === 401) {
+                    alert("Session expired. Please login again.");
+                    logout();
+                } else {
+                    const err = await res.json();
+                    alert("Error: " + (err.error || "Failed to update code"));
+                }
+            } catch (err) {
+                console.error("Update code error:", err);
+            }
+        }
+
+        async function toggleCode() {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/toggle-code`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: sessionToken })
+                });
+                if (res.ok) {
+                    loadSettings();
+                    const data = await res.json();
+                    alert(data.requireCode ? `Signup is now LOCKED. Current code: ${data.code || '----'}` : 'Signup is now OPEN (no code needed)');
+                } else if (res.status === 401) {
+                    logout();
+                }
+            } catch (err) {
+                console.error("Toggle code error:", err);
+            }
+        }
+
+        async function restoreSchedule() {
+            if (!confirm("Restore auto-schedule? This will allow the system to automatically lock/unlock based on the schedule (scheduled lock window).")) return;
+            try {
+                const res = await fetch(`${API_URL}/api/admin/reset-schedule`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: sessionToken })
+                });
+                if (res.ok) {
+                    loadSettings();
+                    alert("Auto-schedule restored! Signup will now automatically lock during the scheduled lock window.");
+                } else if (res.status === 401) {
+                    logout();
+                }
+            } catch (err) {
+                console.error("Restore schedule error:", err);
+            }
+        }
+
+        async function releaseRoster() {
+            console.log("Release roster clicked");
+            
+            await loadData();
+            
+            if (playersCount === 0) {
+                alert("No players registered yet!");
+                return;
+            }
+            
+            if (!confirm("Release roster now? This will generate balanced teams and make them visible to ALL players instantly.")) return;
+            
+            const btn = document.getElementById('releaseRosterBtn');
+            btn.disabled = true;
+            btn.innerText = "Releasing...";
+            
+            document.getElementById('releaseSuccess').classList.remove('active');
+            document.getElementById('releaseError').classList.remove('active');
+            
+            try {
+                console.log("Sending release roster request...");
+                const res = await fetch(`${API_URL}/api/admin/release-roster`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: sessionToken })
+                });
+                
+                let data;
+                try {
+                    data = await res.json();
+                } catch (jsonErr) {
+                    console.error("Failed to parse JSON response:", jsonErr);
+                    const text = await res.text();
+                    console.log("Raw response:", text);
+                    throw new Error("Invalid JSON response from server");
+                }
+                
+                if (res.ok && data.success) {
+                    const successMsg = document.getElementById('releaseSuccess');
+                    successMsg.classList.add('active');
+                    setTimeout(() => successMsg.classList.remove('active'), 5000);
+                    
+                    document.getElementById('rosterStatusDisplay').innerText = "RELEASED";
+                    document.getElementById('rosterStatusDisplay').className = "roster-released";
+                    btn.innerText = "Roster Already Released";
+                    
+                    await loadReleasedRosterPreview();
+                    
+                    alert(`✅ Roster Released Successfully!\n\nWhite Team: ${data.whiteTeam.length} players (Avg: ${data.whiteRating})\nDark Team: ${data.darkTeam.length} players (Avg: ${data.darkRating})\n\nSignup is now LOCKED until the scheduled unlock time. Players can see the teams on the signup page!`);
+                } else {
+                    console.error("Server returned error:", data);
+                    document.getElementById('releaseError').classList.add('active');
+                    document.getElementById('releaseError').innerText = "❌ " + (data.error || "Unknown error");
+                    btn.disabled = false;
+                    btn.innerText = "Release Roster Now";
+                    alert("Error: " + (data.error || "Failed to release roster"));
+                }
+            } catch (err) {
+                console.error("Error in releaseRoster:", err);
+                document.getElementById('releaseError').classList.add('active');
+                document.getElementById('releaseError').innerText = "❌ " + err.message;
+                btn.disabled = false;
+                btn.innerText = "Release Roster Now";
+                alert("Error releasing roster: " + err.message + "\n\nCheck browser console (F12) for details.");
+            }
+        }
+
+        async function manualReset() {
+            if (!confirm("⚠️ WARNING: This will reset ALL data for a new week. The code will remain as 9855. Continue?")) return;
+            try {
+                const res = await fetch(`${API_URL}/api/admin/manual-reset`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: sessionToken })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert("Week reset complete!\nCode remains: " + data.code);
+                    loadData();
+                    loadSettings();
+                } else if (res.status === 401) {
+                    logout();
+                }
+            } catch (err) {
+                console.error("Manual reset error:", err);
+            }
+        }
+
+        async function loadData() {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/players-full`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: sessionToken })
+                });
+                
+                if (!res.ok) {
+                    if (res.status === 401) {
+                        logout();
+                        return;
+                    }
+                    console.error("Failed to load data:", res.status);
+                    return;
+                }
+                
+                const data = await res.json();
+
+                playersCount = data.players.length;
+                maxGoalies = data.maxGoalies || 2;
+                currentGoalies = data.goalieCount;
+                currentTotalPaid = parseFloat(data.totalPaid) || 0;
+                
+                // Update payment summary
+                document.getElementById('totalCollected').innerText = '$' + currentTotalPaid.toFixed(2);
+                document.getElementById('paidCountDisplay').innerText = data.paidCount || 0;
+                document.getElementById('unpaidCountDisplay').innerText = data.unpaidCount || 0;
+                
+                // Update counts
+                document.getElementById('currentPlayerSpotsDisplay').innerText = data.playerSpots;
+                document.getElementById('playerSpotInput').value = data.playerSpots;
+                document.getElementById('currentPlayerCount').innerText = data.playerCount;
+                
+                const goalieDisplay = document.getElementById('currentGoalieCount');
+                goalieDisplay.innerText = `${data.goalieCount}/${maxGoalies}`;
+                goalieDisplay.style.color = data.goalieCount >= maxGoalies ? '#ff4444' : '#4CAF50';
+                
+                document.getElementById('playerCount').innerText = data.playerCount;
+                document.getElementById('goalieCountDisplay').innerText = data.goalieCount;
+                document.getElementById('waitlistCount').innerText = data.waitlist.length;
+                
+                document.getElementById('totalPaidDisplay').innerText = `($${currentTotalPaid.toFixed(2)})`;
+                
+                if (data.playerSignupCode) {
+                    document.getElementById('currentCodeDisplay').innerText = data.playerSignupCode;
+                }
+                
+                // Render players table with payment controls (ADMIN ONLY)
+                const tbody = document.getElementById('playerList');
+                tbody.innerHTML = '';
+                
+                if (data.players.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#666; padding:30px;">No players registered</td></tr>';
+                } else {
+                    data.players.forEach(p => {
+                        const tr = document.createElement('tr');
+                        const goalieBadge = p.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
+                        const protectedBadge = (p.firstName.toLowerCase() === 'phan' && p.lastName.toLowerCase() === 'ly') ? 
+                            '<span class="protected-badge">PROTECTED</span>' : '';
+                        
+                        let paidInput = '';
+                        if (p.isGoalie) {
+                            paidInput = '<span style="color:#4CAF50; font-weight:bold;">FREE</span>';
+                        } else if (p.firstName === 'Phan' && p.lastName === 'Ly') {
+                            paidInput = '<span style="color:#4CAF50; font-weight:bold;">FREE</span>';
+                        } else {
+                            const amount = p.paidAmount !== null && p.paidAmount !== undefined ? p.paidAmount : '';
+                            const isPaid = p.paidAmount && parseFloat(p.paidAmount) > 0;
+
+                            paidInput = `
+                                <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+                                    <button onclick="quickPay15(${p.id})" 
+                                        style="padding:4px 8px;font-size:0.75rem;background:${isPaid ? '#555' : '#4CAF50'};border:none;border-radius:3px;color:white;cursor:pointer;"
+                                        ${isPaid ? 'disabled' : ''}>
+                                        $15
+                                    </button>
+                                    <input type="number" class="paid-input" value="${amount}" 
+                                        id="paid-${p.id}"
+                                        placeholder="0.00" step="0.01" min="0"
+                                        style="width:60px;"
+                                        onchange="updatePaidAmount(${p.id}, this.value)">
+                                    <button onclick="markUnpaid(${p.id})" 
+                                        style="padding:4px 8px;font-size:0.75rem;background:#ff4444;border:none;border-radius:3px;color:white;cursor:pointer;"
+                                        title="Mark as unpaid">
+                                        ✕
+                                    </button>
+                                </div>
+                            `;
+                        }
+                        
+                        tr.innerHTML = `
+                            <td>${p.firstName} ${p.lastName} ${goalieBadge} ${protectedBadge}</td>
+                            <td>${p.phone}</td>
+                            <td>
+                                <div style="display:flex;align-items:center;gap:5px;">
+                                    <input type="number" id="rating-${p.id}" value="${p.rating}" min="1" max="10" 
+                                        style="width:50px;padding:5px;background:#3d3d3d;border:1px solid #555;color:white;border-radius:3px;text-align:center;"
+                                        onchange="updateRating(${p.id}, this.value)">
+                                    <span>/10</span>
+                                </div>
+                            </td>
+                            <td>${p.isGoalie ? 'N/A' : p.paymentMethod}</td>
+                            <td>${paidInput}</td>
+                            <td>
+                                <button class="remove-btn" onclick="removePlayer(${p.id})">Remove</button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+
+                // Render waitlist with full data (ADMIN ONLY)
+                const waitlistBody = document.getElementById('waitlistList');
+                waitlistBody.innerHTML = '';
+                if (data.waitlist.length === 0) {
+                    waitlistBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#666; padding:30px;">No one on waitlist</td></tr>';
+                } else {
+                    data.waitlist.forEach((p, index) => {
+                        const tr = document.createElement('tr');
+                        const goalieBadge = p.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
+                        tr.innerHTML = `
+                            <td>${index + 1}</td>
+                            <td>${p.firstName} ${p.lastName} ${goalieBadge}</td>
+                            <td>${p.phone}</td>
+                            <td>
+                                <div style="display:flex;align-items:center;gap:5px;">
+                                    <input type="number" id="rating-${p.id}" value="${p.rating}" min="1" max="10" 
+                                        style="width:50px;padding:5px;background:#3d3d3d;border:1px solid #555;color:white;border-radius:3px;text-align:center;"
+                                        onchange="updateRating(${p.id}, this.value)">
+                                    <span>/10</span>
+                                </div>
+                            </td>
+                            <td>
+                                <button class="promote-btn" data-player-id="${p.id}">Promote</button>
+                                <button class="remove-btn" onclick="removeWaitlist(${p.id})">Remove</button>
+                            </td>
+                        `;
+                        waitlistBody.appendChild(tr);
+                    });
+                }
+            } catch (err) {
+                console.error("Load data error:", err);
+            }
+        }
+
+        async function removePlayer(id) {
+            if (!confirm("Remove this player?")) return;
+            try {
+                const res = await fetch(`${API_URL}/api/admin/remove-player`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: sessionToken, playerId: id })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    loadData();
+                    const removedName = data.removedPlayer ? 
+                        `${data.removedPlayer.firstName} ${data.removedPlayer.lastName}` : 
+                        'Player';
+                    showNotification(`✅ ${removedName} removed successfully`, 'success');
+                } else if (res.status === 401) {
+                    logout();
+                } else {
+                    const err = await res.json();
+                    showNotification("Error: " + (err.error || "Failed to remove player"), 'error');
+                }
+            } catch (err) {
+                console.error("Remove player error:", err);
+                showNotification("Error removing player. Check console for details.", 'error');
+            }
+        }
+
+        function showNotification(message, type) {
+            const existing = document.querySelector('.remove-notification');
+            if (existing) existing.remove();
+            
+            const notif = document.createElement('div');
+            notif.className = `remove-notification ${type}`;
+            notif.innerText = message;
+            document.body.appendChild(notif);
+            
+            setTimeout(() => {
+                if (notif.parentNode) notif.remove();
+            }, 3000);
+        }
+
+        async function quickPay15(playerId) {
+            await updatePaidAmount(playerId, 15);
+            loadData();
+        }
+
+        async function markUnpaid(playerId) {
+            if (!confirm('Mark this player as unpaid?')) return;
+            await updatePaidAmount(playerId, null);
+            loadData();
+        }
+
+        async function updatePaidAmount(playerId, amount) {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/update-paid-amount`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        sessionToken: sessionToken, 
+                        playerId: playerId, 
+                        amount: amount 
+                    })
+                });
+
+                if (res.status === 401) {
+                    logout();
+                    return;
+                }
+
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('totalPaidDisplay').innerText = `($${data.totalPaid})`;
+                    console.log(`Updated paid amount for player ${playerId}: $${amount}, Total: $${data.totalPaid}`);
+                } else {
+                    const err = await res.json();
+                    alert("Error: " + (err.error || "Failed to update payment"));
+                    loadData();
+                }
+            } catch (err) {
+                console.error("Update paid amount error:", err);
+                alert("Error updating payment amount");
+                loadData();
+            }
+        }
+
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.classList.contains('promote-btn')) {
+                const playerId = parseInt(e.target.getAttribute('data-player-id'));
+                promotePlayer(playerId);
+            }
+        });
+
+        async function promotePlayer(id) {
+            const spotsDisplay = document.getElementById('currentPlayerSpotsDisplay').innerText;
+            const spots = parseInt(spotsDisplay);
+            
+            let confirmMsg = "Promote this player from waitlist to game?";
+            if (spots <= 0) {
+                confirmMsg = "⚠️ ADMIN OVERRIDE\n\nPlayer spots are currently 0.\nPromote player anyway?";
+            }
+            
+            if (!confirm(confirmMsg)) return;
+
+            try {
+                const res = await fetch(`${API_URL}/api/admin/promote-waitlist`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: sessionToken, waitlistId: id })
+                });
+
+                if (res.status === 401) {
+                    logout();
+                    return;
+                }
+
+                if (res.ok) {
+                    const data = await res.json();
+                    let message = `✅ Player promoted!`;
+                    if (data.override) {
+                        message += '\n\n(Admin override - spots were at 0)';
+                    }
+                    alert(message);
+                    loadData();
+                } else {
+                    const err = await res.json();
+                    alert("Error: " + err.error);
+                }
+            } catch (err) {
+                console.error("Promote player error:", err);
+                alert("Error promoting player");
+            }
+        }
+
+        async function removeWaitlist(id) {
+            if (!confirm("Remove from waitlist?")) return;
+            try {
+                const res = await fetch(`${API_URL}/api/admin/remove-waitlist`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: sessionToken, waitlistId: id })
+                });
+                if (res.ok) {
+                    loadData();
+                } else if (res.status === 401) {
+                    logout();
+                }
+            } catch (err) {
+                console.error("Remove waitlist error:", err);
+            }
+        }
+
+        async function updateRating(id, newRating) {
+            const ratingNum = parseInt(newRating);
+            if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 10) {
+                alert("Rating must be between 1 and 10");
+                loadData();
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/api/admin/update-rating`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: sessionToken, playerId: id, newRating: ratingNum })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log(`Updated ${data.player.firstName} ${data.player.lastName} rating to ${data.player.rating}`);
+                } else if (res.status === 401) {
+                    logout();
+                } else {
+                    const err = await res.json();
+                    alert("Error: " + (err.error || "Failed to update rating"));
+                    loadData();
+                }
+            } catch (err) {
+                console.error("Update rating error:", err);
+                alert("Error updating rating");
+                loadData();
+            }
+        }
+
+        async function updatePlayerSpots() {
+            try {
+                const newSpots = document.getElementById('playerSpotInput').value;
+                const res = await fetch(`${API_URL}/api/admin/update-spots`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: sessionToken, newSpots: newSpots })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('currentPlayerSpotsDisplay').innerText = data.spots;
+                    alert("Player spots updated to: " + data.spots);
+                } else if (res.status === 401) {
+                    logout();
+                }
+            } catch (err) {
+                console.error("Update spots error:", err);
+            }
+        }
+
+        async function addPlayer() {
+            const firstName = document.getElementById('newFirstName').value;
+            const lastName = document.getElementById('newLastName').value;
+            const phone = document.getElementById('newPhone').value;
+            const rating = document.getElementById('newRating').value;
+            const paymentMethod = document.getElementById('newPayment').value;
+            const toWaitlist = document.getElementById('addToWaitlist').checked;
+
+            if (!firstName || !lastName || !phone || !rating) {
+                alert("Please fill in all required fields");
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/api/admin/add-player`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        sessionToken: sessionToken, 
+                        firstName, 
+                        lastName, 
+                        phone, 
+                        rating,
+                        paymentMethod, 
+                        isGoalie: false,
+                        toWaitlist 
+                    })
+                });
+                
+                if (res.ok) {
+                    document.getElementById('newFirstName').value = '';
+                    document.getElementById('newLastName').value = '';
+                    document.getElementById('newPhone').value = '';
+                    document.getElementById('newRating').value = '';
+                    document.getElementById('addToWaitlist').checked = false;
+                    loadData();
+                } else if (res.status === 401) {
+                    logout();
+                } else {
+                    const err = await res.json();
+                    alert("Error: " + err.error);
+                }
+            } catch (err) {
+                console.error("Add player error:", err);
+            }
+        }
+
+        function exportToExcel() {
+            window.open(`${API_URL}/api/admin/export-payments?sessionToken=${sessionToken}`, '_blank');
+        }
+        
+        async function loadHistoryList() {
+            const select = document.getElementById('historySelect');
+            const resultDiv = document.getElementById('deleteResult');
+            
+            try {
+                const res = await fetch(`${API_URL}/api/history`);
+                const data = await res.json();
+                
+                select.innerHTML = '<option value="">-- Select a week to delete --</option>';
+                
+                if (data.history && data.history.length > 0) {
+                    data.history.forEach(week => {
+                        const option = document.createElement('option');
+                        option.value = `${week.year}-${week.weekNumber}`;
+                        const date = new Date(week.created);
+                        option.text = `Week ${week.weekNumber}, ${week.year} (${date.toLocaleDateString()})`;
+                        select.appendChild(option);
+                    });
+                    resultDiv.className = 'delete-result success';
+                    resultDiv.innerHTML = `✅ Loaded ${data.history.length} weeks from history`;
+                } else {
+                    select.innerHTML = '<option value="">No history available</option>';
+                    resultDiv.className = 'delete-result error';
+                    resultDiv.innerHTML = '⚠️ No history found';
+                }
+                
+            } catch (err) {
+                console.error("Error loading history list:", err);
+                resultDiv.className = 'delete-result error';
+                resultDiv.innerHTML = '❌ Error loading history';
+            }
+        }
+        
+        async function deleteSelectedHistory() {
+            const select = document.getElementById('historySelect');
+            const resultDiv = document.getElementById('deleteResult');
+            const value = select.value;
+            
+            if (!value) {
+                alert("Please select a week to delete");
+                return;
+            }
+            
+            const [year, week] = value.split('-');
+            
+            if (!confirm(`⚠️ WARNING: This will permanently delete Week ${week}, ${year} from history.\n\nThis action cannot be undone!\n\nContinue?`)) {
+                return;
+            }
+            
+            try {
+                const res = await fetch(`${API_URL}/api/admin/history/${year}/${week}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken: sessionToken })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    resultDiv.className = 'delete-result success';
+                    resultDiv.innerHTML = `✅ ${data.message}`;
+                    loadHistoryList();
+                } else if (res.status === 401) {
+                    logout();
+                } else {
+                    const err = await res.json();
+                    resultDiv.className = 'delete-result error';
+                    resultDiv.innerHTML = `❌ Error: ${err.error || 'Failed to delete'}`;
+                }
+            } catch (err) {
+                console.error("Error deleting history:", err);
+                resultDiv.className = 'delete-result error';
+                resultDiv.innerHTML = '❌ Network error';
+            }
+        }
+
+        initializeEnhancedDateTimeControls();
+        checkSession();
+    </script>
+
+    <div class="clock-modal" id="clockModal">
+        <div class="clock-modal-card">
+            <div class="clock-modal-title">Select Time</div>
+            <div class="clock-readout" id="clockReadout">12:00 AM</div>
+            <div class="clock-mode-row">
+                <button type="button" class="clock-pill active" id="clockHourBtn" onclick="setClockMode('hour')">Hour</button>
+                <button type="button" class="clock-pill" id="clockMinuteBtn" onclick="setClockMode('minute')">Minute</button>
+            </div>
+            <div class="clock-ampm-row">
+                <button type="button" class="clock-pill active" id="clockAmBtn" onclick="setClockPeriod('AM')">AM</button>
+                <button type="button" class="clock-pill" id="clockPmBtn" onclick="setClockPeriod('PM')">PM</button>
+            </div>
+            <div class="clock-help" id="clockHelp">Tap or drag on the clock to set the hour.</div>
+            <div class="analog-clock" id="analogClock">
+                <div class="clock-hand" id="clockHand"></div>
+                <div class="clock-center-dot"></div>
+            </div>
+            <div class="clock-action-row">
+                <button type="button" class="clock-pill" onclick="closeClockModal()">Cancel</button>
+                <button type="button" class="clock-pill" onclick="confirmClockSelection()">Use Time</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

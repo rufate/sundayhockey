@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Rules - Phan's Sunday Hockey</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text: #ffffff;
+            --accent: #ff6b00;
+            --danger: #ff4444;
+        }
+
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 700px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid #444;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--accent);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        h2 {
+            text-align: center;
+            font-size: 1.2rem;
+            color: #ff4444;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+
+        .warning-box {
+            background: linear-gradient(135deg, #3a1a1a, #4d2d2d);
+            border: 2px solid #ff4444;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .warning-box p {
+            margin: 0;
+            color: #ff4444;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .rules-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 25px 0;
+        }
+
+        .rules-list li {
+            background: linear-gradient(135deg, #2a2a2a, #333);
+            border-left: 4px solid var(--accent);
+            padding: 15px 20px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+        }
+
+        .rule-number {
+            background: var(--accent);
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .rule-text {
+            flex: 1;
+            line-height: 1.4;
+        }
+
+        .agreement-box {
+            background: #1a3a1a;
+            border: 2px solid #4CAF50;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .checkbox-container input[type="checkbox"] {
+            width: 25px;
+            height: 25px;
+            cursor: pointer;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background: white;
+            border: 2px solid #4CAF50;
+            border-radius: 4px;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .checkbox-container input[type="checkbox"]:checked {
+            background: #4CAF50;
+        }
+
+        .checkbox-container input[type="checkbox"]:checked::after {
+            content: '✓';
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .checkbox-container label {
+            font-size: 1.1rem;
+            cursor: pointer;
+            line-height: 1.4;
+        }
+
+        .ban-warning {
+            color: #ff4444;
+            font-weight: bold;
+        }
+
+        button {
+            width: 100%;
+            padding: 18px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        button:hover { background: #ff8533; }
+
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .back-link a {
+            color: #888;
+            text-decoration: none;
+            font-size: 1.1rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 10px 20px;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .back-link a:hover {
+            color: var(--accent);
+            background: rgba(255, 107, 0, 0.1);
+        }
+
+        .error-message {
+            background: #3a1a1a;
+            border: 1px solid #ff4444;
+            color: #ff4444;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+            text-align: center;
+        }
+
+        @media (max-width: 600px) {
+            .container { padding: 20px; }
+            .checkbox-container label { font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Phan's Sunday Hockey</h1>
+        <h2>⚠️ MANDATORY RULES AGREEMENT</h2>
+        
+        <div class="warning-box">
+            <p>Failure to comply with these rules will result in PERMANENT BAN from all future games.</p>
+        </div>
+
+        <ul class="rules-list" id="rulesList">
+            <li>
+                <span class="rule-number">1</span>
+                <span class="rule-text">No Contact, may tie up player along board plays.</span>
+            </li>
+            <li>
+                <span class="rule-number">2</span>
+                <span class="rule-text">No slashing period, lift the bloody stick. If you slash, and hurt the opposing player. You are done for the night and future infraction will end in being banned.</span>
+            </li>
+            <li>
+                <span class="rule-number">3</span>
+                <span class="rule-text">Pass the puck! It's no fun for anyone if you dipsy doodle every shift.</span>
+            </li>
+            <li>
+                <span class="rule-number">4</span>
+                <span class="rule-text">Slap shots, don't take it if you can't control it. If you hit goalies in the head, or hurt anyone, you are banned from taking slapshots.</span>
+            </li>
+            <li>
+                <span class="rule-number">5</span>
+                <span class="rule-text">Shift OFF often, be considerate of your ice time and teammates.</span>
+            </li>
+            <li>
+                <span class="rule-number">6</span>
+                <span class="rule-text">Keep negative comments to yourself.</span>
+            </li>
+            <li>
+                <span class="rule-number">7</span>
+                <span class="rule-text">Skate hard, shift off when you're huffing and puffing.</span>
+            </li>
+            <li>
+                <span class="rule-number">8</span>
+                <span class="rule-text">Don't need to be overly aggressive, tone down the aggression. It's pickup.</span>
+            </li>
+            <li>
+                <span class="rule-number">9</span>
+                <span class="rule-text">Don't be that guy, if you have to ask if you're that guy. You're more likelh that guy! I will call you out if I have to!</span>
+            </li>
+            <li>
+                <span class="rule-number">10</span>
+                <span class="rule-text">Don't forget Traditional Handshake/Fist bump when game ends! Have fun!</span>
+            </li>
+        </ul>
+
+        <div class="error-message" id="errorMessage">
+            You must agree to the rules to complete registration.
+        </div>
+
+        <div class="agreement-box">
+            <div class="checkbox-container" id="agreementCheckbox">
+                <input type="checkbox" id="agreeRules">
+                <label for="agreeRules">
+                    I have read, understood, and agree to follow all rules. 
+                    I understand that <span class="ban-warning">breaking any rule will result in a permanent ban</span> 
+                    from Phan's Sunday Hockey.
+                </label>
+            </div>
+        </div>
+
+        <button id="completeBtn" onclick="completeRegistration()" disabled>Complete Registration</button>
+        
+        <div class="back-link">
+            <a href="/" onclick="goBack(event)">← Back</a>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+        
+        
+        // Schedule info (dynamic by selected game day/time)
+        let rosterReleaseLine = "Teams are released at the scheduled time";
+        let gameDayName = "game day";
+
+        (async function loadScheduleInfo() {
+            try {
+                const res = await fetch(`${API_URL}/api/status`);
+                const status = await res.json();
+                if (status && status.rosterReleaseLine) rosterReleaseLine = status.rosterReleaseLine;
+                if (status && status.gameDayName) gameDayName = status.gameDayName;
+            } catch (e) {
+                console.warn('Could not load schedule info', e);
+            }
+        })();
+// Check for temp registration data
+        const tempData = sessionStorage.getItem('tempRegData');
+        
+        if (!tempData) {
+            alert('No registration data found. Please start registration from the beginning.');
+            window.location.href = '/';
+        }
+        
+        const registrationData = JSON.parse(tempData);
+        
+        // Enable button when checkbox is checked
+        document.getElementById('agreeRules').addEventListener('change', function() {
+            document.getElementById('completeBtn').disabled = !this.checked;
+        });
+        
+        // Make the entire agreement box clickable
+        document.getElementById('agreementCheckbox').addEventListener('click', function(e) {
+            if (e.target.tagName !== 'INPUT') {
+                const checkbox = document.getElementById('agreeRules');
+                checkbox.checked = !checkbox.checked;
+                document.getElementById('completeBtn').disabled = !checkbox.checked;
+            }
+        });
+        
+        function goBack(e) {
+            e.preventDefault();
+            // The form data is already saved in sessionStorage from the signup page
+            // Just navigate back to preserve it
+            window.location.href = '/';
+        }
+        
+        async function completeRegistration() {
+            const agreed = document.getElementById('agreeRules').checked;
+            
+            if (!agreed) {
+                document.getElementById('errorMessage').style.display = 'block';
+                return;
+            }
+            
+            document.getElementById('completeBtn').disabled = true;
+            document.getElementById('completeBtn').innerText = 'Processing...';
+            
+            try {
+                const res = await fetch(`${API_URL}/api/register-final`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tempData: registrationData,
+                        rulesAgreed: true
+                    })
+                });
+                
+                const result = await res.json();
+                
+                if (result.success) {
+                    // Clear temp data
+                    sessionStorage.removeItem('tempRegData');
+                    // Also clear the saved form data since registration is complete
+                    sessionStorage.removeItem('signupFormData');
+                    
+                    // Show success message
+                    const isGoalie = result.isGoalie;
+                    const paymentMsg = isGoalie 
+    ? '✅ Goalies play FREE! No payment required.'
+    : '⚠️ E-Transfer payment must be received before stepping on the ice!';
+                    
+                    document.querySelector('.container').innerHTML = `
+                        <div style="text-align: center; padding: 40px 20px;">
+                            <h1 style="color: #4CAF50; margin-bottom: 20px;">✓ Registration Complete!</h1>
+                            <p style="font-size: 1.2rem; color: #ccc; margin-bottom: 20px;">
+                                You're registered for the game!
+                            </p>
+                            ${!isGoalie ? `<p style="color: #ff4444; font-weight: bold; margin-bottom: 20px;">${paymentMsg}</p>` : `<p style="color: #4CAF50; font-weight: bold; margin-bottom: 20px;">${paymentMsg}</p>`}
+                            <p style="color: #888; margin-bottom: 30px;">
+                                ${rosterReleaseLine ? `${rosterReleaseLine} to see your team assignment!` : 'Check back for your team assignment once the roster is released.'}
+                            </p>
+                            <button onclick="window.location.href='/'" style="width: 100%; padding: 15px; background: #ff6b00; color: white; border: none; border-radius: 5px; font-size: 1.1rem; cursor: pointer;">
+                                Return to Home
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('errorMessage').innerText = result.error || 'Registration failed.';
+                    document.getElementById('errorMessage').style.display = 'block';
+                    document.getElementById('completeBtn').disabled = false;
+                    document.getElementById('completeBtn').innerText = 'Complete Registration';
+                }
+            } catch (err) {
+                console.error('Error:', err);
+                document.getElementById('errorMessage').innerText = 'Error completing registration. Please try again.';
+                document.getElementById('errorMessage').style.display = 'block';
+                document.getElementById('completeBtn').disabled = false;
+                document.getElementById('completeBtn').innerText = 'Complete Registration';
+            }
+        }
+    </script>
+
+</body>
+</html>

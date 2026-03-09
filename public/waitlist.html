@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waitlist</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text: #ffffff;
+            --accent: #ff6b00;
+            --secondary: #888;
+        }
+
+        * { 
+            box-sizing: border-box; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid #444;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--accent);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        h2 {
+            text-align: center;
+            font-size: 1.1rem;
+            color: var(--secondary);
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+
+        .game-info {
+            text-align: center;
+            color: #aaa;
+            margin-bottom: 20px;
+            font-size: 1rem;
+        }
+
+        .game-date {
+            font-weight: bold;
+            color: #fff;
+            margin-bottom: 5px;
+        }
+
+        .waitlist-header {
+            background: linear-gradient(135deg, #3a1a1a, #4d2d2d);
+            border: 2px solid #ff4444;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .waitlist-count {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #ff6b00;
+            margin: 10px 0;
+        }
+
+        .waitlist-label {
+            color: #aaa;
+            font-size: 1.1rem;
+        }
+
+        .waitlist-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .waitlist-item {
+            background: linear-gradient(135deg, #2a2a2a, #333);
+            border-left: 4px solid var(--accent);
+            padding: 15px 20px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .position-number {
+            background: var(--accent);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .player-info {
+            flex: 1;
+        }
+
+        .player-name {
+            font-size: 1.2rem;
+            color: white;
+        }
+
+        .goalie-badge {
+            background: #ff6b00;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            margin-left: 8px;
+        }
+
+        .player-rating {
+            font-size: 0.85rem;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 15px;
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #444;
+        }
+
+        .back-link a {
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 1.1rem;
+        }
+
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+
+        .refresh-info {
+            text-align: center;
+            color: #666;
+            font-size: 0.85rem;
+            margin-top: 15px;
+        }
+
+        @media (max-width: 600px) {
+            .container { padding: 20px; }
+            .waitlist-count { font-size: 2.5rem; }
+            .player-name { font-size: 1.1rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1 id="pageTitle">Loading...</h1>
+        <h2>Waitlist</h2>
+        
+        <div class="game-info" id="gameInfo">
+            <div class="game-date" id="gameDate">Loading...</div>
+            <div id="gameLocationTime">Loading...</div>
+        </div>
+
+        <div class="waitlist-header">
+            <div class="waitlist-label">Total on Waitlist</div>
+            <div class="waitlist-count" id="totalWaitlist">0</div>
+        </div>
+
+        <ul class="waitlist-list" id="waitlistList">
+        </ul>
+
+        <div class="back-link">
+            <a href="/">← Back to Signup</a>
+        </div>
+
+        <div class="refresh-info">
+            Auto-refreshes every 30 seconds
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+
+        async function loadWaitlist() {
+            try {
+                const res = await fetch(`${API_URL}/api/waitlist`);
+                const data = await res.json();
+
+                try {
+                    const statusRes = await fetch(`${API_URL}/api/status`);
+                    const statusData = await statusRes.json();
+                    if (statusData.customTitle) {
+                        document.getElementById('pageTitle').innerText = statusData.customTitle;
+                        document.title = statusData.customTitle + ' - Waitlist';
+                    }
+                } catch (e) { /* ignore */ }
+
+
+                document.getElementById('totalWaitlist').innerText = data.totalWaitlist;
+                
+                if (data.location && data.time) {
+                    document.getElementById('gameDate').innerText = data.formattedDate || data.date;
+                    document.getElementById('gameLocationTime').innerText = `${data.location} | ${data.time}`;
+                }
+
+                const list = document.getElementById('waitlistList');
+                list.innerHTML = '';
+
+                if (data.waitlist.length === 0) {
+                    list.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🏒</div>
+                            <p>No one on the waitlist yet</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                data.waitlist.forEach(player => {
+                    const li = document.createElement('li');
+                    li.className = 'waitlist-item';
+                    const goalieBadge = player.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
+                    li.innerHTML = `
+                        <div class="position-number">${player.position}</div>
+                        <div class="player-info">
+                            <div class="player-name">${player.fullName} ${goalieBadge}</div>
+                        </div>
+                    `;
+                    list.appendChild(li);
+                });
+
+            } catch (err) {
+                console.error("Error loading waitlist", err);
+            }
+        }
+
+        loadWaitlist();
+        setInterval(loadWaitlist, 30000);
+    </script>
+
+</body>
+</html>
