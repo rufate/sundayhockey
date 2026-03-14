@@ -246,8 +246,8 @@
             </div>
 
             <div class="check-back-message" id="checkBackMessage" style="display:none;">
-                <strong id="checkBackStrong">📅 Check Back</strong><br>
-                <span id="checkBackDetail">Team rosters are released every game day at 5:00 PM ET</span>
+                <strong id="checkBackStrong">📅 Check back at the scheduled roster release time for team rosters</strong><br>
+                <span id="checkBackDetail">Countdown will appear once a roster release time is scheduled.</span>
             </div>
 
             <div id="teamsDisplay" style="display:none;">
@@ -284,6 +284,39 @@
         const API_URL = window.location.origin;
 
         let scheduleInfo = null;
+        let rosterReleaseAtIso = null;
+        let countdownInterval = null;
+
+        function formatCountdown(msRemaining) {
+            if (!Number.isFinite(msRemaining) || msRemaining <= 0) return 'Roster release time has arrived.';
+            const totalSeconds = Math.floor(msRemaining / 1000);
+            const days = Math.floor(totalSeconds / 86400);
+            const hours = Math.floor((totalSeconds % 86400) / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            const parts = [];
+            if (days > 0) parts.push(`${days}d`);
+            if (hours > 0 || days > 0) parts.push(`${hours}h`);
+            parts.push(`${minutes}m`);
+            if (days === 0) parts.push(`${seconds}s`);
+            return `Roster release in: ${parts.join(' ')}`;
+        }
+
+        function startCountdown() {
+            if (countdownInterval) clearInterval(countdownInterval);
+            const detailEl = document.getElementById('checkBackDetail');
+            if (!detailEl) return;
+            const tick = () => {
+                if (!rosterReleaseAtIso) {
+                    detailEl.textContent = 'Countdown will appear once a roster release time is scheduled.';
+                    return;
+                }
+                const remaining = new Date(rosterReleaseAtIso).getTime() - Date.now();
+                detailEl.textContent = formatCountdown(remaining);
+            };
+            tick();
+            countdownInterval = setInterval(tick, 1000);
+        }
 
         async function loadScheduleInfo() {
             try {
@@ -299,9 +332,10 @@
                 const strongEl = document.getElementById('checkBackStrong');
                 const detailEl = document.getElementById('checkBackDetail');
 
-                if (status.rosterReleaseLine) {
-                    if (strongEl) strongEl.textContent = status.rosterReleaseHeadline || '📅 Check Back';
-                    if (detailEl) detailEl.textContent = status.rosterReleaseLine;
+                if (status.rosterReleaseMessage || status.rosterReleaseLine) {
+                    if (strongEl) strongEl.textContent = status.rosterReleaseMessage || status.rosterReleaseHeadline || '📅 Check back at the scheduled roster release time for team rosters';
+                    rosterReleaseAtIso = status.rosterReleaseAtIso || null;
+                    startCountdown();
                 }
             } catch (e) {
                 // Non-fatal: keep defaults

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Rules - Phan's Sunday Hockey</title>
+    <title id="pageTitle">Game Rules - Phan's Hockey</title>
     <style>
         :root {
             --bg-color: #1a1a1a;
@@ -220,7 +220,7 @@
 <body>
 
     <div class="container">
-        <h1>Phan's Sunday Hockey</h1>
+        <h1 id="rulesHeading">Phan's Hockey</h1>
         <h2>⚠️ MANDATORY RULES AGREEMENT</h2>
         
         <div class="warning-box">
@@ -280,7 +280,7 @@
                 <label for="agreeRules">
                     I have read, understood, and agree to follow all rules. 
                     I understand that <span class="ban-warning">breaking any rule will result in a permanent ban</span> 
-                    from Phan's Sunday Hockey.
+                    from <span id="rulesLeagueName">Phan's Hockey</span>.
                 </label>
             </div>
         </div>
@@ -300,6 +300,18 @@
         let rosterReleaseLine = "Teams are released at the scheduled time";
         let gameDayName = "game day";
 
+        function applyGameDayBranding(dayName) {
+            const safeDayName = String(dayName || 'Sunday').trim();
+            const leagueName = `Phan's ${safeDayName} Hockey`;
+            document.title = `Game Rules - ${leagueName}`;
+
+            const headingEl = document.getElementById('rulesHeading');
+            if (headingEl) headingEl.textContent = leagueName;
+
+            const leagueNameEl = document.getElementById('rulesLeagueName');
+            if (leagueNameEl) leagueNameEl.textContent = leagueName;
+        }
+
         (async function loadScheduleInfo() {
             try {
                 const res = await fetch(`${API_URL}/api/status`);
@@ -308,6 +320,8 @@
                 if (status && status.gameDayName) gameDayName = status.gameDayName;
             } catch (e) {
                 console.warn('Could not load schedule info', e);
+            } finally {
+                applyGameDayBranding(gameDayName);
             }
         })();
 // Check for temp registration data
@@ -341,6 +355,36 @@
             window.location.href = '/';
         }
         
+        function formatCountdown(msRemaining) {
+            if (!Number.isFinite(msRemaining) || msRemaining <= 0) return 'Roster release time has arrived.';
+            const totalSeconds = Math.floor(msRemaining / 1000);
+            const days = Math.floor(totalSeconds / 86400);
+            const hours = Math.floor((totalSeconds % 86400) / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            const parts = [];
+            if (days > 0) parts.push(`${days}d`);
+            if (hours > 0 || days > 0) parts.push(`${hours}h`);
+            parts.push(`${minutes}m`);
+            if (days === 0) parts.push(`${seconds}s`);
+            return `Roster release in: ${parts.join(' ')}`;
+        }
+
+        function startRulesCountdown() {
+            const el = document.getElementById('rulesCountdown');
+            if (!el) return;
+            const tick = () => {
+                if (!rosterReleaseAtIso) {
+                    el.textContent = 'Countdown will appear once a roster release time is scheduled.';
+                    return;
+                }
+                const remaining = new Date(rosterReleaseAtIso).getTime() - Date.now();
+                el.textContent = formatCountdown(remaining);
+            };
+            tick();
+            setInterval(tick, 1000);
+        }
+
         async function completeRegistration() {
             const agreed = document.getElementById('agreeRules').checked;
             
@@ -383,14 +427,16 @@
                                 You're registered for the game!
                             </p>
                             ${!isGoalie ? `<p style="color: #ff4444; font-weight: bold; margin-bottom: 20px;">${paymentMsg}</p>` : `<p style="color: #4CAF50; font-weight: bold; margin-bottom: 20px;">${paymentMsg}</p>`}
-                            <p style="color: #888; margin-bottom: 30px;">
-                                ${rosterReleaseLine ? `${rosterReleaseLine} to see your team assignment!` : 'Check back for your team assignment once the roster is released.'}
-                            </p>
+                            <div style="background: linear-gradient(135deg, #2a1f0e, #3c2b12); border: 2px solid #ffb347; border-radius: 10px; padding: 16px; margin: 0 0 30px 0;">
+                                <p style="color: #ffd27a; font-weight: bold; margin: 0 0 8px 0;">${rosterReleaseMessage}</p>
+                                <p id="rulesCountdown" style="color: #f4e0b2; margin: 0; line-height: 1.5;">Countdown will appear once a roster release time is scheduled.</p>
+                            </div>
                             <button onclick="window.location.href='/'" style="width: 100%; padding: 15px; background: #ff6b00; color: white; border: none; border-radius: 5px; font-size: 1.1rem; cursor: pointer;">
                                 Return to Home
                             </button>
                         </div>
                     `;
+                    startRulesCountdown();
                 } else {
                     document.getElementById('errorMessage').innerText = result.error || 'Registration failed.';
                     document.getElementById('errorMessage').style.display = 'block';

@@ -729,6 +729,7 @@
             font-size: 1.1rem;
         }
 
+
         .maintenance-toggle {
             display: flex;
             align-items: center;
@@ -1229,7 +1230,116 @@
             }
         }
 
-</style>
+
+        .announcement-control {
+            background: linear-gradient(135deg, #1a2f4d, #2b3f66);
+            border: 2px solid #4a90e2;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+
+        .announcement-control h3 {
+            margin: 0 0 15px 0;
+            color: #7ab8ff;
+            font-size: 1.1rem;
+        }
+
+        .announcement-status {
+            margin-left: auto;
+            font-weight: bold;
+            padding: 10px 18px;
+            border-radius: 999px;
+            font-size: 0.95rem;
+            color: white;
+        }
+
+        .announcement-status.active {
+            background: #4a90e2;
+        }
+
+        .announcement-status.inactive {
+            background: #666;
+        }
+
+        .message-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-top: 12px;
+        }
+
+        .message-grid textarea,
+        .message-grid select,
+        .message-grid input[type="file"] {
+            width: 100%;
+        }
+
+        .message-box {
+            background: rgba(0,0,0,0.18);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 16px;
+            margin-top: 14px;
+        }
+
+        .message-box label {
+            display: block;
+            color: #f0f0f0;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .message-box small {
+            color: #b8b8b8;
+            display: block;
+            margin-top: 6px;
+        }
+
+        .message-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+
+        .secondary-btn {
+            background: #666;
+        }
+
+        .secondary-btn:hover {
+            background: #777;
+        }
+
+        .preview-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+        }
+
+        .preview-thumb {
+            width: 96px;
+            height: 96px;
+            object-fit: contain;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.18);
+            display: none;
+        }
+
+        .preview-thumb.visible {
+            display: block;
+        }
+
+        @media (max-width: 700px) {
+            .message-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+    </style>
 </head>
 <body>
 
@@ -1271,6 +1381,46 @@
             <p style="color:#888; font-size:0.85rem; margin-top:10px;">
                 When enabled, a flashing alert will appear on all pages warning users that the portal is down for maintenance.
             </p>
+
+        </div>
+
+        <!-- ANNOUNCEMENT -->
+        <div class="announcement-control">
+            <h3>📢 Announcement (does not block signup)</h3>
+            <div class="maintenance-toggle">
+                <input type="checkbox" id="announcementCheckbox" class="maintenance-checkbox">
+                <label for="announcementCheckbox" class="maintenance-label">Enable Announcement</label>
+                <div class="announcement-status inactive" id="announcementStatus">ANNOUNCEMENT OFF</div>
+            </div>
+            <p style="color:#9fc7ff; font-size:0.9rem; margin-top:10px;">
+                Use this for any player-facing message. It shows on the signup page and does not block signup.
+            </p>
+
+            <div class="message-box">
+                <label for="announcementText">Custom Announcement</label>
+                <textarea id="announcementText" rows="4" placeholder="Type any custom announcement here..."></textarea>
+                <small>This banner is separate from maintenance mode and will not shut down signup.</small>
+            </div>
+
+            <div class="message-grid">
+                <div class="message-box">
+                    <label for="announcementImageUpload">Upload Announcement Picture</label>
+                    <input type="file" id="announcementImageUpload" accept="image/*">
+                    <small>Large clear image supported. It will display directly on the signup page.</small>
+                </div>
+
+                <div class="message-box">
+                    <label>Image Preview</label>
+                    <div class="preview-row">
+                        <img id="announcementImagePreview" class="preview-thumb visible" alt="Announcement preview" style="width:180px;height:auto;max-height:180px;object-fit:contain;">
+                        <button type="button" class="secondary-btn control-btn" onclick="clearAnnouncementImage()">Remove Picture</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="message-actions">
+                <button type="button" class="control-btn" onclick="saveAnnouncementSettings()">Save Announcement</button>
+            </div>
         </div>
 
         <!-- TITLE EDITOR -->
@@ -1667,20 +1817,26 @@
         }
 
         function nextOccurrenceDate(dow, hour, minute) {
-            const etNow = getETNowDate();
-            const currentDow = etNow.getDay();
+            // Build an exact wall-clock value without browser timezone conversion.
+            const nowEt = getETNowDate();
+            const currentDow = nowEt.getDay();
             let daysAhead = (dow - currentDow + 7) % 7;
 
-            // If today but time passed, jump a week
             const past = (daysAhead === 0) && (
-                etNow.getHours() > hour || (etNow.getHours() === hour && etNow.getMinutes() >= minute)
+                nowEt.getHours() > hour || (nowEt.getHours() === hour && nowEt.getMinutes() >= minute)
             );
             if (past) daysAhead = 7;
 
-            const next = new Date(etNow);
-            next.setDate(etNow.getDate() + daysAhead);
-            next.setHours(hour, minute, 0, 0);
-            return next;
+            const result = new Date(Date.UTC(
+                nowEt.getFullYear(),
+                nowEt.getMonth(),
+                nowEt.getDate() + daysAhead,
+                hour,
+                minute,
+                0,
+                0
+            ));
+            return result;
         }
 
         function toDatetimeLocalValue(d) {
@@ -1697,23 +1853,27 @@
         }
 
         function formatDayTimeFromDatetimeLocal(dtLocalValue) {
-            if (!dtLocalValue) return "";
-            const d = new Date(dtLocalValue);
-            // Format using ET regardless of client locale.
-            const parts = new Intl.DateTimeFormat("en-US", {
-                timeZone: "America/New_York",
-                weekday: "long",
-                hour: "numeric",
-                minute: "2-digit",
-                hour12: true
-            }).formatToParts(d);
-            const get = (t) => (parts.find(p => p.type === t)?.value || "");
-            const weekday = get("weekday");
-            const hour = get("hour");
-            const minute = get("minute");
-            const dayPeriod = get("dayPeriod");
-            if (!weekday || !hour || !minute || !dayPeriod) return "";
-            return `${weekday} ${hour}:${minute} ${dayPeriod}`;
+            if (!dtLocalValue || !dtLocalValue.includes('T')) return "";
+
+            // IMPORTANT:
+            // Treat datetime-local values as ET wall-clock values exactly as entered.
+            // Do not convert from the browser's local timezone.
+            const [datePart, timePart] = dtLocalValue.split('T');
+            const [year, month, day] = datePart.split('-').map(Number);
+            const [hour24, minute] = timePart.split(':').map(Number);
+
+            if ([year, month, day, hour24, minute].some(v => !Number.isFinite(v))) return "";
+
+            const base = new Date(Date.UTC(year, month - 1, day));
+            const weekday = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'UTC',
+                weekday: 'long'
+            }).format(base);
+
+            const hour12 = ((hour24 + 11) % 12) + 1;
+            const dayPeriod = hour24 >= 12 ? 'PM' : 'AM';
+
+            return `${weekday} ${hour12}:${pad2(minute)} ${dayPeriod}`;
         }
 
         
@@ -1742,6 +1902,28 @@
             if (!dateVal) return '';
             return `${dateVal}T${pad2(hour24)}:${pad2(minute)}`;
         }
+        function getEnhancedControlParts(targetId) {
+            const wrapper = document.querySelector(`.enhanced-datetime[data-target="${targetId}"]`);
+            if (!wrapper) return null;
+            const dateVal = wrapper.querySelector('.date-input')?.value || '';
+            const timeText = (wrapper.querySelector('.time-trigger')?.textContent || '').trim();
+            const m = timeText.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+            if (!dateVal || !m) return null;
+            let hour24 = parseInt(m[1], 10) % 12;
+            const minute = parseInt(m[2], 10);
+            if (m[3].toUpperCase() === 'PM') hour24 += 12;
+            const base = new Date(Date.UTC(
+                Number(dateVal.slice(0,4)),
+                Number(dateVal.slice(5,7)) - 1,
+                Number(dateVal.slice(8,10))
+            ));
+            const weekday = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'UTC',
+                weekday: 'long'
+            }).format(base);
+            return { dateVal, hour24, minute, weekday };
+        }
+
 
         function ensureDateForInput(input) {
             const parsed = parseDatetimeLocalValue(input.value);
@@ -2165,8 +2347,13 @@
                 if (data.selectedDayTime) {
                     const parsed = parseSelectedDayTime(data.selectedDayTime);
                     if (parsed) {
-                        const next = nextOccurrenceDate(parsed.dow, parsed.hour, parsed.minute);
-                        document.getElementById('titleDayTime').value = toDatetimeLocalValue(next);
+                        const exactDate = data.gameDate || '';
+                        if (exactDate) {
+                            document.getElementById('titleDayTime').value = buildDatetimeLocal(exactDate, parsed.hour, parsed.minute);
+                        } else {
+                            const next = nextOccurrenceDate(parsed.dow, parsed.hour, parsed.minute);
+                            document.getElementById('titleDayTime').value = toDatetimeLocalValue(next);
+                        }
                         syncEnhancedControl('titleDayTime');
                     }
                 }
@@ -2186,6 +2373,28 @@
                     backupGoaliesData = data.backupGoalies;
                 }
                 
+                const announcementCheckbox = document.getElementById('announcementCheckbox');
+                const announcementStatus = document.getElementById('announcementStatus');
+                const announcementText = document.getElementById('announcementText');
+                                const announcementImagePreview = document.getElementById('announcementImagePreview');
+
+                if (announcementCheckbox) {
+                    announcementCheckbox.checked = !!data.announcementEnabled;
+                }
+                if (announcementStatus) {
+                    announcementStatus.innerText = data.announcementEnabled ? 'ANNOUNCEMENT LIVE' : 'ANNOUNCEMENT OFF';
+                    announcementStatus.className = 'announcement-status ' + (data.announcementEnabled ? 'active' : 'inactive');
+                }
+                if (announcementText) {
+                    announcementText.value = data.announcementText || '';
+                }
+                if (announcementImagePreview) {
+                    const firstImage = Array.isArray(data.announcementImages) && data.announcementImages.length ? data.announcementImages[0] : '';
+                    announcementImagePreview.src = firstImage || '';
+                    announcementImagePreview.classList.toggle('visible', !!firstImage);
+                    window.announcementImageData = firstImage || '';
+                }
+
                 updateTitlePreview();
             } catch (err) {
                 console.error("Error loading app settings:", err);
@@ -2222,42 +2431,59 @@
 
         // Update title preview based on selection
         function updateTitlePreview() {
-            const dtVal = document.getElementById('titleDayTime')?.value || '';
-            const dayTime = formatDayTimeFromDatetimeLocal(dtVal);
-            const day = (dayTime.split(' ')[0] || "Friday");
-            const newTitle = `Phan's ${day} Hockey`;
+            const parts = getEnhancedControlParts('titleDayTime');
+            if (!parts) return;
+            const newTitle = `Phan's ${parts.weekday} Hockey`;
             document.getElementById('dynamicTitlePreview').innerText = newTitle;
+
+            const wrapper = document.querySelector('.enhanced-datetime[data-target="titleDayTime"]');
+            const summary = wrapper?.querySelector('.picker-summary');
+            if (summary) {
+                summary.textContent = `ET: ${parts.weekday} ${formatTime12(parts.hour24, parts.minute)}`;
+            }
+
+            const hiddenInput = document.getElementById('titleDayTime');
+            if (hiddenInput) {
+                hiddenInput.value = buildDatetimeLocal(parts.dateVal, parts.hour24, parts.minute);
+            }
         }
 
         // Update title and time
         async function updateTitle() {
-            const dtVal = document.getElementById('titleDayTime')?.value || '';
-            const dayTime = formatDayTimeFromDatetimeLocal(dtVal);
-            if (!dayTime) {
+            const parts = getEnhancedControlParts('titleDayTime');
+            if (!parts) {
                 alert('Please select a day and time first.');
                 return;
             }
-            const day = dayTime.split(' ')[0];
-            const newTitle = `Phan's ${day} Hockey`;
-            const selectedGameDate = dtVal ? dtVal.split('T')[0] : '';
-            
+
+            const newTitle = `Phan's ${parts.weekday} Hockey`;
+            const dayTime = `${parts.weekday} ${formatTime12(parts.hour24, parts.minute)}`;
+            const selectedGameDate = parts.dateVal;
+
+            const hiddenInput = document.getElementById('titleDayTime');
+            if (hiddenInput) {
+                hiddenInput.value = buildDatetimeLocal(parts.dateVal, parts.hour24, parts.minute);
+            }
+
             try {
                 const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         sessionToken: sessionToken,
                         customTitle: newTitle,
                         selectedDayTime: dayTime,
                         gameDate: selectedGameDate
                     })
                 });
-                
+
                 if (res.ok) {
                     document.getElementById('titlePreview').innerText = newTitle;
                     document.getElementById('timeInput').value = dayTime;
-                    alert(`✅ Title updated to: ${newTitle}\nTime updated to: ${dayTime}\nDate updated to: ${selectedGameDate}`);
-                    loadSettings(); // Refresh other displays
+                    alert(`✅ Title updated to: ${newTitle}
+Time updated to: ${dayTime}
+Date updated to: ${selectedGameDate}`);
+                    loadSettings();
                 } else {
                     alert('Failed to update title');
                 }
@@ -3290,6 +3516,98 @@
                 resultDiv.innerHTML = '❌ Network error';
             }
         }
+        async function resizeAnnouncementImageDataUrl(file, maxWidth = 1800, maxHeight = 1200, quality = 0.92) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        const ratio = Math.min(maxWidth / img.width, maxHeight / img.height, 1);
+                        const drawW = Math.round(img.width * ratio);
+                        const drawH = Math.round(img.height * ratio);
+                        canvas.width = drawW;
+                        canvas.height = drawH;
+                        ctx.clearRect(0, 0, drawW, drawH);
+                        ctx.drawImage(img, 0, 0, drawW, drawH);
+                        resolve(canvas.toDataURL('image/jpeg', quality));
+                    };
+                    img.onerror = () => reject(new Error('Invalid image file'));
+                    img.src = event.target.result;
+                };
+                reader.onerror = () => reject(new Error('Unable to read file'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function handleAnnouncementImageUpload(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            try {
+                const dataUrl = await resizeAnnouncementImageDataUrl(file, 1800, 1200, 0.92);
+                window.announcementImageData = dataUrl;
+                const preview = document.getElementById('announcementImagePreview');
+                if (preview) {
+                    preview.src = dataUrl;
+                    preview.classList.add('visible');
+                }
+            } catch (err) {
+                console.error('Announcement image upload error:', err);
+                alert('Could not process that image. Please try a different file.');
+            }
+        }
+
+        function clearAnnouncementImage() {
+            window.announcementImageData = '';
+            const preview = document.getElementById('announcementImagePreview');
+            if (preview) {
+                preview.src = '';
+                preview.classList.remove('visible');
+            }
+            const upload = document.getElementById('announcementImageUpload');
+            if (upload) upload.value = '';
+        }
+
+        async function saveAnnouncementSettings() {
+            const checkbox = document.getElementById('announcementCheckbox');
+            const text = document.getElementById('announcementText');
+            const checkboxEnabled = !!(checkbox && checkbox.checked);
+            const enabled = checkboxEnabled;
+            const announcementTextValue = text ? text.value.trim() : '';
+            const announcementImages = window.announcementImageData ? [window.announcementImageData] : [];
+
+            try {
+                const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionToken,
+                        announcementEnabled: checkboxEnabled,
+                        announcementText: announcementTextValue,
+                        announcementImages
+                    })
+                });
+
+                const result = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    throw new Error(result.error || 'Failed to save announcement');
+                }
+
+                await loadAppSettings();
+                alert(enabled
+                    ? '📢 Announcement saved and enabled on signup page.'
+                    : '✅ Announcement saved and hidden from signup page.');
+            } catch (err) {
+                console.error('Save announcement error:', err);
+                alert(err.message || 'Failed to save announcement');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const upload = document.getElementById('announcementImageUpload');
+            if (upload) upload.addEventListener('change', handleAnnouncementImageUpload);
+        });
 
         initializeEnhancedDateTimeControls();
         checkSession();

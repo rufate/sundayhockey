@@ -4,6 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const cron = require('node-cron');
 const { Pool } = require('pg');
+const crypto = require('crypto');
+process.env.TZ = 'America/New_York';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -12,6 +14,11 @@ const HAS_DB = !!process.env.DATABASE_URL;
 
 // IMPORTANT: Render (and many hosts) will NOT have Postgres listening on localhost.
 // If DATABASE_URL is not set, we run in "file mode" and skip all DB calls.
+if (process.env.NODE_ENV === 'production' && !HAS_DB) {
+    console.error('DATABASE_URL is required in production to protect signup data integrity.');
+    process.exit(1);
+}
+
 const pool = HAS_DB ? new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
@@ -40,15 +47,17 @@ if (pool) {
 }
 
 // Middleware
+app.disable('x-powered-by');
 app.use(cors());
-app.use(express.json());
-app.use(express.static('public'));
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+app.use(express.static('public', { maxAge: '1h', etag: true }));
 
 // --- DATA STORE ---
 let playerSpots = 20;
 let players = []; 
 let waitlist = [];
-const ADMIN_PASSWORD = "964888";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "964888";
 
 // Game details - FRIDAY HOCKEY
 let gameLocation = "Capri Recreation Complex";
@@ -273,6 +282,9 @@ const DAY_TIME_OPTIONS = [
 // --- APP SETTINGS ---
 let maintenanceMode = false;
 let customTitle = `Phan's ${getGameDayName()} Hockey`;
+let announcementEnabled = false;
+let announcementText = '';
+let announcementImages = [];
 
 // ============================================
 // END NEW CONFIGURATION SECTION
@@ -478,6 +490,10 @@ async function autoReleaseRoster() {
         manualOverride = true;
         manualOverrideState = 'locked';
 
+        // Auto-enable payment reminder when roster is released
+        announcementEnabled = true;
+        announcementText = 'E-transfer required immediately after roster release.';
+
         currentWeekData = {
             weekNumber: week,
             year: year,
@@ -495,6 +511,15 @@ async function autoReleaseRoster() {
 
         if (pool) {
             await saveWeekHistory(year, week, teams.whiteTeam, teams.darkTeam);
+
+            await pool.query(
+                'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+                ['announcementEnabled', announcementEnabled.toString()]
+            );
+            await pool.query(
+                'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+                ['announcementText', announcementText]
+            );
         }
         await saveData();
         return true;
@@ -525,7 +550,7 @@ async function addAutoPlayers() {
         }
         
         const newPlayer = {
-            id: Date.now() + Math.floor(Math.random() * 1000),
+            id: generateSafeId(),
             firstName: autoPlayer.firstName,
             lastName: autoPlayer.lastName,
             phone: autoPlayer.phone,
@@ -767,7 +792,13 @@ async function initDatabase() {
                 value TEXT NOT NULL
             )
         `);
-        
+
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_players_phone_digits_unique ON players ((regexp_replace(phone, '\D', '', 'g')))`);
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlist_phone_digits_unique ON waitlist ((regexp_replace(phone, '\D', '', 'g')))`);
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_players_full_name_unique ON players ((lower(trim(first_name || ' ' || last_name))))`);
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlist_full_name_unique ON waitlist ((lower(trim(first_name || ' ' || last_name))))`);
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_history_year_week_unique ON history (year, week_number)`);
+
         await loadDataFromDB();
     } catch (err) {
         console.error('Database initialization error:', err);
@@ -852,6 +883,16 @@ async function loadDataFromDB() {
         if (appSettings.customTitle) customTitle = appSettings.customTitle;
         if (appSettings.selectedDayTime) gameTime = appSettings.selectedDayTime;
         if (appSettings.selectedArena) gameLocation = appSettings.selectedArena;
+        if (appSettings.announcementEnabled !== undefined) announcementEnabled = appSettings.announcementEnabled === 'true';
+        if (appSettings.announcementText !== undefined) announcementText = appSettings.announcementText || '';
+        if (appSettings.announcementImages !== undefined) {
+            try {
+                announcementImages = JSON.parse(appSettings.announcementImages || '[]');
+                if (!Array.isArray(announcementImages)) announcementImages = [];
+            } catch {
+                announcementImages = [];
+            }
+        }
         
     } catch (err) {
         console.error('Error loading from DB:', err);
@@ -939,6 +980,9 @@ function loadDataFromFile() {
             // Load new settings
             maintenanceMode = data.maintenanceMode ?? false;
             customTitle = data.customTitle ?? `Phan's ${getGameDayName()} Hockey`;
+            announcementEnabled = data.announcementEnabled ?? false;
+            announcementText = data.announcementText ?? '';
+            announcementImages = Array.isArray(data.announcementImages) ? data.announcementImages : [];
             refreshDynamicSignupCode();
         } else {
             gameDate = calculateNextGameDate();
@@ -996,6 +1040,77 @@ function formatPhoneNumber(phone) {
         return '(' + match[1] + ') ' + match[2] + '-' + match[3];
     }
     return phone;
+}
+
+function normalizeFullName(firstName, lastName) {
+    return `${capitalizeFullName(firstName)} ${capitalizeFullName(lastName)}`.toLowerCase().trim();
+}
+
+function generateSafeId() {
+    const ts = Date.now() * 1000;
+    const rand = crypto.randomInt(0, 1000);
+    return ts + rand;
+}
+
+function syncPlayerSpotsFromMemory() {
+    const nonGoalieCount = players.filter(p => !p.isGoalie).length;
+    playerSpots = Math.max(0, 20 - nonGoalieCount);
+    return playerSpots;
+}
+
+async function withDbClient(work) {
+    if (!pool) return await work(null);
+    const client = await pool.connect();
+    try { return await work(client); } finally { client.release(); }
+}
+
+async function withTransaction(client, work) {
+    if (!client) return await work(null);
+    await client.query('BEGIN');
+    try {
+        const result = await work(client);
+        await client.query('COMMIT');
+        return result;
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    }
+}
+
+async function acquireAppLock(client, key) {
+    if (!client) return;
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [String(key)]);
+}
+
+async function getSettingsMap(client) {
+    const executor = client || pool;
+    const res = await executor.query('SELECT key, value FROM settings');
+    const out = {};
+    for (const row of res.rows) out[row.key] = row.value;
+    return out;
+}
+
+async function dbDuplicateExists(client, firstName, lastName, phone) {
+    if (!client && !pool) return false;
+    const executor = client || pool;
+    const normalizedName = normalizeFullName(firstName, lastName);
+    const normalizedPhone = normalizePhoneDigits(phone);
+    const playerDup = await executor.query(
+        `SELECT 1 FROM players
+         WHERE lower(trim(first_name || ' ' || last_name)) = $1
+            OR regexp_replace(phone, '\D', '', 'g') = $2
+         LIMIT 1`,
+        [normalizedName, normalizedPhone]
+    );
+    if (playerDup.rowCount > 0) return true;
+    const waitlistDup = await executor.query(
+        `SELECT 1 FROM waitlist
+         WHERE lower(trim(first_name || ' ' || last_name)) = $1
+            OR regexp_replace(phone, '\D', '', 'g') = $2
+         LIMIT 1`,
+        [normalizedName, normalizedPhone]
+    );
+    return waitlistDup.rowCount > 0;
 }
 
 function isDuplicatePlayer(firstName, lastName, phone) {
@@ -1284,6 +1399,18 @@ function formatETDateTimeLong(etParts) {
     return `${weekday}, ${monthName} ${etParts.day}, ${etParts.year} at ${hour12}:${String(etParts.minute).padStart(2, '0')} ${ampm} ET`;
 }
 
+function formatETDayTimeShort(etParts) {
+    if (!etParts) return '';
+    const base = new Date(Date.UTC(etParts.year, etParts.month - 1, etParts.day));
+    const weekday = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'UTC',
+        weekday: 'long'
+    }).format(base);
+    const hour12 = ((etParts.hour + 11) % 12) + 1;
+    const ampm = etParts.hour >= 12 ? 'PM' : 'AM';
+    return `${weekday} at ${hour12}:${String(etParts.minute).padStart(2, '0')} ${ampm} ET`;
+}
+
 function etPartsToIso(etParts) {
     if (!etParts) return null;
     return `${String(etParts.year).padStart(4, '0')}-${String(etParts.month).padStart(2, '0')}-${String(etParts.day).padStart(2, '0')}T${String(etParts.hour).padStart(2, '0')}:${String(etParts.minute).padStart(2, '0')}:00-05:00`;
@@ -1299,8 +1426,12 @@ function getSignupOpenMessageData() {
         ? parseDatetimeLocalToETDate(rosterReleaseAt)
         : null;
     const rosterReleaseLabel = releaseAtParts ? formatETDateTimeLong(releaseAtParts) : null;
+    const rosterReleaseShortLabel = releaseAtParts ? formatETDayTimeShort(releaseAtParts) : null;
 
     const gameDayName = getGameDayName();
+    const rosterReleaseMessage = rosterReleaseShortLabel
+        ? `📅 Check back ${rosterReleaseShortLabel} for team rosters`
+        : `📅 Check back ${gameDayName} at the scheduled roster release time for team rosters`;
 
     return {
         gameDayName,
@@ -1313,12 +1444,10 @@ function getSignupOpenMessageData() {
         noCodeLine: 'No code required after signup opens to all players.',
         rosterReleaseAtIso: etPartsToIso(releaseAtParts),
         rosterReleaseLabel,
-        rosterReleaseHeadline: rosterReleaseLabel
-            ? `📅 Check Back ${rosterReleaseLabel}`
-            : `📅 Check Back ${gameDayName} at the scheduled roster release time`,
-        rosterReleaseLine: rosterReleaseLabel
-            ? `Team rosters are released on ${rosterReleaseLabel}`
-            : `Team rosters are released at the scheduled time`
+        rosterReleaseShortLabel,
+        rosterReleaseMessage,
+        rosterReleaseHeadline: rosterReleaseMessage,
+        rosterReleaseLine: rosterReleaseMessage
     };
 }
 
@@ -1372,6 +1501,9 @@ app.get('/api/status', (req, res) => {
         // NEW FIELDS - ADD THESE
         maintenanceMode: maintenanceMode,
         customTitle: customTitle,
+        announcementEnabled: announcementEnabled,
+        announcementText: announcementText,
+        announcementImages: announcementImages,
         arenaOptions: ARENA_OPTIONS,
         dayTimeOptions: DAY_TIME_OPTIONS,
         gameDayName: signupMessageData.gameDayName,
@@ -1385,11 +1517,15 @@ app.get('/api/status', (req, res) => {
 });
 
 app.get('/api/waitlist', (req, res) => {
-    // Sanitized waitlist - no ratings, no phone numbers
+    // Waitlist view supports self-cancel, so include the id but keep private data hidden.
     const waitlistNames = waitlist.map((p, index) => ({
+        id: p.id,
         position: index + 1,
+        firstName: p.firstName,
+        lastName: p.lastName,
         fullName: `${p.firstName} ${p.lastName}`,
-        isGoalie: p.isGoalie
+        isGoalie: p.isGoalie,
+        canCancel: !rosterReleased && !(String(p.firstName || '').toLowerCase() === 'phan' && String(p.lastName || '').toLowerCase() === 'ly')
         // EXCLUDED: rating, phone, paymentMethod
     }));
     
@@ -1399,7 +1535,8 @@ app.get('/api/waitlist', (req, res) => {
         location: gameLocation,
         time: gameTime,
         date: gameDate,
-        formattedDate: formatGameDate(gameDate)
+        formattedDate: formatGameDate(gameDate),
+        rosterReleased
     });
 });
 
@@ -1545,10 +1682,6 @@ app.post('/api/register-init', async (req, res) => {
     const cleanLastName = capitalizeFullName(lastName);
     const cleanPhone = formatPhoneNumber(phone);
 
-    if (isDuplicatePlayer(cleanFirstName, cleanLastName, cleanPhone)) {
-        return res.status(400).json({ error: "A player with this name or phone number is already registered." });
-    }
-
     if (!validatePhoneNumber(cleanPhone)) {
         return res.status(400).json({ error: "Please enter a valid 10-digit phone number." });
     }
@@ -1558,224 +1691,206 @@ app.post('/api/register-init', async (req, res) => {
         return res.status(400).json({ error: "Rating must be a number between 1 and 10." });
     }
 
-    if (playerSpots <= 0) {
-        const formattedPhone = cleanPhone;
-        const waitlistPlayer = {
-            id: Date.now(),
-            firstName: cleanFirstName,
-            lastName: cleanLastName,
-            phone: formattedPhone,
-            paymentMethod,
-            rating: ratingNum,
-            isGoalie: false,
-            joinedAt: new Date()
-        };
+    if (requirePlayerCode && signupCode !== playerSignupCode) {
+        return res.status(401).json({ error: "Invalid or missing signup code" });
+    }
 
+    if (pool) {
         try {
-            await pool.query(
-                `INSERT INTO waitlist (id, first_name, last_name, phone, payment_method, rating, is_goalie)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                [waitlistPlayer.id, waitlistPlayer.firstName, waitlistPlayer.lastName, 
-                 waitlistPlayer.phone, waitlistPlayer.paymentMethod, waitlistPlayer.rating, false]
-            );
-            waitlist.push(waitlistPlayer);
+            const result = await withDbClient(async (client) => {
+                return await withTransaction(client, async (tx) => {
+                    await acquireAppLock(tx, 'signup-register-init');
+                    const settings = await getSettingsMap(tx);
+                    if (settings.rosterReleased === true) {
+                        return { status: 403, body: { error: 'Signup is closed after roster release.' } };
+                    }
+                    const dupExists = await dbDuplicateExists(tx, cleanFirstName, cleanLastName, cleanPhone);
+                    if (dupExists) {
+                        return { status: 400, body: { error: "A player with this name or phone number is already registered." } };
+                    }
+                    const dbPlayers = await tx.query('SELECT COUNT(*)::int AS count FROM players WHERE is_goalie = false');
+                    const openSpots = Math.max(0, 20 - Number(dbPlayers.rows[0].count || 0));
+                    if (openSpots <= 0) {
+                        const waitlistPlayer = {
+                            id: generateSafeId(),
+                            firstName: cleanFirstName,
+                            lastName: cleanLastName,
+                            phone: cleanPhone,
+                            paymentMethod,
+                            rating: ratingNum,
+                            isGoalie: false,
+                            joinedAt: new Date().toISOString()
+                        };
+                        await tx.query(
+                            `INSERT INTO waitlist (id, first_name, last_name, phone, payment_method, rating, is_goalie)
+                             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                            [waitlistPlayer.id, waitlistPlayer.firstName, waitlistPlayer.lastName, waitlistPlayer.phone, waitlistPlayer.paymentMethod, waitlistPlayer.rating, false]
+                        );
+                        return { status: 200, body: { success: true, inWaitlist: true, waitlistPlayer } };
+                    }
+                    return { status: 200, body: { success: true, proceedToRules: true, isGoalie: false, tempData: { firstName: cleanFirstName, lastName: cleanLastName, phone: cleanPhone, paymentMethod, rating: ratingNum, isGoalie: false } } };
+                });
+            });
+            if (result.body?.inWaitlist && result.body.waitlistPlayer) {
+                waitlist.push(result.body.waitlistPlayer);
+                syncPlayerSpotsFromMemory();
+                await saveData();
+                return res.status(result.status).json({ success: true, inWaitlist: true, waitlistPosition: waitlist.length, message: "Game is full. You have been added to the waitlist." });
+            }
+            return res.status(result.status).json(result.body);
         } catch (err) {
-            console.error('Error adding to waitlist:', err);
-        }
-
-        return res.json({
-            success: true,
-            inWaitlist: true,
-            waitlistPosition: waitlist.length,
-            message: "Game is full. You have been added to the waitlist."
-        });
-    }
-
-    if (requirePlayerCode) {
-        if (signupCode !== playerSignupCode) {
-            return res.status(401).json({ error: "Invalid or missing signup code" });
+            console.error('Error in register-init:', err);
+            if (String(err.message || '').includes('duplicate key value')) {
+                return res.status(400).json({ error: "A player with this name or phone number is already registered." });
+            }
+            return res.status(500).json({ error: 'Database error' });
         }
     }
 
-    res.json({ 
-        success: true, 
-        proceedToRules: true,
-        isGoalie: false,
-        tempData: {
-            firstName: cleanFirstName,
-            lastName: cleanLastName,
-            phone: cleanPhone,
-            paymentMethod,
-            rating: ratingNum,
-            isGoalie: false
-        }
-    });
+    if (isDuplicatePlayer(cleanFirstName, cleanLastName, cleanPhone)) {
+        return res.status(400).json({ error: "A player with this name or phone number is already registered." });
+    }
+    if (playerSpots <= 0) {
+        const waitlistPlayer = { id: generateSafeId(), firstName: cleanFirstName, lastName: cleanLastName, phone: cleanPhone, paymentMethod, rating: ratingNum, isGoalie: false, joinedAt: new Date().toISOString() };
+        waitlist.push(waitlistPlayer);
+        saveData();
+        return res.json({ success: true, inWaitlist: true, waitlistPosition: waitlist.length, message: "Game is full. You have been added to the waitlist." });
+    }
+    res.json({ success: true, proceedToRules: true, isGoalie: false, tempData: { firstName: cleanFirstName, lastName: cleanLastName, phone: cleanPhone, paymentMethod, rating: ratingNum, isGoalie: false } });
 });
 
 app.post('/api/register-final', async (req, res) => {
     const { tempData, rulesAgreed } = req.body;
-    
-    if (!rulesAgreed) {
-        return res.status(400).json({ error: "You must agree to the rules to register." });
-    }
-    
-    if (!tempData || !tempData.firstName) {
-        return res.status(400).json({ error: "Registration data missing." });
-    }
-    
-    if (isDuplicatePlayer(tempData.firstName, tempData.lastName, tempData.phone)) {
-        return res.status(400).json({ error: "A player with this name or phone number is already registered." });
-    }
-    
-    const newPlayer = {
-        id: Date.now(),
-        firstName: tempData.firstName,
-        lastName: tempData.lastName,
-        phone: tempData.phone,
-        paymentMethod: tempData.paymentMethod,
-        paid: false,
-        paidAmount: null,
-        rating: parseInt(tempData.rating) || 5,
-        isGoalie: false,
-        team: null,
-        registeredAt: new Date().toISOString(),
-        rulesAgreed: true
-    };
 
-    try {
-        await pool.query(
-            `INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team, rules_agreed)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-            [newPlayer.id, newPlayer.firstName, newPlayer.lastName, newPlayer.phone,
-             newPlayer.paymentMethod, newPlayer.paid, newPlayer.paidAmount, newPlayer.rating, false, null, true]
-        );
-        players.push(newPlayer);
-        playerSpots--;
-        await saveData();
-    } catch (err) {
-        console.error('Error saving player:', err);
-        return res.status(500).json({ error: "Database error" });
+    if (!rulesAgreed) return res.status(400).json({ error: "You must agree to the rules to register." });
+    if (!tempData || !tempData.firstName) return res.status(400).json({ error: "Registration data missing." });
+
+    const cleanFirstName = capitalizeFullName(tempData.firstName);
+    const cleanLastName = capitalizeFullName(tempData.lastName);
+    const cleanPhone = formatPhoneNumber(tempData.phone);
+    const ratingNum = parseInt(tempData.rating) || 5;
+
+    if (pool) {
+        try {
+            const result = await withDbClient(async (client) => withTransaction(client, async (tx) => {
+                await acquireAppLock(tx, 'signup-register-final');
+                const settings = await getSettingsMap(tx);
+                if (settings.rosterReleased === true) return { status: 403, body: { error: 'Signup is closed after roster release.' } };
+                const dupExists = await dbDuplicateExists(tx, cleanFirstName, cleanLastName, cleanPhone);
+                if (dupExists) return { status: 400, body: { error: "A player with this name or phone number is already registered." } };
+                const dbPlayers = await tx.query('SELECT COUNT(*)::int AS count FROM players WHERE is_goalie = false');
+                const openSpots = Math.max(0, 20 - Number(dbPlayers.rows[0].count || 0));
+                if (openSpots <= 0) return { status: 409, body: { error: 'That spot was just taken. Please try again and you will be added to the waitlist.' } };
+                const newPlayer = { id: generateSafeId(), firstName: cleanFirstName, lastName: cleanLastName, phone: cleanPhone, paymentMethod: tempData.paymentMethod, paid: false, paidAmount: null, rating: ratingNum, isGoalie: false, team: null, registeredAt: new Date().toISOString(), rulesAgreed: true };
+                await tx.query(
+                    `INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team, rules_agreed)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                    [newPlayer.id, newPlayer.firstName, newPlayer.lastName, newPlayer.phone, newPlayer.paymentMethod, newPlayer.paid, newPlayer.paidAmount, newPlayer.rating, false, null, true]
+                );
+                return { status: 200, body: { success: true, newPlayer } };
+            }));
+            if (!result.body?.success) return res.status(result.status).json(result.body);
+            players.push(result.body.newPlayer);
+            syncPlayerSpotsFromMemory();
+            await saveData();
+            return res.json({ success: true, inWaitlist: false, message: `You're registered! E-Transfer payment must be received before stepping on the ice.`, paymentDeadline: "Before stepping on the ice", rosterReleaseTime: getSignupOpenMessageData().rosterReleaseLine || "Teams released after admin generates roster", isGoalie: false });
+        } catch (err) {
+            console.error('Error saving player:', err);
+            if (String(err.message || '').includes('duplicate key value')) return res.status(400).json({ error: "A player with this name or phone number is already registered." });
+            return res.status(500).json({ error: 'Database error' });
+        }
     }
 
-    res.json({ 
-        success: true, 
-        inWaitlist: false,
-        message: `You're registered! E-Transfer payment must be received before stepping on the ice.`,
-        paymentDeadline: "Before stepping on the ice",
-        rosterReleaseTime: getSignupOpenMessageData().rosterReleaseLine || "Teams released after admin generates roster",
-        isGoalie: false
-    });
+    if (isDuplicatePlayer(cleanFirstName, cleanLastName, cleanPhone)) return res.status(400).json({ error: "A player with this name or phone number is already registered." });
+    const newPlayer = { id: generateSafeId(), firstName: cleanFirstName, lastName: cleanLastName, phone: cleanPhone, paymentMethod: tempData.paymentMethod, paid: false, paidAmount: null, rating: ratingNum, isGoalie: false, team: null, registeredAt: new Date().toISOString(), rulesAgreed: true };
+    players.push(newPlayer);
+    syncPlayerSpotsFromMemory();
+    saveData();
+    return res.json({ success: true, inWaitlist: false, message: `You're registered! E-Transfer payment must be received before stepping on the ice.`, paymentDeadline: "Before stepping on the ice", rosterReleaseTime: getSignupOpenMessageData().rosterReleaseLine || "Teams released after admin generates roster", isGoalie: false });
 });
 
-// CANCEL REGISTRATION ENDPOINT - MODIFIED TO PROTECT PHAN LY
+// CANCEL REGISTRATION / WAITLIST ENDPOINT
+// CANCEL REGISTRATION / WAITLIST ENDPOINT
 app.post('/api/cancel-registration', async (req, res) => {
     const { playerId, phone } = req.body;
-    
-    if (!playerId || !phone) {
-        return res.status(400).json({ error: "Player ID and phone number are required." });
-    }
-    
-    const idToRemove = parseInt(playerId);
-    if (isNaN(idToRemove)) {
-        return res.status(400).json({ error: "Invalid player ID." });
-    }
-    
-    const playerIndex = players.findIndex(p => String(p.id) === String(idToRemove));
-    
-    if (playerIndex === -1) {
-        return res.status(404).json({ error: "Player not found." });
-    }
-    
-    const player = players[playerIndex];
-    
-    // PROTECT PHAN LY - CANNOT CANCEL FROM SIGNUP PAGE
-    if (player.firstName.toLowerCase() === 'phan' && player.lastName.toLowerCase() === 'ly') {
-        return res.status(403).json({ error: "This player cannot be cancelled online. Please contact admin." });
-    }
-    
+    if (playerId === undefined || playerId === null || !phone) return res.status(400).json({ error: "Player ID and phone number are required." });
+    const idToRemove = String(playerId).trim();
+    if (!idToRemove) return res.status(400).json({ error: "Invalid player ID." });
+    if (rosterReleased) return res.status(403).json({ error: "Cannot cancel after roster has been released." });
     const submittedPhone = normalizePhoneDigits(phone);
-    const storedPhone = normalizePhoneDigits(player.phone);
-    
-    if (submittedPhone !== storedPhone) {
-        return res.status(401).json({ error: "Phone number does not match registration." });
-    }
-    
-    if (player.isGoalie) {
-        return res.status(403).json({ error: "Goalies cannot cancel online. Please contact admin." });
-    }
-    
-    if (rosterReleased) {
-        return res.status(403).json({ error: "Cannot cancel after roster has been released." });
-    }
-    
+    if (!submittedPhone) return res.status(400).json({ error: "Phone number is required." });
+
+    const isProtectedPlayer = (p) => String(p?.firstName || '').toLowerCase() === 'phan' && String(p?.lastName || '').toLowerCase() === 'ly';
+
     try {
         if (pool) {
-            await pool.query('DELETE FROM players WHERE id = $1', [player.id]);
+            const result = await withDbClient(async (client) => withTransaction(client, async (tx) => {
+                await acquireAppLock(tx, 'signup-cancel-registration');
+                const playerRes = await tx.query('SELECT * FROM players WHERE id = $1', [idToRemove]);
+                if (playerRes.rowCount > 0) {
+                    const p = playerRes.rows[0];
+                    if (normalizePhoneDigits(p.phone) !== submittedPhone) return { status: 401, body: { error: "Phone number does not match registration." } };
+                    if (isProtectedPlayer({ firstName: p.first_name, lastName: p.last_name })) return { status: 403, body: { error: "This player cannot be cancelled online. Please contact admin." } };
+                    await tx.query('DELETE FROM players WHERE id = $1', [idToRemove]);
+                    let promotedPlayer = null;
+                    const nextWait = await tx.query('SELECT * FROM waitlist ORDER BY joined_at, id LIMIT 1');
+                    if (nextWait.rowCount > 0) {
+                        const wp = nextWait.rows[0];
+                        await tx.query('DELETE FROM waitlist WHERE id = $1', [wp.id]);
+                        await tx.query(`INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team, rules_agreed) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`, [wp.id, wp.first_name, wp.last_name, wp.phone, wp.payment_method, false, null, Number(wp.rating) || 5, !!wp.is_goalie, null, true]);
+                        promotedPlayer = { id: Number(wp.id), firstName: wp.first_name, lastName: wp.last_name, phone: wp.phone, paymentMethod: wp.payment_method, paid: false, paidAmount: null, rating: Number(wp.rating) || 5, isGoalie: !!wp.is_goalie, team: null, registeredAt: new Date().toISOString(), rulesAgreed: true };
+                    }
+                    return { status: 200, body: { success: true, promotedPlayer } };
+                }
+                const waitRes = await tx.query('SELECT * FROM waitlist WHERE id = $1', [idToRemove]);
+                if (waitRes.rowCount > 0) {
+                    const w = waitRes.rows[0];
+                    if (normalizePhoneDigits(w.phone) !== submittedPhone) return { status: 401, body: { error: "Phone number does not match registration." } };
+                    if (isProtectedPlayer({ firstName: w.first_name, lastName: w.last_name })) return { status: 403, body: { error: "This player cannot be cancelled online. Please contact admin." } };
+                    await tx.query('DELETE FROM waitlist WHERE id = $1', [idToRemove]);
+                    return { status: 200, body: { success: true, waitlistCancelled: true } };
+                }
+                return { status: 404, body: { error: "Registration not found." } };
+            }));
+            if (!result.body?.success) return res.status(result.status).json(result.body);
+            players = players.filter(p => String(p.id) !== idToRemove);
+            waitlist = waitlist.filter(p => String(p.id) !== idToRemove && String(p.id) !== String(result.body.promotedPlayer?.id || ''));
+            if (result.body.promotedPlayer) players.push(result.body.promotedPlayer);
+            syncPlayerSpotsFromMemory();
+            await saveData();
+            return res.json({ success: true, message: result.body.waitlistCancelled ? "Waitlist registration cancelled successfully." : "Registration cancelled successfully.", promotedPlayer: result.body.promotedPlayer ? { firstName: result.body.promotedPlayer.firstName, lastName: result.body.promotedPlayer.lastName } : null, spotsAvailable: playerSpots, wasWaitlist: !!result.body.waitlistCancelled });
         }
+
+        const findById = (arr) => arr.findIndex(p => String(p.id).trim() === idToRemove);
+        const playerIndex = findById(players);
+        if (playerIndex !== -1) {
+            const player = players[playerIndex];
+            if (isProtectedPlayer(player)) return res.status(403).json({ error: "This player cannot be cancelled online. Please contact admin." });
+            if (normalizePhoneDigits(player.phone) !== submittedPhone) return res.status(401).json({ error: "Phone number does not match registration." });
+            players.splice(playerIndex, 1);
+            let promotedPlayer = null;
+            if (waitlist.length > 0) {
+                const wp = waitlist.shift();
+                promotedPlayer = { ...wp, paid: false, paidAmount: null, team: null, registeredAt: new Date().toISOString(), rulesAgreed: true };
+                players.push(promotedPlayer);
+            }
+            syncPlayerSpotsFromMemory();
+            saveData();
+            return res.json({ success: true, message: "Registration cancelled successfully.", promotedPlayer: promotedPlayer ? { firstName: promotedPlayer.firstName, lastName: promotedPlayer.lastName } : null, spotsAvailable: playerSpots });
+        }
+        const waitIndex = findById(waitlist);
+        if (waitIndex !== -1) {
+            const wp = waitlist[waitIndex];
+            if (isProtectedPlayer(wp)) return res.status(403).json({ error: "This player cannot be cancelled online. Please contact admin." });
+            if (normalizePhoneDigits(wp.phone) !== submittedPhone) return res.status(401).json({ error: "Phone number does not match registration." });
+            waitlist.splice(waitIndex, 1);
+            saveData();
+            return res.json({ success: true, message: "Waitlist registration cancelled successfully.", wasWaitlist: true, spotsAvailable: playerSpots });
+        }
+        return res.status(404).json({ error: "Registration not found." });
     } catch (err) {
-        console.error('Error removing from database:', err);
-    }
-    
-    players.splice(playerIndex, 1);
-    playerSpots++;
-    
-    let promotedPlayer = null;
-    
-    if (waitlist.length > 0) {
-        const waitlistPlayer = waitlist.shift();
-        
-        promotedPlayer = {
-            id: waitlistPlayer.id,
-            firstName: waitlistPlayer.firstName,
-            lastName: waitlistPlayer.lastName,
-            phone: waitlistPlayer.phone,
-            paymentMethod: waitlistPlayer.paymentMethod,
-            paid: false,
-            paidAmount: null,
-            rating: parseInt(waitlistPlayer.rating) || 5,
-            isGoalie: waitlistPlayer.isGoalie,
-            team: null,
-            registeredAt: new Date().toISOString(),
-            rulesAgreed: true
-        };
-        
-        players.push(promotedPlayer);
-        playerSpots--;
-        
-        try {
-            await pool.query('DELETE FROM waitlist WHERE id = $1', [waitlistPlayer.id]);
-            await pool.query(
-                `INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team, rules_agreed)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-                [promotedPlayer.id, promotedPlayer.firstName, promotedPlayer.lastName, promotedPlayer.phone,
-                 promotedPlayer.paymentMethod, promotedPlayer.paid, promotedPlayer.paidAmount, promotedPlayer.rating, promotedPlayer.isGoalie, null, true]
-            );
-        } catch (err) {
-            console.error('Error promoting waitlist player:', err);
-        }
-    }
-    
-    await saveData();
-    
-    res.json({
-        success: true,
-        message: "Registration cancelled successfully.",
-        promotedPlayer: promotedPlayer ? {
-            firstName: promotedPlayer.firstName,
-            lastName: promotedPlayer.lastName
-        } : null,
-        spotsAvailable: playerSpots
-    });
-});
-
-// --- ADMIN API - FULL ACCESS TO ALL DATA ---
-
-app.post('/api/admin/check-session', (req, res) => {
-    const { sessionToken } = req.body;
-    if (adminSessions[sessionToken]) {
-        res.json({ loggedIn: true });
-    } else {
-        res.json({ loggedIn: false });
+        console.error('Cancellation error:', err);
+        return res.status(500).json({ error: 'Server error' });
     }
 });
 
@@ -1804,6 +1919,9 @@ app.post('/api/admin/app-settings', (req, res) => {
     res.json({
         maintenanceMode,
         customTitle,
+        announcementEnabled,
+        announcementText,
+        announcementImages,
         selectedDayTime: gameTime,
         selectedArena: gameLocation,
         gameDate,
@@ -1816,14 +1934,22 @@ app.post('/api/admin/app-settings', (req, res) => {
 // Update app settings
 app.post('/api/admin/update-app-settings', async (req, res) => {
     const { sessionToken, maintenanceMode: newMaintenance, customTitle: newTitle, 
+            announcementEnabled: newAnnouncementEnabled, announcementText: newAnnouncementText, announcementImages: newAnnouncementImages,
             selectedDayTime, selectedArena, gameDate: newGameDate } = req.body;
     
     if (!adminSessions[sessionToken]) {
         return res.status(401).json({ error: "Unauthorized" });
     }
     
-    if (newMaintenance !== undefined) maintenanceMode = newMaintenance;
+    if (newMaintenance !== undefined) maintenanceMode = !!newMaintenance;
     if (newTitle) customTitle = newTitle;
+    if (newAnnouncementEnabled !== undefined) announcementEnabled = !!newAnnouncementEnabled;
+    if (newAnnouncementText !== undefined) announcementText = String(newAnnouncementText || '').trim();
+    if (newAnnouncementImages !== undefined) {
+        announcementImages = Array.isArray(newAnnouncementImages)
+            ? newAnnouncementImages.map(v => String(v || '').trim()).filter(Boolean).slice(0, 6)
+            : [];
+    }
     if (selectedDayTime) gameTime = selectedDayTime;
     if (selectedArena) gameLocation = selectedArena;
     if (newGameDate) gameDate = newGameDate;
@@ -1837,6 +1963,18 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
         await pool.query(
             'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
             ['customTitle', customTitle]
+        );
+        await pool.query(
+            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+            ['announcementEnabled', announcementEnabled.toString()]
+        );
+        await pool.query(
+            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+            ['announcementText', announcementText]
+        );
+        await pool.query(
+            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+            ['announcementImages', JSON.stringify(announcementImages)]
         );
         await pool.query(
             'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
@@ -1855,6 +1993,9 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
             success: true,
             maintenanceMode,
             customTitle,
+            announcementEnabled,
+            announcementText,
+            announcementImages,
             gameTime,
             gameLocation,
             gameDate
@@ -1888,7 +2029,7 @@ app.post('/api/admin/add-backup-goalie', async (req, res) => {
     }
     
     const newGoalie = {
-        id: Date.now(),
+        id: generateSafeId(),
         firstName: backupGoalie.firstName,
         lastName: backupGoalie.lastName,
         phone: backupGoalie.phone,
@@ -2151,7 +2292,7 @@ app.post('/api/admin/promote-waitlist', async (req, res) => {
         return res.status(404).json({ error: "Player not found in waitlist" });
     }
 
-    const player = waitlist.splice(index, 1)[0];
+    const player = waitlist[index];
     
     const newPlayer = {
         id: player.id,
@@ -2168,19 +2309,19 @@ app.post('/api/admin/promote-waitlist', async (req, res) => {
     
     try {
         if (pool) {
-            await pool.query(
-                `INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-                [newPlayer.id, newPlayer.firstName, newPlayer.lastName, newPlayer.phone,
-                 newPlayer.paymentMethod, newPlayer.paid, newPlayer.paidAmount, newPlayer.rating, newPlayer.isGoalie, null]
-            );
+            await withDbClient(async (client) => withTransaction(client, async (tx) => {
+                await acquireAppLock(tx, 'admin-promote-waitlist');
+                await tx.query('DELETE FROM waitlist WHERE id = $1', [player.id]);
+                await tx.query(
+                    `INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                    [newPlayer.id, newPlayer.firstName, newPlayer.lastName, newPlayer.phone, newPlayer.paymentMethod, newPlayer.paid, newPlayer.paidAmount, newPlayer.rating, newPlayer.isGoalie, null]
+                );
+            }));
         }
+        waitlist.splice(index, 1);
         players.push(newPlayer);
-        
-        if (!player.isGoalie && playerSpots > 0) {
-            playerSpots--;
-        }
-        
+        syncPlayerSpotsFromMemory();
         await saveData();
     } catch (err) {
         console.error('Error promoting player:', err);
@@ -2206,7 +2347,7 @@ app.post('/api/admin/remove-waitlist', async (req, res) => {
         return res.status(404).json({ error: "Player not found in waitlist" });
     }
 
-    const player = waitlist.splice(index, 1)[0];
+    const player = waitlist[index];
     
     try {
         if (pool) {
@@ -2242,7 +2383,7 @@ app.post('/api/admin/add-player', async (req, res) => {
 
     if (toWaitlist) {
         const waitlistPlayer = {
-            id: Date.now(),
+            id: generateSafeId(),
             firstName: cleanFirstName,
             lastName: cleanLastName,
             phone: formattedPhone,
@@ -2273,7 +2414,7 @@ app.post('/api/admin/add-player', async (req, res) => {
         }
         
         const newPlayer = {
-            id: Date.now(),
+            id: generateSafeId(),
             firstName: cleanFirstName,
             lastName: cleanLastName,
             phone: formattedPhone,
@@ -2467,6 +2608,10 @@ app.post('/api/admin/release-roster', async (req, res) => {
         requirePlayerCode = true;
         manualOverride = true;  // Keep locked after manual release
         manualOverrideState = 'locked';  // Force locked state
+
+        // Auto-enable payment reminder when roster is released
+        announcementEnabled = true;
+        announcementText = 'E-transfer required immediately after roster release.';
         
         currentWeekData = {
             weekNumber: week,
@@ -2482,6 +2627,16 @@ app.post('/api/admin/release-roster', async (req, res) => {
         }
         
         await saveWeekHistory(year, week, teams.whiteTeam, teams.darkTeam);
+
+        await pool.query(
+            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+            ['announcementEnabled', announcementEnabled.toString()]
+        );
+        await pool.query(
+            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+            ['announcementText', announcementText]
+        );
+
         await saveData();
         
         res.json({ 
@@ -2541,8 +2696,13 @@ app.post('/api/admin/manual-reset', async (req, res) => {
     // Code stays as 9855 - no auto-generation
     
     try {
-        await pool.query('DELETE FROM players');
-        await pool.query('DELETE FROM waitlist');
+        if (pool) {
+            await withDbClient(async (client) => withTransaction(client, async (tx) => {
+                await acquireAppLock(tx, 'manual-reset');
+                await tx.query('DELETE FROM players');
+                await tx.query('DELETE FROM waitlist');
+            }));
+        }
         
         // Auto-add predefined players after reset
         await addAutoPlayers();
@@ -2689,6 +2849,10 @@ initDatabase().then(() => {
         console.log(`Current players registered: ${players.length}`);
     });
 }).catch(err => {
+    if (process.env.NODE_ENV === 'production') {
+        console.error('Failed to initialize database. Refusing to start in production without a healthy database:', err);
+        process.exit(1);
+    }
     console.error('Failed to initialize database, starting with file fallback:', err);
     loadDataFromFile();
     
