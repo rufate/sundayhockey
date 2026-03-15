@@ -1419,7 +1419,7 @@
             </div>
 
             <div class="message-actions">
-                <button type="button" class="control-btn" onclick="saveAnnouncementSettings()">Save Announcement</button>
+                <button type="button" id="saveAnnouncementBtn" class="control-btn" onclick="saveAnnouncementSettings()">Save Announcement</button>
             </div>
         </div>
 
@@ -1442,7 +1442,7 @@
                     </div>
                 </div>
             </div>
-            <button class="update-title-btn" onclick="updateTitle()">Update Title & Time</button>
+            <button id="updateTitleBtn" class="update-title-btn" onclick="updateTitle()">Update Title & Time</button>
         </div>
 
         <!-- ARENA SELECTOR -->
@@ -1458,7 +1458,7 @@
                     <option value="Vollmer Lasalle Arena">Vollmer Lasalle Arena</option>
                     <option value="Atlas Tube Lakeshore">Atlas Tube Lakeshore</option>
                 </select>
-                <button class="update-arena-btn" onclick="updateArena()">Update Arena</button>
+                <button id="updateArenaBtn" class="update-arena-btn" onclick="updateArena()">Update Arena</button>
             </div>
             <div class="current-arena-display">
                 Current Arena: <span id="currentArenaDisplay">--</span>
@@ -1580,7 +1580,7 @@
                 </div>
 
                 <div class="control-row" style="margin-top:10px; gap:10px; flex-wrap:wrap;">
-                    <button class="control-btn" onclick="saveSchedules()" style="background:#4a90e2;">💾 Save Schedules</button>
+                    <button id="saveSchedulesBtn" class="control-btn" onclick="saveSchedules()" style="background:#4a90e2;">💾 Save Schedules</button>
                     <button class="control-btn" onclick="refreshSettings()" style="background:#555;">↻ Reload</button>
                     <div class="status-display" style="margin-left:0;">Now: <span id="etNowLine">--</span></div>
                 </div>
@@ -2189,34 +2189,38 @@
         }
 
         async function saveSchedules() {
-            try {
-                const payload = {
-                    sessionToken,
-                    signupLockEnabled: document.getElementById('signupLockEnabled').checked,
-                    signupLockStart: document.getElementById('signupLockStart').value,
-                    signupLockEnd: document.getElementById('signupLockEnd').value,
-                    rosterReleaseEnabled: document.getElementById('rosterReleaseEnabled').checked,
-                    rosterReleaseAt: document.getElementById('rosterReleaseAt').value,
-                    resetWeekEnabled: document.getElementById('resetWeekEnabled').checked,
-                    resetWeekAt: document.getElementById('resetWeekAt').value
-                };
+            const button = document.getElementById('saveSchedulesBtn');
+            return withBusyButton(button, 'Saving...', async () => {
+                try {
+                    const payload = {
+                        sessionToken,
+                        signupLockEnabled: document.getElementById('signupLockEnabled').checked,
+                        signupLockStart: document.getElementById('signupLockStart').value,
+                        signupLockEnd: document.getElementById('signupLockEnd').value,
+                        rosterReleaseEnabled: document.getElementById('rosterReleaseEnabled').checked,
+                        rosterReleaseAt: document.getElementById('rosterReleaseAt').value,
+                        resetWeekEnabled: document.getElementById('resetWeekEnabled').checked,
+                        resetWeekAt: document.getElementById('resetWeekAt').value
+                    };
 
-                const res = await fetch(`${API_URL}/api/admin/update-schedules`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                if (!res.ok) {
-                    alert("Failed to save schedules.");
-                    return;
+                    const res = await fetch(`${API_URL}/api/admin/update-schedules`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        alert(data.error || 'Failed to save schedules.');
+                        return;
+                    }
+                    document.getElementById('scheduleInfo').innerHTML = formatScheduleInfo(data);
+                    await refreshSettings();
+                    alert('✅ Schedules saved.');
+                } catch (e) {
+                    console.error(e);
+                    alert('Error saving schedules.');
                 }
-                const data = await res.json();
-                document.getElementById('scheduleInfo').innerHTML = formatScheduleInfo(data);
-                await refreshSettings();
-            } catch (e) {
-                console.error(e);
-                alert("Error saving schedules (see console).");
-            }
+            });
         }
 
         async function refreshSettings() {
@@ -2401,12 +2405,43 @@
             }
         }
 
+        function setButtonBusy(button, busy, busyText) {
+            if (!button) return;
+            if (!button.dataset.originalText) {
+                button.dataset.originalText = button.innerHTML;
+            }
+            button.disabled = !!busy;
+            button.style.opacity = busy ? '0.7' : '1';
+            button.style.pointerEvents = busy ? 'none' : 'auto';
+            button.innerHTML = busy ? busyText : button.dataset.originalText;
+        }
+
+        async function withBusyButton(button, busyText, action) {
+            if (button && button.disabled) return;
+            setButtonBusy(button, true, busyText);
+            try {
+                return await action();
+            } finally {
+                setButtonBusy(button, false, busyText);
+            }
+        }
+
+        function formatEtDateTimeLocal(value) {
+            if (!value || !value.includes('T')) return '—';
+            const [datePart, timePart] = value.split('T');
+            const [year, month, day] = datePart.split('-').map(Number);
+            const [hour, minute] = timePart.split(':').map(Number);
+            if (![year, month, day, hour, minute].every(Number.isFinite)) return '—';
+            return `${weekdayName(year, month, day)} ${formatTime12(hour, minute)} ET`;
+        }
+
         // Toggle maintenance mode
         async function toggleMaintenance() {
             const checkbox = document.getElementById('maintenanceCheckbox');
             const newState = checkbox.checked;
-            
+
             try {
+                checkbox.disabled = true;
                 const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2415,17 +2450,20 @@
                         maintenanceMode: newState
                     })
                 });
-                
+
+                const result = await res.json().catch(() => ({}));
                 if (res.ok) {
-                    loadAppSettings(); // Refresh UI
+                    await loadAppSettings();
                     alert(newState ? '🔧 Maintenance Mode ACTIVATED - Portal is now down' : '✅ Portal is now ACTIVE');
                 } else {
-                    checkbox.checked = !newState; // Revert on error
-                    alert('Failed to update maintenance mode');
+                    checkbox.checked = !newState;
+                    alert(result.error || 'Failed to update maintenance mode');
                 }
             } catch (err) {
                 console.error("Error toggling maintenance:", err);
                 checkbox.checked = !newState;
+            } finally {
+                checkbox.disabled = false;
             }
         }
 
@@ -2450,75 +2488,81 @@
 
         // Update title and time
         async function updateTitle() {
-            const parts = getEnhancedControlParts('titleDayTime');
-            if (!parts) {
-                alert('Please select a day and time first.');
-                return;
-            }
-
-            const newTitle = `Phan's ${parts.weekday} Hockey`;
-            const dayTime = `${parts.weekday} ${formatTime12(parts.hour24, parts.minute)}`;
-            const selectedGameDate = parts.dateVal;
-
-            const hiddenInput = document.getElementById('titleDayTime');
-            if (hiddenInput) {
-                hiddenInput.value = buildDatetimeLocal(parts.dateVal, parts.hour24, parts.minute);
-            }
-
-            try {
-                const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        sessionToken: sessionToken,
-                        customTitle: newTitle,
-                        selectedDayTime: dayTime,
-                        gameDate: selectedGameDate
-                    })
-                });
-
-                if (res.ok) {
-                    document.getElementById('titlePreview').innerText = newTitle;
-                    document.getElementById('timeInput').value = dayTime;
-                    alert(`✅ Title updated to: ${newTitle}
-Time updated to: ${dayTime}
-Date updated to: ${selectedGameDate}`);
-                    loadSettings();
-                } else {
-                    alert('Failed to update title');
+            const button = document.getElementById('updateTitleBtn');
+            return withBusyButton(button, 'Saving...', async () => {
+                const parts = getEnhancedControlParts('titleDayTime');
+                if (!parts) {
+                    alert('Please select a day and time first.');
+                    return;
                 }
-            } catch (err) {
-                console.error("Error updating title:", err);
-                alert('Error updating title');
-            }
+
+                const newTitle = `Phan's ${parts.weekday} Hockey`;
+                const dayTime = `${parts.weekday} ${formatTime12(parts.hour24, parts.minute)}`;
+                const selectedGameDate = parts.dateVal;
+
+                const hiddenInput = document.getElementById('titleDayTime');
+                if (hiddenInput) {
+                    hiddenInput.value = buildDatetimeLocal(parts.dateVal, parts.hour24, parts.minute);
+                }
+
+                try {
+                    const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sessionToken: sessionToken,
+                            customTitle: newTitle,
+                            selectedDayTime: dayTime,
+                            gameDate: selectedGameDate
+                        })
+                    });
+
+                    const result = await res.json().catch(() => ({}));
+                    if (res.ok) {
+                        document.getElementById('titlePreview').innerText = newTitle;
+                        document.getElementById('timeInput').value = dayTime;
+                        alert(`✅ Title updated to: ${newTitle}\nTime updated to: ${formatEtDateTimeLocal(buildDatetimeLocal(parts.dateVal, parts.hour24, parts.minute))}\nDate updated to: ${selectedGameDate}`);
+                        await loadSettings();
+                    } else {
+                        alert(result.error || 'Failed to update title');
+                    }
+                } catch (err) {
+                    console.error("Error updating title:", err);
+                    alert('Error updating title');
+                }
+            });
         }
 
         // Update arena
         async function updateArena() {
-            const arena = document.getElementById('arenaSelect').value;
-            
-            try {
-                const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        sessionToken: sessionToken,
-                        selectedArena: arena
-                    })
-                });
-                
-                if (res.ok) {
-                    document.getElementById('currentArenaDisplay').innerText = arena;
-                    document.getElementById('locationInput').value = arena;
-                    alert(`✅ Arena updated to: ${arena}`);
-                    loadSettings();
-                } else {
-                    alert('Failed to update arena');
+            const button = document.getElementById('updateArenaBtn');
+            return withBusyButton(button, 'Saving...', async () => {
+                const arena = document.getElementById('arenaSelect').value;
+
+                try {
+                    const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            sessionToken: sessionToken,
+                            selectedArena: arena
+                        })
+                    });
+
+                    const result = await res.json().catch(() => ({}));
+                    if (res.ok) {
+                        document.getElementById('currentArenaDisplay').innerText = arena;
+                        document.getElementById('locationInput').value = arena;
+                        alert(`✅ Arena updated to: ${arena}`);
+                        await loadSettings();
+                    } else {
+                        alert(result.error || 'Failed to update arena');
+                    }
+                } catch (err) {
+                    console.error("Error updating arena:", err);
+                    alert('Error updating arena');
                 }
-            } catch (err) {
-                console.error("Error updating arena:", err);
-                alert('Error updating arena');
-            }
+            });
         }
 
         // Add backup goalie (substitute)
@@ -3603,38 +3647,41 @@ Date updated to: ${selectedGameDate}`);
         }
 
         async function saveAnnouncementSettings() {
-            const checkbox = document.getElementById('announcementCheckbox');
-            const text = document.getElementById('announcementText');
-            const checkboxEnabled = !!(checkbox && checkbox.checked);
-            const enabled = checkboxEnabled;
-            const announcementTextValue = text ? text.value.trim() : '';
-            const announcementImages = window.announcementImageData ? [window.announcementImageData] : [];
+            const button = document.getElementById('saveAnnouncementBtn');
+            return withBusyButton(button, 'Saving...', async () => {
+                const checkbox = document.getElementById('announcementCheckbox');
+                const text = document.getElementById('announcementText');
+                const checkboxEnabled = !!(checkbox && checkbox.checked);
+                const enabled = checkboxEnabled;
+                const announcementTextValue = text ? text.value.trim() : '';
+                const announcementImages = window.announcementImageData ? [window.announcementImageData] : [];
 
-            try {
-                const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        sessionToken,
-                        announcementEnabled: checkboxEnabled,
-                        announcementText: announcementTextValue,
-                        announcementImages
-                    })
-                });
+                try {
+                    const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            sessionToken,
+                            announcementEnabled: checkboxEnabled,
+                            announcementText: announcementTextValue,
+                            announcementImages
+                        })
+                    });
 
-                const result = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                    throw new Error(result.error || 'Failed to save announcement');
+                    const result = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        throw new Error(result.error || 'Failed to save announcement');
+                    }
+
+                    await loadAppSettings();
+                    alert(enabled
+                        ? '📢 Announcement saved and enabled on signup page.'
+                        : '✅ Announcement saved and hidden from signup page.');
+                } catch (err) {
+                    console.error('Save announcement error:', err);
+                    alert(err.message || 'Failed to save announcement');
                 }
-
-                await loadAppSettings();
-                alert(enabled
-                    ? '📢 Announcement saved and enabled on signup page.'
-                    : '✅ Announcement saved and hidden from signup page.');
-            } catch (err) {
-                console.error('Save announcement error:', err);
-                alert(err.message || 'Failed to save announcement');
-            }
+            });
         }
 
         document.addEventListener('DOMContentLoaded', () => {
