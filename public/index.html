@@ -245,6 +245,31 @@
             margin: 0;
         }
 
+        .roster-countdown {
+            margin-top: 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .roster-countdown-value {
+            font-size: 1.9rem;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 1px;
+        }
+
+        .roster-countdown-label {
+            font-size: 0.9rem;
+            color: #d8c08f;
+        }
+
+        .roster-countdown-placeholder {
+            font-size: 0.95rem;
+            color: #d8c08f;
+        }
+
         .roster-link {
             display: inline-block;
             margin-top: 10px;
@@ -255,28 +280,6 @@
 
         .roster-link:hover {
             text-decoration: underline;
-        }
-
-        .release-banner {
-            background: linear-gradient(135deg, #2a1f0e, #3c2b12);
-            border: 2px solid #ffb347;
-            border-radius: 10px;
-            padding: 18px;
-            margin: 18px 0;
-            text-align: center;
-        }
-
-        .release-banner-text {
-            color: #ffd27a;
-            font-weight: bold;
-            font-size: 1.05rem;
-            line-height: 1.45;
-        }
-
-        .release-countdown {
-            color: #f4e0b2;
-            margin-top: 8px;
-            font-size: 0.95rem;
         }
 
         .code-entry {
@@ -774,24 +777,17 @@
         }
 
         .announcement-thumb {
-            width: 120px;
-            height: 120px;
+            width: 96px;
+            height: 96px;
             object-fit: contain;
             border-radius: 10px;
             background: rgba(255,255,255,0.55);
             flex: 0 0 auto;
             display: none;
-            cursor: zoom-in;
-            transition: transform 0.18s ease, box-shadow 0.18s ease;
         }
 
         .announcement-thumb.visible {
             display: block;
-        }
-
-        .announcement-thumb.visible:hover {
-            transform: scale(1.03);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
         }
 
         .announcement-copy strong {
@@ -808,71 +804,6 @@
             line-height: 1.4;
         }
 
-
-        .announcement-modal {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.88);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-            z-index: 9999;
-        }
-
-        .announcement-modal.active {
-            display: flex;
-        }
-
-        .announcement-modal-image {
-            max-width: min(96vw, 1400px);
-            max-height: 90vh;
-            width: auto;
-            height: auto;
-            border-radius: 12px;
-            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
-            background: #fff;
-        }
-
-        .announcement-modal-close {
-            position: absolute;
-            top: 18px;
-            right: 22px;
-            width: 44px;
-            height: 44px;
-            border: none;
-            border-radius: 999px;
-            background: rgba(255,255,255,0.16);
-            color: #fff;
-            font-size: 1.8rem;
-            line-height: 1;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0;
-            padding: 0;
-        }
-
-        .announcement-modal-close:hover {
-            background: rgba(255,255,255,0.24);
-        }
-
-        @media (max-width: 640px) {
-            .announcement-bulletin.active {
-                align-items: flex-start;
-            }
-
-            .announcement-thumb {
-                width: 96px;
-                height: 96px;
-            }
-
-            .announcement-modal {
-                padding: 16px;
-            }
-        }
-
     </style>
 <base target="_blank">
 </head>
@@ -884,18 +815,11 @@
     </div>
 
     <div class="announcement-bulletin" id="announcementBulletin">
-        <img id="announcementThumb" class="announcement-thumb" alt="Announcement" role="button" tabindex="0" aria-label="Open announcement image">
+        <img id="announcementThumb" class="announcement-thumb" alt="Announcement">
         <div class="announcement-copy">
-            <strong>Attention (click on pic to enlarge):</strong>
+            <strong>Attention:</strong>
             <span id="announcementText">&nbsp;</span>
         </div>
-    </div>
-
-
-
-    <div class="announcement-modal" id="announcementModal" aria-hidden="true">
-        <button type="button" class="announcement-modal-close" id="announcementModalClose" aria-label="Close image viewer">&times;</button>
-        <img id="announcementModalImage" class="announcement-modal-image" alt="Announcement full size">
     </div>
 
     <div class="container" id="playerView">
@@ -907,10 +831,6 @@
             <div class="game-time" id="gameTime">Loading...</div>
         </div>
 
-        <div class="release-banner" id="releaseBanner">
-            <div class="release-banner-text" id="releaseBannerText">📅 Check back at the scheduled roster release time for team rosters</div>
-            <div class="release-countdown" id="releaseCountdown">Countdown will appear once a roster release time is scheduled.</div>
-        </div>
 
         <!-- Roster Display Section -->
         <div class="roster-display-section" id="rosterDisplay">
@@ -941,9 +861,6 @@
             <h3 style="text-align: center; color: var(--accent); margin: 20px 0 15px 0; text-transform: uppercase; letter-spacing: 1px;">
                 🏒 Registered Players (<span id="registeredCount">0</span>)
             </h3>
-            <p style="text-align:center; color:#ffb366; margin:-4px 0 16px 0; font-size:0.95rem;">
-                Notice: Waitlist position 1 will automatically be promoted if a player cancels.
-            </p>
             <div class="players-grid" id="playersGrid">
                 <!-- Players will be loaded here -->
             </div>
@@ -970,8 +887,13 @@
             </div>
 
             <div class="roster-notice" id="rosterNotice">
-                <h3>📋 Team Roster</h3>
-                <p>Teams are auto-generated based on players self rating</p>
+                <h3 id="rosterNoticeHeadline">📋 Team Roster</h3>
+                <p id="rosterNoticeLine">Teams are auto-generated based on players self rating</p>
+                <div class="roster-countdown" id="rosterCountdown" style="display:none;">
+                    <div class="roster-countdown-value" id="rosterCountdownValue">--:--:--</div>
+                    <div class="roster-countdown-label" id="rosterCountdownLabel">until roster release</div>
+                </div>
+                <div class="roster-countdown-placeholder" id="rosterCountdownPlaceholder" style="display:none;">Countdown will appear once a roster release time is scheduled.</div>
                 <a href="/roster" class="roster-link">View Full Roster Page →</a><br>
                 <a href="/history" class="roster-link" style="font-size: 0.9rem; margin-top: 5px;">View Past Weeks →</a>
             </div>
@@ -1080,7 +1002,7 @@
             <h2 style="color: #ff6b00;">You're on the Waitlist!</h2>
             <p style="font-size: 1.2rem;">Position: <strong id="waitlistPosition">#</strong></p>
             <p style="color: #aaa; margin-top: 20px;">
-                Waitlist position 1 will automatically be promoted if a player cancels<br>
+                Position 1 on waitlist will automatically be assigned a spot if there's a cancellation<br>
                 <a href="/waitlist" style="color:#ff6b00;">View Waitlist</a>
             </p>
         </div>
@@ -1115,42 +1037,10 @@
         let currentPlayers = [];
         let maintenanceMode = false;
         let currentAnnouncementEnabled = false;
-        let rosterReleaseAtIso = null;
-        let rosterCountdownInterval = null;
+        let rosterCountdownTimer = null;
+        let currentRosterReleaseAt = null;
 
         let playerToCancel = null;
-
-        function formatCountdown(msRemaining) {
-            if (!Number.isFinite(msRemaining) || msRemaining <= 0) return 'Roster release time has arrived.';
-            const totalSeconds = Math.floor(msRemaining / 1000);
-            const days = Math.floor(totalSeconds / 86400);
-            const hours = Math.floor((totalSeconds % 86400) / 3600);
-            const minutes = Math.floor((totalSeconds % 3600) / 60);
-            const seconds = totalSeconds % 60;
-            const parts = [];
-            if (days > 0) parts.push(`${days}d`);
-            if (hours > 0 || days > 0) parts.push(`${hours}h`);
-            parts.push(`${minutes}m`);
-            if (days === 0) parts.push(`${seconds}s`);
-            return `Roster release in: ${parts.join(' ')}`;
-        }
-
-        function startRosterCountdown() {
-            if (rosterCountdownInterval) clearInterval(rosterCountdownInterval);
-            const countdownEl = document.getElementById('releaseCountdown');
-            if (!countdownEl) return;
-            const tick = () => {
-                if (!rosterReleaseAtIso) {
-                    countdownEl.textContent = 'Countdown will appear once a roster release time is scheduled.';
-                    return;
-                }
-                const target = new Date(rosterReleaseAtIso).getTime();
-                const remaining = target - Date.now();
-                countdownEl.textContent = formatCountdown(remaining);
-            };
-            tick();
-            rosterCountdownInterval = setInterval(tick, 1000);
-        }
 
         function capitalizeNamePart(part) {
             return String(part || '')
@@ -1417,53 +1307,6 @@
 
 
 
-
-        function openAnnouncementModal(src) {
-            const modal = document.getElementById('announcementModal');
-            const modalImage = document.getElementById('announcementModalImage');
-            if (!modal || !modalImage || !src) return;
-            modalImage.src = src;
-            modal.classList.add('active');
-            modal.setAttribute('aria-hidden', 'false');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeAnnouncementModal() {
-            const modal = document.getElementById('announcementModal');
-            const modalImage = document.getElementById('announcementModalImage');
-            if (!modal || !modalImage) return;
-            modal.classList.remove('active');
-            modal.setAttribute('aria-hidden', 'true');
-            modalImage.src = '';
-            document.body.style.overflow = '';
-        }
-
-        document.addEventListener('click', (event) => {
-            const thumb = document.getElementById('announcementThumb');
-            const modal = document.getElementById('announcementModal');
-            const closeBtn = document.getElementById('announcementModalClose');
-            if (thumb && event.target === thumb && thumb.src) {
-                openAnnouncementModal(thumb.src);
-                return;
-            }
-            if (modal && (event.target === modal || event.target === closeBtn)) {
-                closeAnnouncementModal();
-            }
-        });
-
-        document.addEventListener('keydown', (event) => {
-            const thumb = document.getElementById('announcementThumb');
-            const modal = document.getElementById('announcementModal');
-            if (event.key === 'Escape' && modal && modal.classList.contains('active')) {
-                closeAnnouncementModal();
-                return;
-            }
-            if (thumb && document.activeElement === thumb && (event.key === 'Enter' || event.key === ' ')) {
-                event.preventDefault();
-                if (thumb.src) openAnnouncementModal(thumb.src);
-            }
-        });
-
         function renderAnnouncement(data) {
             const bulletin = document.getElementById('announcementBulletin');
             const textEl = document.getElementById('announcementText');
@@ -1495,6 +1338,72 @@
             bulletin.classList.add('active');
         }
 
+
+        function formatCountdown(msRemaining) {
+            const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000));
+            const days = Math.floor(totalSeconds / 86400);
+            const hours = Math.floor((totalSeconds % 86400) / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            if (days > 0) {
+                return `${days}d ${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
+            }
+            return `${String(hours).padStart(2, '0')}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`;
+        }
+
+        function stopRosterCountdown() {
+            if (rosterCountdownTimer) {
+                clearInterval(rosterCountdownTimer);
+                rosterCountdownTimer = null;
+            }
+        }
+
+        function renderRosterCountdown() {
+            const countdownWrap = document.getElementById('rosterCountdown');
+            const countdownValue = document.getElementById('rosterCountdownValue');
+            const countdownLabel = document.getElementById('rosterCountdownLabel');
+            const placeholder = document.getElementById('rosterCountdownPlaceholder');
+
+            if (!currentRosterReleaseAt || rosterReleased) {
+                stopRosterCountdown();
+                countdownWrap.style.display = 'none';
+                placeholder.style.display = rosterReleased ? 'none' : 'block';
+                placeholder.textContent = rosterReleased
+                    ? ''
+                    : 'Countdown will appear once a roster release time is scheduled.';
+                return;
+            }
+
+            const releaseMs = Date.parse(currentRosterReleaseAt);
+            if (!Number.isFinite(releaseMs)) {
+                stopRosterCountdown();
+                countdownWrap.style.display = 'none';
+                placeholder.style.display = 'block';
+                placeholder.textContent = 'Countdown will appear once a roster release time is scheduled.';
+                return;
+            }
+
+            const tick = () => {
+                const remaining = releaseMs - Date.now();
+                if (remaining <= 0) {
+                    countdownWrap.style.display = 'none';
+                    placeholder.style.display = 'block';
+                    placeholder.textContent = 'Roster release time has arrived. Refresh if teams are not shown yet.';
+                    stopRosterCountdown();
+                    return;
+                }
+                countdownValue.textContent = formatCountdown(remaining);
+                countdownLabel.textContent = 'until roster release';
+                countdownWrap.style.display = 'flex';
+                placeholder.style.display = 'none';
+            };
+
+            tick();
+            stopRosterCountdown();
+            rosterCountdownTimer = setInterval(tick, 1000);
+        }
+
         async function checkStatus() {
             try {
                 const res = await fetch(`${API_URL}/api/status`);
@@ -1524,6 +1433,7 @@
                 playerSpotsAvailable = data.playerSpotsRemaining;
                 isFull = data.isFull;
                 rosterReleased = data.rosterReleased;
+                currentRosterReleaseAt = data.rosterReleaseAt || null;
 
                 // Auto-redirect to roster page when roster is newly released
                 if (data.rosterReleased && data.rosterReleaseTime) {
@@ -1541,13 +1451,9 @@
                 document.getElementById('gameLocation').innerText = currentLocation;
                 document.getElementById('gameTime').innerText = currentTime;
                 document.getElementById('gameDate').innerText = currentDate;
-
-                rosterReleaseAtIso = data.rosterReleaseAtIso || null;
-                const releaseBannerText = document.getElementById('releaseBannerText');
-                if (releaseBannerText) {
-                    releaseBannerText.textContent = data.rosterReleaseMessage || data.rosterReleaseLine || '📅 Check back at the scheduled roster release time for team rosters';
-                }
-                startRosterCountdown();
+                document.getElementById('rosterNoticeHeadline').innerText = data.rosterReleaseHeadline || '📋 Team Roster';
+                document.getElementById('rosterNoticeLine').innerText = data.rosterReleaseLine || 'Teams are auto-generated based on players self rating';
+                renderRosterCountdown();
                 
                 if (rosterReleased) {
                     await loadAndDisplayRoster();
