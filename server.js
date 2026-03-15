@@ -41,7 +41,8 @@ if (pool) {
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '12mb' }));
+app.use(express.urlencoded({ extended: true, limit: '12mb' }));
 app.use(express.static('public'));
 
 // --- DATA STORE ---
@@ -56,6 +57,60 @@ let gameTime = "Friday 9:30 PM";
 let gameDate = "";
 
 // ---- Game-day helpers (dynamic Friday/Sunday etc.) ----
+
+const MAX_ANNOUNCEMENT_IMAGE_BYTES = 900 * 1024;
+const MAX_ANNOUNCEMENT_IMAGES = 1;
+const ALLOWED_ANNOUNCEMENT_IMAGE_PREFIXES = [
+    'data:image/jpeg;base64,',
+    'data:image/jpg;base64,',
+    'data:image/png;base64,',
+    'data:image/webp;base64,'
+];
+
+function normalizeAnnouncementImages(input) {
+    if (!Array.isArray(input)) return [];
+    const normalized = [];
+
+    for (const raw of input.slice(0, MAX_ANNOUNCEMENT_IMAGES)) {
+        const value = String(raw || '').trim();
+        if (!value) continue;
+
+        const lower = value.toLowerCase();
+        const isAllowed = ALLOWED_ANNOUNCEMENT_IMAGE_PREFIXES.some(prefix => lower.startsWith(prefix));
+        if (!isAllowed) continue;
+
+        const commaIndex = value.indexOf(',');
+        if (commaIndex === -1) continue;
+
+        const base64Part = value.slice(commaIndex + 1).replace(/\s+/g, '');
+        const byteLength = Buffer.byteLength(base64Part, 'base64');
+        if (!byteLength || byteLength > MAX_ANNOUNCEMENT_IMAGE_BYTES) {
+            throw new Error('Announcement image is too large. Please use a smaller image.');
+        }
+
+        normalized.push(value);
+    }
+
+    return normalized;
+}
+
+async function saveAppSetting(key, value) {
+    if (pool) {
+        await pool.query(
+            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+            [key, value]
+        );
+        return;
+    }
+
+    const payload = fs.existsSync(DATA_FILE)
+        ? JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))
+        : {};
+
+    payload[key] = value;
+    fs.writeFileSync(DATA_FILE, JSON.stringify(payload, null, 2));
+}
+
 const DAY_NAME_TO_INDEX = {
     sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
     thursday: 4, friday: 5, saturday: 6
@@ -919,6 +974,14 @@ async function saveData() {
         await saveSetting('signupLockSchedule', signupLockSchedule);
         await saveSetting('rosterReleaseSchedule', rosterReleaseSchedule);
         await saveSetting('resetWeekSchedule', resetWeekSchedule);
+        await saveAppSetting('maintenanceMode', maintenanceMode);
+        await saveAppSetting('customTitle', customTitle);
+        await saveAppSetting('announcementEnabled', announcementEnabled.toString());
+        await saveAppSetting('announcementText', announcementText);
+        await saveAppSetting('announcementImages', JSON.stringify(announcementImages));
+        await saveAppSetting('selectedDayTime', gameTime);
+        await saveAppSetting('selectedArena', gameLocation);
+        await saveAppSetting('gameDate', gameDate);
     } catch (err) {
         console.error('Error saving data:', err);
     }
@@ -1894,62 +1957,35 @@ app.post('/api/admin/app-settings', (req, res) => {
 
 // Update app settings
 app.post('/api/admin/update-app-settings', async (req, res) => {
-    const { sessionToken, maintenanceMode: newMaintenance, customTitle: newTitle, 
+    const { sessionToken, maintenanceMode: newMaintenance, customTitle: newTitle,
             announcementEnabled: newAnnouncementEnabled, announcementText: newAnnouncementText, announcementImages: newAnnouncementImages,
             selectedDayTime, selectedArena, gameDate: newGameDate } = req.body;
-    
+
     if (!adminSessions[sessionToken]) {
         return res.status(401).json({ error: "Unauthorized" });
     }
-    
-    if (newMaintenance !== undefined) maintenanceMode = !!newMaintenance;
-    if (newTitle) customTitle = newTitle;
-    if (newAnnouncementEnabled !== undefined) announcementEnabled = !!newAnnouncementEnabled;
-    if (newAnnouncementText !== undefined) announcementText = String(newAnnouncementText || '').trim();
-    if (newAnnouncementImages !== undefined) {
-        announcementImages = Array.isArray(newAnnouncementImages)
-            ? newAnnouncementImages.map(v => String(v || '').trim()).filter(Boolean).slice(0, 6)
-            : [];
-    }
-    if (selectedDayTime) gameTime = selectedDayTime;
-    if (selectedArena) gameLocation = selectedArena;
-    if (newGameDate) gameDate = newGameDate;
-    if (newGameDate) gameDate = newGameDate;
-    
+
     try {
-        await pool.query(
-            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
-            ['maintenanceMode', maintenanceMode.toString()]
-        );
-        await pool.query(
-            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
-            ['customTitle', customTitle]
-        );
-        await pool.query(
-            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
-            ['announcementEnabled', announcementEnabled.toString()]
-        );
-        await pool.query(
-            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
-            ['announcementText', announcementText]
-        );
-        await pool.query(
-            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
-            ['announcementImages', JSON.stringify(announcementImages)]
-        );
-        await pool.query(
-            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
-            ['selectedDayTime', gameTime]
-        );
-        await pool.query(
-            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
-            ['selectedArena', gameLocation]
-        );
-        await pool.query(
-            'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
-            ['gameDate', gameDate]
-        );
-        
+        if (newMaintenance !== undefined) maintenanceMode = !!newMaintenance;
+        if (newTitle !== undefined) customTitle = String(newTitle || '').trim() || customTitle;
+        if (newAnnouncementEnabled !== undefined) announcementEnabled = !!newAnnouncementEnabled;
+        if (newAnnouncementText !== undefined) announcementText = String(newAnnouncementText || '').trim();
+        if (newAnnouncementImages !== undefined) {
+            announcementImages = normalizeAnnouncementImages(newAnnouncementImages);
+        }
+        if (selectedDayTime) gameTime = selectedDayTime;
+        if (selectedArena) gameLocation = selectedArena;
+        if (newGameDate) gameDate = newGameDate;
+
+        await saveAppSetting('maintenanceMode', maintenanceMode.toString());
+        await saveAppSetting('customTitle', customTitle);
+        await saveAppSetting('announcementEnabled', announcementEnabled.toString());
+        await saveAppSetting('announcementText', announcementText);
+        await saveAppSetting('announcementImages', JSON.stringify(announcementImages));
+        await saveAppSetting('selectedDayTime', gameTime);
+        await saveAppSetting('selectedArena', gameLocation);
+        await saveAppSetting('gameDate', gameDate);
+
         res.json({
             success: true,
             maintenanceMode,
@@ -1963,11 +1999,13 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
         });
     } catch (err) {
         console.error('Error saving app settings:', err);
-        res.status(500).json({ error: "Failed to save settings" });
+        const message = err && err.message ? err.message : 'Failed to save settings';
+        res.status(500).json({ error: message });
     }
 });
 
-// Add backup goalie to roster (substitution)
+// Add backup goalie to roster
+ (substitution)
 app.post('/api/admin/add-backup-goalie', async (req, res) => {
     const { sessionToken, goalieIndex } = req.body;
     
