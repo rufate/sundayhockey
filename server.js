@@ -2005,7 +2005,6 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
 });
 
 // Add backup goalie to roster
- (substitution)
 app.post('/api/admin/add-backup-goalie', async (req, res) => {
     const { sessionToken, goalieIndex } = req.body;
     
