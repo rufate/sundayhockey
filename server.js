@@ -109,6 +109,7 @@ async function saveAppSetting(key, value) {
 
     payload[key] = value;
     fs.writeFileSync(DATA_FILE, JSON.stringify(payload, null, 2));
+    writeSettingsBackup(`app-setting:${key}`);
 }
 
 const DAY_NAME_TO_INDEX = {
@@ -982,12 +983,84 @@ async function saveData() {
         await saveAppSetting('selectedDayTime', gameTime);
         await saveAppSetting('selectedArena', gameLocation);
         await saveAppSetting('gameDate', gameDate);
+        writeSettingsBackup('saveData');
     } catch (err) {
         console.error('Error saving data:', err);
     }
 }
 
 const DATA_FILE = './data.json';
+const SETTINGS_BACKUP_FILE = './app-settings.backup.json';
+
+function getSettingsSnapshot() {
+    return {
+        savedAt: new Date().toISOString(),
+        maintenanceMode,
+        customTitle,
+        announcementEnabled,
+        announcementText,
+        announcementImages,
+        gameTime,
+        gameLocation,
+        gameDate,
+        signupLockStartAt,
+        signupLockEndAt,
+        rosterReleaseAt,
+        resetWeekAt,
+        signupLockSchedule,
+        rosterReleaseSchedule,
+        resetWeekSchedule,
+        requirePlayerCode,
+        manualOverride,
+        manualOverrideState,
+        rosterReleased,
+        currentWeekData
+    };
+}
+
+function writeSettingsBackup(reason = 'update') {
+    try {
+        const snapshot = {
+            reason,
+            ...getSettingsSnapshot()
+        };
+        fs.writeFileSync(SETTINGS_BACKUP_FILE, JSON.stringify(snapshot, null, 2));
+    } catch (err) {
+        console.error('Error writing settings backup:', err.message);
+    }
+}
+
+function validateScheduleInputs({ signupLockEnabled, signupLockStart, signupLockEnd, rosterReleaseEnabled, rosterReleaseAt, resetWeekEnabled, resetWeekAt }) {
+    const lockStartParts = signupLockStart ? parseDatetimeLocalToETDate(signupLockStart) : null;
+    const lockEndParts = signupLockEnd ? parseDatetimeLocalToETDate(signupLockEnd) : null;
+    const releaseParts = rosterReleaseAt ? parseDatetimeLocalToETDate(rosterReleaseAt) : null;
+    const resetParts = resetWeekAt ? parseDatetimeLocalToETDate(resetWeekAt) : null;
+
+    if (signupLockEnabled) {
+        if (!signupLockStart || !signupLockEnd) {
+            return 'Signup lock requires both a start and end date/time.';
+        }
+        if (!lockStartParts || !lockEndParts) {
+            return 'Signup lock dates are invalid.';
+        }
+        if (etPartsToMinuteKey(lockEndParts) <= etPartsToMinuteKey(lockStartParts)) {
+            return 'Signup lock end must be after lock start.';
+        }
+    }
+
+    if (rosterReleaseEnabled) {
+        if (!rosterReleaseAt) return 'Roster release requires a valid date/time.';
+        if (!releaseParts) return 'Roster release date/time is invalid.';
+    }
+
+    if (resetWeekEnabled) {
+        if (!resetWeekAt) return 'Weekly reset requires a valid date/time.';
+        if (!resetParts) return 'Weekly reset date/time is invalid.';
+    }
+
+    return null;
+}
+
 
 function generateRandomCode() {
     return Math.floor(1000 + Math.random() * 9000).toString();
@@ -1985,6 +2058,8 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
         await saveAppSetting('selectedDayTime', gameTime);
         await saveAppSetting('selectedArena', gameLocation);
         await saveAppSetting('gameDate', gameDate);
+        writeSettingsBackup('update-app-settings');
+        console.log('[ADMIN] App settings updated');
 
         res.json({
             success: true,
@@ -2192,7 +2267,7 @@ app.post('/api/admin/update-code', (req, res) => {
 });
 
 
-app.post('/api/admin/update-schedules', (req, res) => {
+app.post('/api/admin/update-schedules', async (req, res) => {
         const body = req.body || {};
     const { password, sessionToken, signupLockEnabled, signupLockStart, signupLockEnd, rosterReleaseEnabled, rosterReleaseAt: rosterReleaseAtInput, resetWeekEnabled, resetWeekAt: resetWeekAtInput } = body;
     if (!adminSessions[sessionToken] && password !== ADMIN_PASSWORD) {
@@ -2209,6 +2284,19 @@ app.post('/api/admin/update-schedules', (req, res) => {
         resetWeekSchedule.enabled = resetWeekEnabled;
     }
 
+    const validationError = validateScheduleInputs({
+        signupLockEnabled: !!signupLockEnabled,
+        signupLockStart,
+        signupLockEnd,
+        rosterReleaseEnabled: !!rosterReleaseEnabled,
+        rosterReleaseAt: rosterReleaseAtInput,
+        resetWeekEnabled: !!resetWeekEnabled,
+        resetWeekAt: resetWeekAtInput
+    });
+    if (validationError) {
+        return res.status(400).json({ error: validationError });
+    }
+
     signupLockStartAt = signupLockStart || '';
     signupLockEndAt = signupLockEnd || '';
     rosterReleaseAt = rosterReleaseAtInput || '';
@@ -2219,7 +2307,9 @@ app.post('/api/admin/update-schedules', (req, res) => {
     rosterReleaseSchedule.at = rosterReleaseAt ? parseDatetimeLocalToDowTime(rosterReleaseAt) : null;
     resetWeekSchedule.at = resetWeekAt ? parseDatetimeLocalToDowTime(resetWeekAt) : null;
 
-    saveData();
+    await saveData();
+    writeSettingsBackup('update-schedules');
+    console.log('[ADMIN] Schedules updated');
     const lockStatus = checkAutoLock();
 
     res.json({
