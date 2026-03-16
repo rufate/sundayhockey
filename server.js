@@ -443,11 +443,17 @@ function checkAutoLock() {
     const etTime = getCurrentETTime();
 
     if (rosterReleased) {
+        if (!requirePlayerCode || manualOverrideState !== 'locked' || !manualOverride) {
+            requirePlayerCode = true;
+            manualOverride = true;
+            manualOverrideState = 'locked';
+            saveData();
+        }
         return {
-            requirePlayerCode,
-            manualOverride,
-            manualOverrideState,
-            isLockedWindow: false,
+            requirePlayerCode: true,
+            manualOverride: true,
+            manualOverrideState: 'locked',
+            isLockedWindow: true,
             rosterReleased: true
         };
     }
@@ -527,6 +533,9 @@ async function autoReleaseRoster() {
         const teams = generateFairTeams();
 
         rosterReleased = true;
+        requirePlayerCode = true;
+        manualOverride = true;
+        manualOverrideState = 'locked';
 
         // Auto-enable payment reminder when roster is released
         announcementEnabled = true;
@@ -675,6 +684,8 @@ async function checkWeeklyReset() {
     if (lastExactResetRunAt === exactKey) return false;
 
     lastExactResetRunAt = exactKey;
+
+    await savePaymentReportSnapshot('scheduled_reset');
 
     if (rosterReleased && currentWeekData.weekNumber &&
         (currentWeekData.whiteTeam.length > 0 || currentWeekData.darkTeam.length > 0) && pool) {
@@ -828,6 +839,22 @@ async function initDatabase() {
             CREATE TABLE IF NOT EXISTS app_settings (
                 key VARCHAR(50) PRIMARY KEY,
                 value TEXT NOT NULL
+            )
+        `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS payment_reports (
+                id SERIAL PRIMARY KEY,
+                report_name VARCHAR(255) NOT NULL,
+                report_csv TEXT NOT NULL,
+                trigger_source VARCHAR(50) NOT NULL,
+                game_location VARCHAR(200),
+                game_time VARCHAR(50),
+                game_date DATE,
+                roster_released BOOLEAN DEFAULT false,
+                week_number INTEGER,
+                year INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
         
@@ -1252,6 +1279,165 @@ function generateFairTeams() {
     return { whiteTeam, darkTeam, whiteRating, darkRating };
 }
 
+function escapeCsvValue(value) {
+    if (value === null || value === undefined) return '';
+    const str = String(value)
+        .replaceAll('\r\n', ' ')
+        .replaceAll('\n', ' ')
+        .replaceAll('\r', ' ');
+    return `"${str.replace(/"/g, '""')}"`;
+}
+
+function buildPaymentReportCsv() {
+    const headers = ['Team', 'First Name', 'Last Name', 'Phone', 'Rating', 'Payment Method', 'Paid Amount', 'Payment Status', 'Goalie', 'Registered At'];
+    const csvRows = [headers.join(',')];
+
+    const addPlayerRow = (teamLabel, p, dateValue) => {
+        const row = [
+            escapeCsvValue(teamLabel),
+            escapeCsvValue(p.firstName),
+            escapeCsvValue(p.lastName),
+            escapeCsvValue(p.phone),
+            escapeCsvValue(p.rating),
+            escapeCsvValue(p.paymentMethod || 'N/A'),
+            escapeCsvValue(p.paidAmount == null ? 0 : p.paidAmount),
+            escapeCsvValue(p.paid ? 'PAID' : 'UNPAID'),
+            escapeCsvValue(p.isGoalie ? 'YES' : 'NO'),
+            escapeCsvValue(dateValue ? new Date(dateValue).toLocaleString('en-US') : '')
+        ];
+        csvRows.push(row.join(','));
+    };
+
+    const whiteTeam = players.filter(p => p.team === 'White' || (!p.team && !rosterReleased));
+    whiteTeam.forEach(p => addPlayerRow('White', p, p.registeredAt));
+
+    const darkTeam = players.filter(p => p.team === 'Dark');
+    darkTeam.forEach(p => addPlayerRow('Dark', p, p.registeredAt));
+
+    const unassigned = players.filter(p => !p.team && rosterReleased);
+    unassigned.forEach(p => addPlayerRow('Unassigned', p, p.registeredAt));
+
+    waitlist.forEach((p, index) => {
+        const row = [
+            escapeCsvValue(`Waitlist #${index + 1}`),
+            escapeCsvValue(p.firstName),
+            escapeCsvValue(p.lastName),
+            escapeCsvValue(p.phone),
+            escapeCsvValue(p.rating),
+            escapeCsvValue(p.paymentMethod || 'N/A'),
+            escapeCsvValue('N/A'),
+            escapeCsvValue('N/A'),
+            escapeCsvValue(p.isGoalie ? 'YES' : 'NO'),
+            escapeCsvValue(p.joinedAt ? new Date(p.joinedAt).toLocaleString('en-US') : '')
+        ];
+        csvRows.push(row.join(','));
+    });
+
+    const totalCollected = players.reduce((sum, p) => sum + (parseFloat(p.paidAmount) || 0), 0);
+    const paidCount = players.filter(p => p.paid && !p.isGoalie && !(p.firstName === 'Phan' && p.lastName === 'Ly')).length;
+    const unpaidCount = players.filter(p => !p.paid && !p.isGoalie && !(p.firstName === 'Phan' && p.lastName === 'Ly')).length;
+
+    csvRows.push('');
+    csvRows.push([escapeCsvValue('SUMMARY'), '', '', '', '', '', '', '', '', ''].join(','));
+    csvRows.push([escapeCsvValue('Total Collected'), escapeCsvValue(`$${totalCollected.toFixed(2)}`), '', '', '', '', '', '', '', ''].join(','));
+    csvRows.push([escapeCsvValue('Paid Players'), escapeCsvValue(paidCount), '', '', '', '', '', '', '', ''].join(','));
+    csvRows.push([escapeCsvValue('Unpaid Players'), escapeCsvValue(unpaidCount), '', '', '', '', '', '', '', ''].join(','));
+
+    return csvRows.join('\n');
+}
+
+async function savePaymentReportSnapshot(triggerSource = 'manual') {
+    if (!pool) {
+        console.log('Payment report snapshot skipped: database unavailable.');
+        return null;
+    }
+
+    try {
+        const etTime = getCurrentETTime();
+        const weekInfo = getWeekNumber(etTime);
+        const activeWeek = currentWeekData && currentWeekData.weekNumber ? currentWeekData.weekNumber : weekInfo.week;
+        const activeYear = currentWeekData && currentWeekData.year ? currentWeekData.year : weekInfo.year;
+        const safeGameDate = gameDate || etTime.toISOString().split('T')[0];
+        const reportName = `payment-report-${safeGameDate}-week-${activeWeek}-${Date.now()}.csv`;
+        const csvContent = buildPaymentReportCsv();
+
+        const result = await pool.query(
+            `INSERT INTO payment_reports (
+                report_name, report_csv, trigger_source, game_location, game_time, game_date,
+                roster_released, week_number, year, created_at
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+            RETURNING id, report_name, created_at, trigger_source, week_number, year`,
+            [
+                reportName,
+                csvContent,
+                triggerSource,
+                gameLocation,
+                gameTime,
+                safeGameDate,
+                rosterReleased,
+                activeWeek,
+                activeYear,
+                new Date()
+            ]
+        );
+
+        return result.rows[0] || null;
+    } catch (err) {
+        console.error('Error saving payment report snapshot:', err);
+        return null;
+    }
+}
+
+async function listPaymentReports(limit = 25) {
+    if (!pool) return [];
+    try {
+        const cappedLimit = Math.max(1, Math.min(parseInt(limit, 10) || 25, 100));
+        const res = await pool.query(
+            `SELECT id, report_name, trigger_source, game_location, game_time, game_date, roster_released, week_number, year, created_at
+             FROM payment_reports
+             ORDER BY created_at DESC, id DESC
+             LIMIT $1`,
+            [cappedLimit]
+        );
+        return res.rows;
+    } catch (err) {
+        console.error('Error listing payment reports:', err);
+        return [];
+    }
+}
+
+async function getPaymentReportById(reportId) {
+    if (!pool) return null;
+    try {
+        const res = await pool.query(
+            `SELECT id, report_name, report_csv, trigger_source, game_location, game_time, game_date, roster_released, week_number, year, created_at
+             FROM payment_reports
+             WHERE id = $1`,
+            [reportId]
+        );
+        return res.rows[0] || null;
+    } catch (err) {
+        console.error('Error reading payment report:', err);
+        return null;
+    }
+}
+
+async function getLatestPaymentReport() {
+    if (!pool) return null;
+    try {
+        const res = await pool.query(
+            `SELECT id, report_name, report_csv, trigger_source, game_location, game_time, game_date, roster_released, week_number, year, created_at
+             FROM payment_reports
+             ORDER BY created_at DESC, id DESC
+             LIMIT 1`
+        );
+        return res.rows[0] || null;
+    } catch (err) {
+        console.error('Error reading latest payment report:', err);
+        return null;
+    }
+}
+
 async function saveWeekHistory(year, weekNumber, whiteTeam, darkTeam) {
     try {
         // Add payment info to team data before saving
@@ -1404,7 +1590,7 @@ app.get('/waitlist', (req, res) => {
 });
 
 app.get('/roster', (req, res) => {
-    return res.redirect('/');
+    return sendPublic(res, 'roster.html');
 });
 
 app.get('/history', (req, res) => {
@@ -1504,7 +1690,6 @@ app.get('/api/status', (req, res) => {
     
     res.json({
         playerSpotsRemaining: playerSpots > 0 ? playerSpots : 0,
-        openSpotsNotice: (rosterReleased && playerSpots > 0) ? 'Spots still available, message me direct 5195669288 if you want in.' : null,
         goalieCount: goalieCount,
         goalieSpotsAvailable: MAX_GOALIES - goalieCount,
         maxGoalies: MAX_GOALIES,
@@ -1702,9 +1887,6 @@ app.post('/api/register-init', async (req, res) => {
     const { firstName, lastName, phone, paymentMethod, rating, signupCode } = req.body;
 
     if (rosterReleased) {
-        if (playerSpots > 0) {
-            return res.status(403).json({ error: 'Spots still available, message me direct 5195669288 if you want in.' });
-        }
         return res.status(403).json({ error: 'Signup is closed after roster release.' });
     }
 
@@ -2688,6 +2870,9 @@ app.post('/api/admin/release-roster', async (req, res) => {
         const teams = generateFairTeams();
         
         rosterReleased = true;
+        requirePlayerCode = true;
+        manualOverride = true;  // Keep locked after manual release
+        manualOverrideState = 'locked';  // Force locked state
 
         // Auto-enable payment reminder when roster is released
         announcementEnabled = true;
@@ -2721,12 +2906,12 @@ app.post('/api/admin/release-roster', async (req, res) => {
         
         res.json({ 
             success: true, 
-            message: "Roster released successfully.",
+            message: "Roster released successfully. Signup is now LOCKED until Monday 6pm.",
             whiteTeam: teams.whiteTeam,
             darkTeam: teams.darkTeam,
             whiteRating: teams.whiteRating.toFixed(1),
             darkRating: teams.darkRating.toFixed(1),
-            signupLocked: requirePlayerCode,
+            signupLocked: true,
             rosterReleased: true
         });
     } catch (error) {
@@ -2741,6 +2926,8 @@ app.post('/api/admin/manual-reset', async (req, res) => {
         return res.status(401).send("Unauthorized");
     }
     
+    await savePaymentReportSnapshot('manual_reset');
+
     if (rosterReleased && currentWeekData.weekNumber) {
         await saveWeekHistory(
             currentWeekData.year,
@@ -2793,122 +2980,70 @@ app.post('/api/admin/manual-reset', async (req, res) => {
 // ADMIN ONLY: Export payment data to CSV
 app.get('/api/admin/export-payments', async (req, res) => {
     const { sessionToken } = req.query;
-    
-    // STRICT: Only session token, no password fallback
+
     if (!sessionToken || !adminSessions[sessionToken]) {
         return res.status(401).json({ error: "Unauthorized - Admin access only" });
     }
-    
+
     try {
-        const headers = ['Team', 'First Name', 'Last Name', 'Phone', 'Rating', 'Payment Method', 'Paid Amount', 'Payment Status', 'Goalie', 'Registered At'];
-        
-        let csvRows = [headers.join(',')];
-        
-        // Add White Team
-        const whiteTeam = players.filter(p => p.team === 'White' || (!p.team && !rosterReleased));
-        whiteTeam.forEach(p => {
-            const row = [
-                'White',
-                `"${p.firstName}"`,
-                `"${p.lastName}"`,
-                `"${p.phone}"`,
-                p.rating,
-                `"${p.paymentMethod || 'N/A'}"`,
-                p.paidAmount || 0,
-                p.paid ? 'PAID' : 'UNPAID',
-                p.isGoalie ? 'YES' : 'NO',
-                `"${new Date(p.registeredAt).toLocaleString()}"`
-            ];
-            csvRows.push(row.join(','));
-        });
-        
-        // Add Dark Team
-        const darkTeam = players.filter(p => p.team === 'Dark');
-        darkTeam.forEach(p => {
-            const row = [
-                'Dark',
-                `"${p.firstName}"`,
-                `"${p.lastName}"`,
-                `"${p.phone}"`,
-                p.rating,
-                `"${p.paymentMethod || 'N/A'}"`,
-                p.paidAmount || 0,
-                p.paid ? 'PAID' : 'UNPAID',
-                p.isGoalie ? 'YES' : 'NO',
-                `"${new Date(p.registeredAt).toLocaleString()}"`
-            ];
-            csvRows.push(row.join(','));
-        });
-        
-        // Add unassigned players (if roster not released)
-        const unassigned = players.filter(p => !p.team && rosterReleased);
-        unassigned.forEach(p => {
-            const row = [
-                'Unassigned',
-                `"${p.firstName}"`,
-                `"${p.lastName}"`,
-                `"${p.phone}"`,
-                p.rating,
-                `"${p.paymentMethod || 'N/A'}"`,
-                p.paidAmount || 0,
-                p.paid ? 'PAID' : 'UNPAID',
-                p.isGoalie ? 'YES' : 'NO',
-                `"${new Date(p.registeredAt).toLocaleString()}"`
-            ];
-            csvRows.push(row.join(','));
-        });
-        
-        // Add waitlist
-        waitlist.forEach((p, index) => {
-            const row = [
-                `Waitlist #${index + 1}`,
-                `"${p.firstName}"`,
-                `"${p.lastName}"`,
-                `"${p.phone}"`,
-                p.rating,
-                `"${p.paymentMethod || 'N/A'}"`,
-                'N/A',
-                'N/A',
-                p.isGoalie ? 'YES' : 'NO',
-                `"${new Date(p.joinedAt).toLocaleString()}"`
-            ];
-            csvRows.push(row.join(','));
-        });
-        
-        // Add summary row
-        const totalCollected = players.reduce((sum, p) => sum + (parseFloat(p.paidAmount) || 0), 0);
-        const paidCount = players.filter(p => p.paid && !p.isGoalie).length;
-        const unpaidCount = players.filter(p => !p.paid && !p.isGoalie).length;
-        
-        csvRows.push(''); // Empty row
-        csvRows.push(['SUMMARY', '', '', '', '', '', '', '', '', ''].join(','));
-        csvRows.push(['Total Collected', `"$${totalCollected.toFixed(2)}"`, '', '', '', '', '', '', '', ''].join(','));
-        csvRows.push(['Paid Players', paidCount, '', '', '', '', '', '', '', ''].join(','));
-        csvRows.push(['Unpaid Players', unpaidCount, '', '', '', '', '', '', '', ''].join(','));
-        
-        const csvContent = csvRows.join('\n');
-        
+        const csvContent = buildPaymentReportCsv();
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', `attachment; filename="hockey-payments-${gameDate || 'current'}.csv"`);
         res.send(csvContent);
-        
     } catch (err) {
         console.error('Export error:', err);
-        res.status(500).json({ error: "Export failed" });
+        res.status(500).json({ error: 'Failed to export payment report' });
     }
 });
 
-// 404 handler - MUST be last
-app.get('/health', (req, res) => {
-    res.status(200).type('text/plain').send('OK');
+app.get('/api/admin/payment-reports', async (req, res) => {
+    const { sessionToken, limit } = req.query;
+
+    if (!sessionToken || !adminSessions[sessionToken]) {
+        return res.status(401).json({ error: 'Unauthorized - Admin access only' });
+    }
+
+    const reports = await listPaymentReports(limit);
+    res.json({ reports });
 });
 
-app.head('/health', (req, res) => {
-    res.sendStatus(200);
+app.get('/api/admin/payment-reports/latest', async (req, res) => {
+    const { sessionToken } = req.query;
+
+    if (!sessionToken || !adminSessions[sessionToken]) {
+        return res.status(401).json({ error: 'Unauthorized - Admin access only' });
+    }
+
+    const report = await getLatestPaymentReport();
+    if (!report) {
+        return res.status(404).json({ error: 'No saved payment reports found yet.' });
+    }
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${report.report_name}"`);
+    res.send(report.report_csv);
 });
 
-app.use((req, res) => {
-    res.status(404).json({ error: "Cannot GET " + req.path });
+app.get('/api/admin/payment-reports/:id/download', async (req, res) => {
+    const { sessionToken } = req.query;
+
+    if (!sessionToken || !adminSessions[sessionToken]) {
+        return res.status(401).json({ error: 'Unauthorized - Admin access only' });
+    }
+
+    const reportId = parseInt(req.params.id, 10);
+    if (!Number.isFinite(reportId)) {
+        return res.status(400).json({ error: 'Invalid report ID.' });
+    }
+
+    const report = await getPaymentReportById(reportId);
+    if (!report) {
+        return res.status(404).json({ error: 'Payment report not found.' });
+    }
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${report.report_name}"`);
+    res.send(report.report_csv);
 });
 
 // Initialize and start
