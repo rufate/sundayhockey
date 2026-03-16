@@ -757,6 +757,23 @@
         }
 
 
+        .open-spots-notice {
+            display: none;
+            width: 100%;
+            background: linear-gradient(135deg, #ff6b00, #ff8c33);
+            color: #fff;
+            padding: 16px 18px;
+            border-radius: 12px;
+            margin: 18px 0;
+            font-weight: 700;
+            text-align: center;
+            box-shadow: 0 8px 20px rgba(255, 107, 0, 0.25);
+        }
+
+        .open-spots-notice.active {
+            display: block;
+        }
+
         .announcement-bulletin {
             display: none;
             width: 100%;
@@ -831,6 +848,8 @@
             <div class="game-time" id="gameTime">Loading...</div>
         </div>
 
+        <div class="open-spots-notice" id="openSpotsNotice"></div>
+
 
         <!-- Roster Display Section -->
         <div class="roster-display-section" id="rosterDisplay">
@@ -894,7 +913,6 @@
                     <div class="roster-countdown-label" id="rosterCountdownLabel">until roster release</div>
                 </div>
                 <div class="roster-countdown-placeholder" id="rosterCountdownPlaceholder" style="display:none;">Countdown will appear once a roster release time is scheduled.</div>
-                <a href="/roster" class="roster-link">View Full Roster Page →</a><br>
                 <a href="/history" class="roster-link" style="font-size: 0.9rem; margin-top: 5px;">View Past Weeks →</a>
             </div>
 
@@ -993,8 +1011,8 @@
             <p style="color: #ff4444; font-weight: bold; margin: 20px 0;">
                 ⚠️ E-Transfer payment must be received before stepping on the ice!
             </p>
-            <button type="button" class="view-roster-btn" onclick="window.location.href='/roster'" style="margin-top: 20px;">
-                View Roster
+            <button type="button" class="view-roster-btn" onclick="window.location.href='/'" style="margin-top: 20px;">
+                View Current Page
             </button>
         </div>
 
@@ -1431,19 +1449,18 @@
                 currentTime = data.time;
                 currentDate = data.formattedDate;
                 playerSpotsAvailable = data.playerSpotsRemaining;
+                const openSpotsNoticeEl = document.getElementById('openSpotsNotice');
+                if (data.openSpotsNotice) {
+                    openSpotsNoticeEl.textContent = data.openSpotsNotice;
+                    openSpotsNoticeEl.classList.add('active');
+                } else {
+                    openSpotsNoticeEl.textContent = '';
+                    openSpotsNoticeEl.classList.remove('active');
+                }
+
                 isFull = data.isFull;
                 rosterReleased = data.rosterReleased;
                 currentRosterReleaseAt = data.rosterReleaseAt || null;
-
-                // Auto-redirect to roster page when roster is newly released
-                if (data.rosterReleased && data.rosterReleaseTime) {
-                    const lastSeenRelease = sessionStorage.getItem('lastSeenRosterRelease');
-                    if (lastSeenRelease !== String(data.rosterReleaseTime)) {
-                        sessionStorage.setItem('lastSeenRosterRelease', data.rosterReleaseTime);
-                        window.location.href = '/roster';
-                        return;
-                    }
-                }
                 const isLockedWindow = data.isLockedWindow;
                 
                 currentPlayers = data.players || [];
@@ -1487,12 +1504,15 @@
 
                 if (data.rosterReleased) {
                     document.getElementById('registeredPlayersSection').style.display = 'none';
+                    document.getElementById('codeSection').style.display = 'none';
+                    document.getElementById('signupForm').style.display = 'none';
+                    document.getElementById('waitlistMode').style.display = 'none';
                 } else {
                     document.getElementById('registeredPlayersSection').style.display = 'block';
+                    document.getElementById('codeSection').style.display = 'block';
                     await loadRegisteredPlayers();
                 }
 
-                
                 const codeTitle = document.getElementById('codeTitle');
                 if (effectiveLocked) {
                     document.getElementById('codeEntryBox').style.display = 'block';
