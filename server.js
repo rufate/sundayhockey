@@ -443,17 +443,11 @@ function checkAutoLock() {
     const etTime = getCurrentETTime();
 
     if (rosterReleased) {
-        if (!requirePlayerCode || manualOverrideState !== 'locked' || !manualOverride) {
-            requirePlayerCode = true;
-            manualOverride = true;
-            manualOverrideState = 'locked';
-            saveData();
-        }
         return {
-            requirePlayerCode: true,
-            manualOverride: true,
-            manualOverrideState: 'locked',
-            isLockedWindow: true,
+            requirePlayerCode,
+            manualOverride,
+            manualOverrideState,
+            isLockedWindow: false,
             rosterReleased: true
         };
     }
@@ -533,9 +527,6 @@ async function autoReleaseRoster() {
         const teams = generateFairTeams();
 
         rosterReleased = true;
-        requirePlayerCode = true;
-        manualOverride = true;
-        manualOverrideState = 'locked';
 
         // Auto-enable payment reminder when roster is released
         announcementEnabled = true;
@@ -1413,7 +1404,7 @@ app.get('/waitlist', (req, res) => {
 });
 
 app.get('/roster', (req, res) => {
-    return sendPublic(res, 'roster.html');
+    return res.redirect('/');
 });
 
 app.get('/history', (req, res) => {
@@ -1513,6 +1504,7 @@ app.get('/api/status', (req, res) => {
     
     res.json({
         playerSpotsRemaining: playerSpots > 0 ? playerSpots : 0,
+        openSpotsNotice: (rosterReleased && playerSpots > 0) ? 'Spots still available, message me direct 5195669288 if you want in.' : null,
         goalieCount: goalieCount,
         goalieSpotsAvailable: MAX_GOALIES - goalieCount,
         maxGoalies: MAX_GOALIES,
@@ -1710,6 +1702,9 @@ app.post('/api/register-init', async (req, res) => {
     const { firstName, lastName, phone, paymentMethod, rating, signupCode } = req.body;
 
     if (rosterReleased) {
+        if (playerSpots > 0) {
+            return res.status(403).json({ error: 'Spots still available, message me direct 5195669288 if you want in.' });
+        }
         return res.status(403).json({ error: 'Signup is closed after roster release.' });
     }
 
@@ -2693,9 +2688,6 @@ app.post('/api/admin/release-roster', async (req, res) => {
         const teams = generateFairTeams();
         
         rosterReleased = true;
-        requirePlayerCode = true;
-        manualOverride = true;  // Keep locked after manual release
-        manualOverrideState = 'locked';  // Force locked state
 
         // Auto-enable payment reminder when roster is released
         announcementEnabled = true;
@@ -2729,12 +2721,12 @@ app.post('/api/admin/release-roster', async (req, res) => {
         
         res.json({ 
             success: true, 
-            message: "Roster released successfully. Signup is now LOCKED until Monday 6pm.",
+            message: "Roster released successfully.",
             whiteTeam: teams.whiteTeam,
             darkTeam: teams.darkTeam,
             whiteRating: teams.whiteRating.toFixed(1),
             darkRating: teams.darkRating.toFixed(1),
-            signupLocked: true,
+            signupLocked: requirePlayerCode,
             rosterReleased: true
         });
     } catch (error) {
