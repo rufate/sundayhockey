@@ -1646,6 +1646,20 @@
             <button class="export-btn" onclick="exportToExcel()">
                 📥 Download Full Payment Report (CSV)
             </button>
+            <div class="message-actions" style="margin-top:12px;">
+                <button type="button" class="control-btn" onclick="downloadLatestSavedPaymentReport()" style="background:#6f42c1;">🗂️ Download Last Auto-Saved Report</button>
+                <button type="button" class="secondary-btn control-btn" onclick="loadPaymentReportSnapshots()">↻ Refresh Saved Reports</button>
+            </div>
+            <div class="message-box" style="margin-top:12px;">
+                <label for="paymentReportSnapshotSelect">Saved Payment Report Snapshots</label>
+                <div class="control-row">
+                    <select id="paymentReportSnapshotSelect" style="flex:1;">
+                        <option value="">No saved reports loaded</option>
+                    </select>
+                    <button type="button" class="control-btn" onclick="downloadSelectedPaymentReport()" style="background:#6f42c1;">Download Selected</button>
+                </div>
+                <small id="paymentReportSnapshotStatus">Reports are auto-saved to the database before scheduled and manual weekly reset.</small>
+            </div>
             <p class="security-notice">
                 ⚠️ Payment and rating data is hidden from public view. Only admins can see this information.
             </p>
@@ -2260,6 +2274,7 @@
                     loadData();
                     loadSettings();
                     loadAppSettings();
+                    loadPaymentReportSnapshots();
                     setTimeout(loadHistoryList, 500);
                 } else {
                     localStorage.removeItem(SESSION_KEY);
@@ -2298,6 +2313,7 @@
                     loadData();
                     loadSettings();
                     loadAppSettings();
+                    loadPaymentReportSnapshots();
                     setTimeout(loadHistoryList, 500);
                 } else {
                     document.getElementById('errorMsg').style.display = 'block';
@@ -3484,6 +3500,58 @@
 
         function exportToExcel() {
             window.open(`${API_URL}/api/admin/export-payments?sessionToken=${sessionToken}`, '_blank');
+        }
+
+        async function loadPaymentReportSnapshots() {
+            const select = document.getElementById('paymentReportSnapshotSelect');
+            const status = document.getElementById('paymentReportSnapshotStatus');
+            if (!select || !status || !sessionToken) return;
+
+            try {
+                status.innerText = 'Loading saved reports...';
+                const res = await fetch(`${API_URL}/api/admin/payment-reports?sessionToken=${sessionToken}`);
+                const data = await res.json();
+
+                if (!res.ok) {
+                    status.innerText = data.error || 'Failed to load saved reports.';
+                    return;
+                }
+
+                select.innerHTML = '';
+                if (!data.reports || !data.reports.length) {
+                    select.innerHTML = '<option value="">No saved reports yet</option>';
+                    status.innerText = 'No saved reports yet. A snapshot will be created before manual and scheduled weekly reset.';
+                    return;
+                }
+
+                data.reports.forEach(report => {
+                    const option = document.createElement('option');
+                    option.value = report.id;
+                    const created = new Date(report.created_at).toLocaleString();
+                    const trigger = (report.trigger_source || 'snapshot').replace(/_/g, ' ');
+                    option.text = `#${report.id} • Week ${report.week_number || '--'}, ${report.year || '--'} • ${trigger} • ${created}`;
+                    select.appendChild(option);
+                });
+
+                const latest = data.reports[0];
+                status.innerText = `Latest saved report: ${new Date(latest.created_at).toLocaleString()} (${(latest.trigger_source || 'snapshot').replace(/_/g, ' ')})`;
+            } catch (err) {
+                console.error('Error loading payment report snapshots:', err);
+                status.innerText = 'Error loading saved reports.';
+            }
+        }
+
+        function downloadLatestSavedPaymentReport() {
+            window.open(`${API_URL}/api/admin/payment-reports/latest?sessionToken=${sessionToken}`, '_blank');
+        }
+
+        function downloadSelectedPaymentReport() {
+            const select = document.getElementById('paymentReportSnapshotSelect');
+            if (!select || !select.value) {
+                alert('Please choose a saved report first.');
+                return;
+            }
+            window.open(`${API_URL}/api/admin/payment-reports/${select.value}/download?sessionToken=${sessionToken}`, '_blank');
         }
         
         async function loadHistoryList() {
