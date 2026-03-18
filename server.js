@@ -3046,6 +3046,34 @@ app.get('/api/admin/payment-reports/:id/download', async (req, res) => {
     res.send(report.report_csv);
 });
 
+
+// Health check endpoint (for Render + cron-job.org)
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        ok: true,
+        service: process.env.LEAGUE_NAME || 'hockey',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.head('/health', (req, res) => {
+    res.sendStatus(200);
+});
+
+app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        ok: true,
+        service: process.env.LEAGUE_NAME || 'hockey',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.head('/api/health', (req, res) => {
+    res.sendStatus(200);
+});
+
 // Initialize and start
 initDatabase().then(() => {
     checkAutoLock();
