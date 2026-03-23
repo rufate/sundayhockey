@@ -1432,7 +1432,7 @@
                     <label for="titleDayTime">Select day and time:</label>
                     <input type="datetime-local" id="titleDayTime" class="control-input" onchange="updateTitlePreview()">
                     <div style="color:#888; font-size:0.85rem; margin-top:6px;">
-                        Pick any date/time — it will be interpreted as <strong>weekday + time (ET)</strong>.
+                        Pick a weekday/time in ET. V51 auto-schedule will rebuild the weekly lock, roster release, and reset times from this selection.
                     </div>
                 </div>
                 <div class="title-control-group">
@@ -1541,7 +1541,7 @@
                             </div>
                         </div>
 
-                        <div class="schedule-hint">Uses the exact ET date and time selected above.</div>
+                        <div class="schedule-hint">Repeats weekly in ET using the weekday and time you selected.</div>
                     </div>
 
                     <div class="schedule-card">
@@ -1558,7 +1558,7 @@
                             </div>
                         </div>
 
-                        <div class="schedule-hint">Uses the exact ET date and time selected above.</div>
+                        <div class="schedule-hint">Repeats weekly in ET using the weekday and time you selected.</div>
                     </div>
 
                     <div class="schedule-card">
@@ -2198,7 +2198,7 @@
                 <strong>🔒 Signup Lock Window:</strong> ${lockLine}<br>
                 <strong>📋 Auto Roster Release:</strong> ${rrLine}<br>
                 <strong>♻️ Weekly Reset:</strong> ${resetLine}<br>
-                <span style="color:#aaa;">Times use the exact ET date and time selected in the scheduler.</span>
+                <span style="color:#aaa;">V51 auto-schedule: times repeat weekly in ET based on the weekday and time you saved.</span>
             `;
         }
 
@@ -2229,7 +2229,7 @@
                     }
                     document.getElementById('scheduleInfo').innerHTML = formatScheduleInfo(data);
                     await refreshSettings();
-                    alert('✅ Schedules saved.');
+                    alert('✅ Weekly schedules saved. These now repeat automatically in ET every week.');
                 } catch (e) {
                     console.error(e);
                     alert('Error saving schedules.');
@@ -2537,7 +2537,7 @@
                     if (res.ok) {
                         document.getElementById('titlePreview').innerText = newTitle;
                         document.getElementById('timeInput').value = dayTime;
-                        alert(`✅ Title updated to: ${newTitle}\nTime updated to: ${formatEtDateTimeLocal(buildDatetimeLocal(parts.dateVal, parts.hour24, parts.minute))}\nDate updated to: ${selectedGameDate}`);
+                        alert(`✅ Title updated to: ${newTitle}\nTime updated to: ${formatEtDateTimeLocal(buildDatetimeLocal(parts.dateVal, parts.hour24, parts.minute))}\nDate updated to: ${selectedGameDate}\n\nWeekly auto-schedule was rebuilt from this game time.`);
                         await loadSettings();
                     } else {
                         alert(result.error || 'Failed to update title');

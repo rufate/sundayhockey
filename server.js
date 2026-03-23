@@ -190,6 +190,12 @@ let resetWeekAt = '';
 let lastExactResetRunAt = '';
 let lastExactRosterReleaseRunAt = '';
 
+const AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME = true;
+const AUTO_SCHEDULE_LOCK_HOUR = 17;
+const AUTO_SCHEDULE_LOCK_MINUTE = 0;
+const AUTO_SCHEDULE_RESET_HOUR = 0;
+const AUTO_SCHEDULE_RESET_MINUTE = 0;
+
 // Admin-configurable schedules (interpreted in America/New_York, repeats weekly)
 let signupLockSchedule = {
     enabled: false,
@@ -421,21 +427,168 @@ function nowETMinuteKey(etDate) {
     );
 }
 
+function getEtDowHourMinute(etDate = getCurrentETTime()) {
+    return {
+        dow: etDate.getDay(),
+        hour: etDate.getHours(),
+        minute: etDate.getMinutes()
+    };
+}
+
+function minuteOfWeekFromParts(dow, hour, minute) {
+    return (Number(dow) * 24 * 60) + (Number(hour) * 60) + Number(minute);
+}
+
+function minuteOfWeekNow(etDate = getCurrentETTime()) {
+    return minuteOfWeekFromParts(etDate.getDay(), etDate.getHours(), etDate.getMinutes());
+}
+
+function sameDowHourMinute(a, b) {
+    return !!a && !!b &&
+        Number(a.dow) === Number(b.dow) &&
+        Number(a.hour) === Number(b.hour) &&
+        Number(a.minute) === Number(b.minute);
+}
+
+function isNowAtSchedule(scheduleAt, etDate = getCurrentETTime()) {
+    if (!scheduleAt) return false;
+    const now = getEtDowHourMinute(etDate);
+    return sameDowHourMinute(scheduleAt, now);
+}
+
+function isNowInWindow(start, end, etDate = getCurrentETTime()) {
+    if (!start || !end) return false;
+
+    const now = minuteOfWeekNow(etDate);
+    const startMin = minuteOfWeekFromParts(start.dow, start.hour, start.minute);
+    const endMin = minuteOfWeekFromParts(end.dow, end.hour, end.minute);
+
+    if (startMin === endMin) return false;
+
+    if (startMin < endMin) {
+        return now >= startMin && now < endMin;
+    }
+
+    return now >= startMin || now < endMin;
+}
+
+function getScheduleOccurrenceKey(scheduleAt, etDate = getCurrentETTime()) {
+    if (!scheduleAt) return '';
+    const weekInfo = getWeekNumber(etDate);
+    return `${weekInfo.year}-W${weekInfo.week}-${scheduleAt.dow}-${scheduleAt.hour}-${scheduleAt.minute}`;
+}
+
+function getNextOccurrenceEtParts(scheduleAt, etDate = getCurrentETTime()) {
+    if (!scheduleAt) return null;
+
+    const nowDow = etDate.getDay();
+    const nowMinutes = (etDate.getHours() * 60) + etDate.getMinutes();
+    const targetMinutes = (Number(scheduleAt.hour) * 60) + Number(scheduleAt.minute);
+
+    let daysAhead = (Number(scheduleAt.dow) - nowDow + 7) % 7;
+    if (daysAhead === 0 && targetMinutes <= nowMinutes) {
+        daysAhead = 7;
+    }
+
+    const next = new Date(etDate);
+    next.setDate(etDate.getDate() + daysAhead);
+    next.setHours(Number(scheduleAt.hour), Number(scheduleAt.minute), 0, 0);
+
+    return {
+        year: next.getFullYear(),
+        month: next.getMonth() + 1,
+        day: next.getDate(),
+        hour: next.getHours(),
+        minute: next.getMinutes()
+    };
+}
+
+function getCurrentOrNextOccurrenceEtParts(scheduleAt, etDate = getCurrentETTime()) {
+    if (!scheduleAt) return null;
+    if (isNowAtSchedule(scheduleAt, etDate)) {
+        return {
+            year: etDate.getFullYear(),
+            month: etDate.getMonth() + 1,
+            day: etDate.getDate(),
+            hour: etDate.getHours(),
+            minute: etDate.getMinutes()
+        };
+    }
+    return getNextOccurrenceEtParts(scheduleAt, etDate);
+}
+
+function formatScheduleDowTime(scheduleAt) {
+    if (!scheduleAt) return '';
+    const dayName = INDEX_TO_DAY_NAME[Number(scheduleAt.dow)] || 'Unknown';
+    const hour24 = Number(scheduleAt.hour) || 0;
+    const minute = Number(scheduleAt.minute) || 0;
+    const hour12 = ((hour24 + 11) % 12) + 1;
+    const ampm = hour24 >= 12 ? 'PM' : 'AM';
+    return `${dayName} ${hour12}:${String(minute).padStart(2, '0')} ${ampm} ET`;
+}
+
+function buildAutoSchedulesFromGameTime(selectedGameTime = gameTime, anchorDate = gameDate) {
+    const parsed = parseGameTimeString(selectedGameTime);
+    const gameDow = parsed.dayIndex;
+    const resetDow = (gameDow + 1) % 7;
+
+    signupLockSchedule = {
+        enabled: true,
+        start: { dow: gameDow, hour: AUTO_SCHEDULE_LOCK_HOUR, minute: AUTO_SCHEDULE_LOCK_MINUTE },
+        end: { dow: resetDow, hour: AUTO_SCHEDULE_RESET_HOUR, minute: AUTO_SCHEDULE_RESET_MINUTE }
+    };
+
+    rosterReleaseSchedule = {
+        enabled: true,
+        at: { dow: gameDow, hour: AUTO_SCHEDULE_LOCK_HOUR, minute: AUTO_SCHEDULE_LOCK_MINUTE }
+    };
+
+    resetWeekSchedule = {
+        enabled: true,
+        at: { dow: resetDow, hour: AUTO_SCHEDULE_RESET_HOUR, minute: AUTO_SCHEDULE_RESET_MINUTE }
+    };
+
+    const safeDate = anchorDate || calculateNextGameDate();
+    const [year, month, day] = String(safeDate).split('-').map(v => parseInt(v, 10));
+    const hasAnchor = [year, month, day].every(Number.isFinite);
+
+    const buildFromAnchor = (dow, hour, minute) => {
+        if (!hasAnchor) {
+            return getNextOccurrenceEtParts({ dow, hour, minute });
+        }
+        const anchor = new Date(year, month - 1, day, hour, minute, 0, 0);
+        let daysOffset = (dow - anchor.getDay() + 7) % 7;
+        if (daysOffset !== 0) {
+            anchor.setDate(anchor.getDate() + daysOffset);
+        }
+        return {
+            year: anchor.getFullYear(),
+            month: anchor.getMonth() + 1,
+            day: anchor.getDate(),
+            hour: anchor.getHours(),
+            minute: anchor.getMinutes()
+        };
+    };
+
+    const lockStartParts = buildFromAnchor(gameDow, AUTO_SCHEDULE_LOCK_HOUR, AUTO_SCHEDULE_LOCK_MINUTE);
+    const lockEndParts = buildFromAnchor(resetDow, AUTO_SCHEDULE_RESET_HOUR, AUTO_SCHEDULE_RESET_MINUTE);
+    const rosterReleaseParts = buildFromAnchor(gameDow, AUTO_SCHEDULE_LOCK_HOUR, AUTO_SCHEDULE_LOCK_MINUTE);
+    const resetParts = buildFromAnchor(resetDow, AUTO_SCHEDULE_RESET_HOUR, AUTO_SCHEDULE_RESET_MINUTE);
+
+    const toLocalString = (parts) => parts
+        ? `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}T${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
+        : '';
+
+    signupLockStartAt = toLocalString(lockStartParts);
+    signupLockEndAt = toLocalString(lockEndParts);
+    rosterReleaseAt = toLocalString(rosterReleaseParts);
+    resetWeekAt = toLocalString(resetParts);
+}
+
 function shouldBeLocked() {
     if (!signupLockSchedule || !signupLockSchedule.enabled) return false;
-    if (!signupLockStartAt || !signupLockEndAt) return false;
-
-    const etNow = getCurrentETTime();
-    const startAt = parseDatetimeLocalToETDate(signupLockStartAt);
-    const endAt = parseDatetimeLocalToETDate(signupLockEndAt);
-    if (!startAt || !endAt) return false;
-
-    const nowKey = nowETMinuteKey(etNow);
-    const startKey = etPartsToMinuteKey(startAt);
-    const endKey = etPartsToMinuteKey(endAt);
-    if (endKey <= startKey) return false;
-
-    return nowKey >= startKey && nowKey < endKey;
+    if (!signupLockSchedule.start || !signupLockSchedule.end) return false;
+    return isNowInWindow(signupLockSchedule.start, signupLockSchedule.end);
 }
 
 function checkAutoLock() {
@@ -508,25 +661,19 @@ function checkAutoLock() {
 }
 
 
-// Auto-release roster at the exact admin-scheduled ET datetime
+// Auto-release roster using recurring weekly ET schedule
 async function autoReleaseRoster() {
     const etTime = getCurrentETTime();
 
     if (!rosterReleaseSchedule || !rosterReleaseSchedule.enabled) return false;
-    if (!rosterReleaseAt) return false;
+    if (!rosterReleaseSchedule.at) return false;
     if (rosterReleased || players.length === 0) return false;
+    if (!isNowAtSchedule(rosterReleaseSchedule.at, etTime)) return false;
 
-    const exactReleaseAt = parseDatetimeLocalToETDate(rosterReleaseAt);
-    if (!exactReleaseAt) return false;
+    const occurrenceKey = getScheduleOccurrenceKey(rosterReleaseSchedule.at, etTime);
+    if (lastExactRosterReleaseRunAt === occurrenceKey) return false;
 
-    const exactKey = rosterReleaseAt;
-    const nowKey = nowETMinuteKey(etTime);
-    const releaseKey = etPartsToMinuteKey(exactReleaseAt);
-
-    if (nowKey < releaseKey) return false;
-    if (lastExactRosterReleaseRunAt === exactKey) return false;
-
-    lastExactRosterReleaseRunAt = exactKey;
+    lastExactRosterReleaseRunAt = occurrenceKey;
 
     try {
         const { week, year } = getWeekNumber(etTime);
@@ -537,7 +684,6 @@ async function autoReleaseRoster() {
         manualOverride = true;
         manualOverrideState = 'locked';
 
-        // Auto-enable payment reminder when roster is released
         announcementEnabled = true;
         announcementText = 'E-transfer required immediately after roster release.';
 
@@ -554,9 +700,7 @@ async function autoReleaseRoster() {
             for (const player of players) {
                 await pool.query('UPDATE players SET team = $1 WHERE id = $2', [player.team, player.id]);
             }
-        }
 
-        if (pool) {
             await saveWeekHistory(year, week, teams.whiteTeam, teams.darkTeam);
 
             await pool.query(
@@ -568,6 +712,7 @@ async function autoReleaseRoster() {
                 ['announcementText', announcementText]
             );
         }
+
         await saveData();
         return true;
     } catch (error) {
@@ -665,30 +810,28 @@ function checkMaintenanceModeSchedule() {
 }
 
 
-// Weekly reset - exact admin-scheduled ET datetime only
+// Weekly reset using recurring weekly ET schedule
 async function checkWeeklyReset() {
     const etTime = getCurrentETTime();
     const { week: currentWeek, year: currentYear } = getWeekNumber(etTime);
 
     if (!resetWeekSchedule || !resetWeekSchedule.enabled) return false;
-    if (!resetWeekAt) return false;
+    if (!resetWeekSchedule.at) return false;
+    if (!isNowAtSchedule(resetWeekSchedule.at, etTime)) return false;
 
-    const exactResetAt = parseDatetimeLocalToETDate(resetWeekAt);
-    if (!exactResetAt) return false;
+    const occurrenceKey = getScheduleOccurrenceKey(resetWeekSchedule.at, etTime);
+    if (lastExactResetRunAt === occurrenceKey) return false;
 
-    const exactKey = resetWeekAt;
-    const nowKey = nowETMinuteKey(etTime);
-    const resetKeyNum = etPartsToMinuteKey(exactResetAt);
-
-    if (nowKey < resetKeyNum) return false;
-    if (lastExactResetRunAt === exactKey) return false;
-
-    lastExactResetRunAt = exactKey;
+    lastExactResetRunAt = occurrenceKey;
 
     await savePaymentReportSnapshot('scheduled_reset');
 
-    if (rosterReleased && currentWeekData.weekNumber &&
-        (currentWeekData.whiteTeam.length > 0 || currentWeekData.darkTeam.length > 0) && pool) {
+    if (
+        rosterReleased &&
+        currentWeekData.weekNumber &&
+        (currentWeekData.whiteTeam.length > 0 || currentWeekData.darkTeam.length > 0) &&
+        pool
+    ) {
         await saveWeekHistory(
             currentWeekData.year,
             currentWeekData.weekNumber,
@@ -717,14 +860,8 @@ async function checkWeeklyReset() {
     requirePlayerCode = true;
     maintenanceMode = false;
     refreshDynamicSignupCode();
-    resetWeekAt = '';
-    signupLockStartAt = '';
-    signupLockEndAt = '';
-    rosterReleaseAt = '';
-    signupLockSchedule.start = null;
-    signupLockSchedule.end = null;
-    rosterReleaseSchedule.at = null;
-    resetWeekSchedule.at = null;
+
+    // Keep weekly schedules intact
     lastExactRosterReleaseRunAt = '';
 
     if (pool) {
@@ -740,7 +877,6 @@ async function checkWeeklyReset() {
     await saveData();
     return true;
 }
-
 
 const CHECK_INTERVAL = process.env.NODE_ENV === 'production' ? 15000 : 5000;
 let schedulerRunning = false;
@@ -895,6 +1031,9 @@ async function loadDataFromDB() {
         if (settings.signupLockSchedule) signupLockSchedule = settings.signupLockSchedule;
         if (settings.rosterReleaseSchedule) rosterReleaseSchedule = settings.rosterReleaseSchedule;
         if (settings.resetWeekSchedule) resetWeekSchedule = settings.resetWeekSchedule;
+        if (AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME && (!signupLockSchedule.start || !signupLockSchedule.end || !rosterReleaseSchedule.at || !resetWeekSchedule.at)) {
+            buildAutoSchedulesFromGameTime(gameTime, gameDate);
+        }
         refreshDynamicSignupCode();
         
         const playersRes = await pool.query('SELECT * FROM players ORDER BY registered_at');
@@ -1122,6 +1261,9 @@ function loadDataFromFile() {
             announcementEnabled = data.announcementEnabled ?? false;
             announcementText = data.announcementText ?? '';
             announcementImages = Array.isArray(data.announcementImages) ? data.announcementImages : [];
+            if (AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME && (!signupLockSchedule.start || !signupLockSchedule.end || !rosterReleaseSchedule.at || !resetWeekSchedule.at)) {
+                buildAutoSchedulesFromGameTime(gameTime, gameDate);
+            }
             refreshDynamicSignupCode();
         } else {
             gameDate = calculateNextGameDate();
@@ -1632,13 +1774,14 @@ function etPartsToIso(etParts) {
 }
 
 function getSignupOpenMessageData() {
-    const nextOpenAt = (signupLockSchedule && signupLockSchedule.enabled && signupLockEndAt)
-        ? parseDatetimeLocalToETDate(signupLockEndAt)
+    const etNow = getCurrentETTime();
+    const nextOpenAt = (signupLockSchedule && signupLockSchedule.enabled && signupLockSchedule.end)
+        ? getCurrentOrNextOccurrenceEtParts(signupLockSchedule.end, etNow)
         : null;
     const openLabel = nextOpenAt ? formatETDateTimeLong(nextOpenAt) : null;
 
-    const releaseAtParts = (rosterReleaseSchedule && rosterReleaseSchedule.enabled && rosterReleaseAt)
-        ? parseDatetimeLocalToETDate(rosterReleaseAt)
+    const releaseAtParts = (rosterReleaseSchedule && rosterReleaseSchedule.enabled && rosterReleaseSchedule.at)
+        ? getCurrentOrNextOccurrenceEtParts(rosterReleaseSchedule.at, etNow)
         : null;
     const rosterReleaseLabel = releaseAtParts ? formatETDateTimeLong(releaseAtParts) : null;
 
@@ -1660,7 +1803,7 @@ function getSignupOpenMessageData() {
             : `📅 Check Back ${gameDayName} at the scheduled roster release time`,
         rosterReleaseLine: rosterReleaseLabel
             ? `Team rosters are released on ${rosterReleaseLabel}`
-            : `Team rosters are released at the scheduled time`
+            : 'Team rosters are released weekly at the scheduled ET time'
     };
 }
 
@@ -2223,9 +2366,22 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
         if (newAnnouncementImages !== undefined) {
             announcementImages = normalizeAnnouncementImages(newAnnouncementImages);
         }
-        if (selectedDayTime) gameTime = selectedDayTime;
+        if (selectedDayTime) {
+            gameTime = selectedDayTime;
+            if (AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME) {
+                gameDate = newGameDate || calculateNextGameDate();
+                buildAutoSchedulesFromGameTime(gameTime, gameDate);
+                lastExactResetRunAt = '';
+                lastExactRosterReleaseRunAt = '';
+            }
+        }
         if (selectedArena) gameLocation = selectedArena;
-        if (newGameDate) gameDate = newGameDate;
+        if (newGameDate) {
+            gameDate = newGameDate;
+            if (AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME) {
+                buildAutoSchedulesFromGameTime(gameTime, gameDate);
+            }
+        }
 
         await saveAppSetting('maintenanceMode', maintenanceMode.toString());
         await saveAppSetting('customTitle', customTitle);
@@ -2479,10 +2635,17 @@ app.post('/api/admin/update-schedules', async (req, res) => {
     rosterReleaseAt = rosterReleaseAtInput || '';
     resetWeekAt = resetWeekAtInput || '';
 
+    signupLockSchedule.enabled = !!signupLockEnabled;
+    rosterReleaseSchedule.enabled = !!rosterReleaseEnabled;
+    resetWeekSchedule.enabled = !!resetWeekEnabled;
+
     signupLockSchedule.start = signupLockStartAt ? parseDatetimeLocalToDowTime(signupLockStartAt) : null;
     signupLockSchedule.end = signupLockEndAt ? parseDatetimeLocalToDowTime(signupLockEndAt) : null;
     rosterReleaseSchedule.at = rosterReleaseAt ? parseDatetimeLocalToDowTime(rosterReleaseAt) : null;
     resetWeekSchedule.at = resetWeekAt ? parseDatetimeLocalToDowTime(resetWeekAt) : null;
+
+    lastExactRosterReleaseRunAt = '';
+    lastExactResetRunAt = '';
 
     await saveData();
     writeSettingsBackup('update-schedules');
@@ -2959,16 +3122,15 @@ app.post('/api/admin/manual-reset', async (req, res) => {
     manualOverrideState = null;
     requirePlayerCode = true;
     lastExactResetRunAt = '';
-    
-    // Code stays as 9855 - no auto-generation
-    
+    lastExactRosterReleaseRunAt = '';
+
     try {
-        await pool.query('DELETE FROM players');
-        await pool.query('DELETE FROM waitlist');
-        
-        // Auto-add predefined players after reset
+        if (pool) {
+            await pool.query('DELETE FROM players');
+            await pool.query('DELETE FROM waitlist');
+        }
+
         await addAutoPlayers();
-        
         await saveData();
     } catch (err) {
         console.error('Error resetting:', err);
