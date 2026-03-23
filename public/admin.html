@@ -2442,6 +2442,13 @@
             }
         }
 
+        function weekdayName(year, month, day) {
+            return new Intl.DateTimeFormat('en-US', {
+                timeZone: 'UTC',
+                weekday: 'long'
+            }).format(new Date(Date.UTC(year, month - 1, day)));
+        }
+
         function formatEtDateTimeLocal(value) {
             if (!value || !value.includes('T')) return '—';
             const [datePart, timePart] = value.split('T');
