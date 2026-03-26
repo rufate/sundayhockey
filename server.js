@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const cron = require('node-cron');
 const { Pool } = require('pg');
 const app = express();
@@ -50,18 +52,10 @@ let playerSpots = 20;
 let players = []; 
 let waitlist = [];
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '').trim();
-
-function hasConfiguredAdminPassword() {
-    return ADMIN_PASSWORD.length > 0;
-}
-
-function isValidAdminPassword(password) {
-    return hasConfiguredAdminPassword() && String(password || '') === ADMIN_PASSWORD;
-}
-
-function isValidAdminSession(sessionToken) {
-    return !!(sessionToken && adminSessions[sessionToken]);
-}
+const ADMIN_TOKEN_SECRET = String(process.env.ADMIN_TOKEN_SECRET || '').trim() || `fallback:${ADMIN_PASSWORD || 'change-me'}`;
+const ADMIN_REMEMBER_TOKEN_TTL_DAYS = Number(process.env.ADMIN_TOKEN_TTL_DAYS || 30);
+const ADMIN_SESSION_TOKEN_TTL_HOURS = Number(process.env.ADMIN_SESSION_HOURS || 12);
+const ADMIN_SESSION_FILE = './admin-sessions.json';
 
 // Game details - FRIDAY HOCKEY
 let gameLocation = "Capri Recreation Complex";
@@ -228,8 +222,137 @@ let resetWeekSchedule = {
 };
 
 
+
+function hasConfiguredAdminPassword() {
+    return !!ADMIN_PASSWORD;
+}
+
+function isValidAdminPassword(password) {
+    return hasConfiguredAdminPassword() && String(password || '').trim() === ADMIN_PASSWORD;
+}
+
+let adminSessionState = {
+    revokedJtis: {},
+    logoutAllAfter: 0,
+    audit: []
+};
+
+function loadAdminSessionState() {
+    try {
+        if (!fs.existsSync(ADMIN_SESSION_FILE)) return;
+        const raw = JSON.parse(fs.readFileSync(ADMIN_SESSION_FILE, 'utf8'));
+        if (raw && typeof raw === 'object') {
+            adminSessionState = {
+                revokedJtis: raw.revokedJtis || {},
+                logoutAllAfter: Number(raw.logoutAllAfter || 0),
+                audit: Array.isArray(raw.audit) ? raw.audit.slice(-200) : []
+            };
+        }
+    } catch (err) {
+        console.error('Error loading admin session state:', err.message);
+    }
+}
+
+function saveAdminSessionState() {
+    try {
+        fs.writeFileSync(ADMIN_SESSION_FILE, JSON.stringify(adminSessionState, null, 2));
+    } catch (err) {
+        console.error('Error saving admin session state:', err.message);
+    }
+}
+
+function pruneAdminSessionState() {
+    const nowSec = Math.floor(Date.now() / 1000);
+    for (const [jti, exp] of Object.entries(adminSessionState.revokedJtis || {})) {
+        if (!exp || Number(exp) < nowSec) delete adminSessionState.revokedJtis[jti];
+    }
+    adminSessionState.audit = (adminSessionState.audit || []).slice(-200);
+}
+
+function getClientIp(req) {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string' && forwarded.trim()) {
+        return forwarded.split(',')[0].trim();
+    }
+    return req.ip || req.socket?.remoteAddress || 'unknown';
+}
+
+function addAdminAuditEntry(action, req, details = {}) {
+    try {
+        const entry = {
+            at: new Date().toISOString(),
+            action,
+            ip: req ? getClientIp(req) : 'server',
+            ua: req?.headers?.['user-agent'] || '',
+            details
+        };
+        adminSessionState.audit = Array.isArray(adminSessionState.audit) ? adminSessionState.audit : [];
+        adminSessionState.audit.push(entry);
+        pruneAdminSessionState();
+        saveAdminSessionState();
+    } catch (err) {
+        console.error('Error writing admin audit entry:', err.message);
+    }
+}
+
+function decodeAdminSession(token) {
+    const value = String(token || '').trim();
+    if (!value) return null;
+    try {
+        const decoded = jwt.verify(value, ADMIN_TOKEN_SECRET);
+        return decoded && decoded.role === 'admin' ? decoded : null;
+    } catch (err) {
+        return null;
+    }
+}
+
+function createAdminSessionToken(rememberMe = true) {
+    const jti = crypto.randomUUID();
+    const remember = !!rememberMe;
+    const expiresIn = remember ? `${ADMIN_REMEMBER_TOKEN_TTL_DAYS}d` : `${ADMIN_SESSION_TOKEN_TTL_HOURS}h`;
+    return jwt.sign(
+        { role: 'admin', jti, remember },
+        ADMIN_TOKEN_SECRET,
+        { expiresIn }
+    );
+}
+
+function getAdminAuthToken(req) {
+    const authHeader = req.headers['authorization'] || '';
+    const bearerToken = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+        ? authHeader.slice(7).trim()
+        : '';
+
+    return (
+        req.headers['x-admin-auth'] ||
+        req.headers['x-admin-token'] ||
+        req.headers['x-admin-password'] ||
+        bearerToken ||
+        (req.body && (req.body.sessionToken || req.body.password)) ||
+        (req.query && (req.query.sessionToken || req.query.password)) ||
+        ''
+    );
+}
+
+function isValidAdminSession(token) {
+    const decoded = decodeAdminSession(token);
+    if (!decoded) return false;
+    if (decoded.jti && adminSessionState.revokedJtis && adminSessionState.revokedJtis[decoded.jti]) return false;
+    if (adminSessionState.logoutAllAfter && decoded.iat && decoded.iat < Number(adminSessionState.logoutAllAfter)) return false;
+    return true;
+}
+
+function isAuthorizedAdminRequest(req) {
+    const token = getAdminAuthToken(req);
+    if (isValidAdminSession(token)) return true;
+    return isValidAdminPassword(token);
+}
+
 // Store admin sessions
 let adminSessions = {};
+loadAdminSessionState();
+pruneAdminSessionState();
+saveAdminSessionState();
 
 // Weekly reset tracking
 let lastResetWeek = null;
@@ -1816,6 +1939,10 @@ app.get('/admin', (req, res) => {
     return sendPublic(res, 'admin.html');
 });
 
+app.get('/admin-phan-puck-you-9648.html', (req, res) => {
+    return sendPublic(res, 'admin.html');
+});
+
 app.get('/waitlist', (req, res) => {
     return sendPublic(res, 'waitlist.html');
 });
@@ -2070,7 +2197,7 @@ app.get('/api/history/:year/:week', async (req, res) => {
 app.delete('/api/admin/history/:year/:week', async (req, res) => {
     const { password, sessionToken } = req.body;
     
-    if (!isValidAdminSession(sessionToken)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized" });
     }
     
@@ -2392,26 +2519,86 @@ app.post('/api/cancel-registration', async (req, res) => {
 // --- ADMIN API - FULL ACCESS TO ALL DATA ---
 
 app.post('/api/admin/check-session', (req, res) => {
-    const { sessionToken } = req.body;
-    if (adminSessions[sessionToken]) {
-        res.json({ loggedIn: true });
-    } else {
-        res.json({ loggedIn: false });
-    }
+    const sessionToken = getAdminAuthToken(req);
+    const decoded = decodeAdminSession(sessionToken);
+    const loggedIn = !!decoded && isValidAdminSession(sessionToken);
+    res.json({
+        loggedIn,
+        expiresAt: loggedIn && decoded?.exp ? new Date(decoded.exp * 1000).toISOString() : null,
+        remember: !!decoded?.remember
+    });
 });
 
 app.post('/api/admin/login', (req, res) => {
-    const { password } = req.body;
+    const { password, rememberMe } = req.body || {};
+
     if (!hasConfiguredAdminPassword()) {
-        return res.status(500).json({ success: false, error: "Admin password is not configured on the server. Set ADMIN_PASSWORD in Render environment variables." });
+        return res.status(500).json({ success: false, error: 'ADMIN_PASSWORD is not configured on the server' });
     }
-    if (isValidAdminPassword(password)) {
-        const sessionToken = Date.now().toString() + Math.random().toString();
-        adminSessions[sessionToken] = true;
-        res.json({ success: true, sessionToken: sessionToken });
-    } else {
-        res.status(401).json({ success: false });
+
+    if (!isValidAdminPassword(password)) {
+        addAdminAuditEntry('login_failed', req, { reason: 'invalid_password' });
+        return res.status(401).json({ success: false, error: 'Invalid password' });
     }
+
+    const sessionToken = createAdminSessionToken(rememberMe !== false);
+    const decoded = decodeAdminSession(sessionToken);
+    addAdminAuditEntry('login_success', req, { rememberMe: rememberMe !== false, expiresAt: decoded?.exp ? new Date(decoded.exp * 1000).toISOString() : null });
+
+    res.json({
+        success: true,
+        sessionToken,
+        expiresInDays: rememberMe !== false ? ADMIN_REMEMBER_TOKEN_TTL_DAYS : null,
+        expiresInHours: rememberMe === false ? ADMIN_SESSION_TOKEN_TTL_HOURS : null,
+        expiresAt: decoded?.exp ? new Date(decoded.exp * 1000).toISOString() : null,
+        remember: rememberMe !== false
+    });
+});
+
+app.post('/api/admin/logout', (req, res) => {
+    const sessionToken = getAdminAuthToken(req);
+    const decoded = decodeAdminSession(sessionToken);
+    if (decoded?.jti) {
+        adminSessionState.revokedJtis[decoded.jti] = Number(decoded.exp || 0);
+        pruneAdminSessionState();
+        saveAdminSessionState();
+    }
+    addAdminAuditEntry('logout', req, {});
+    res.json({ success: true });
+});
+
+app.post('/api/admin/logout-all', (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    adminSessionState.logoutAllAfter = Math.floor(Date.now() / 1000);
+    adminSessionState.revokedJtis = {};
+    pruneAdminSessionState();
+    saveAdminSessionState();
+    addAdminAuditEntry('logout_all_devices', req, {});
+    res.json({ success: true, message: 'All other admin sessions have been logged out.' });
+});
+
+app.get('/api/admin/session-info', (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const sessionToken = getAdminAuthToken(req);
+    const decoded = decodeAdminSession(sessionToken);
+    res.json({
+        remember: !!decoded?.remember,
+        issuedAt: decoded?.iat ? new Date(decoded.iat * 1000).toISOString() : null,
+        expiresAt: decoded?.exp ? new Date(decoded.exp * 1000).toISOString() : null
+    });
+});
+
+app.get('/api/admin/audit-log', (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const limit = Math.max(1, Math.min(100, Number(req.query.limit || 25)));
+    const entries = (adminSessionState.audit || []).slice(-limit).reverse();
+    res.json({ entries });
 });
 
 // ============================================
@@ -2421,7 +2608,7 @@ app.post('/api/admin/login', (req, res) => {
 // Get app settings (maintenance mode, title, etc.)
 app.post('/api/admin/app-settings', (req, res) => {
     const { sessionToken } = req.body;
-    if (!isValidAdminSession(sessionToken)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized" });
     }
     
@@ -2446,7 +2633,7 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
             announcementEnabled: newAnnouncementEnabled, announcementText: newAnnouncementText, announcementImages: newAnnouncementImages,
             selectedDayTime, selectedArena, gameDate: newGameDate } = req.body;
 
-    if (!isValidAdminSession(sessionToken)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
@@ -2513,7 +2700,7 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
 app.post('/api/admin/add-backup-goalie', async (req, res) => {
     const { sessionToken, goalieIndex } = req.body;
     
-    if (!isValidAdminSession(sessionToken)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized" });
     }
     
@@ -2573,7 +2760,7 @@ app.post('/api/admin/add-backup-goalie', async (req, res) => {
 app.post('/api/admin/players-full', (req, res) => {
     const { sessionToken } = req.body;
     
-    if (!isValidAdminSession(sessionToken)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized" });
     }
     
@@ -2619,7 +2806,7 @@ app.post('/api/admin/players-full', (req, res) => {
 app.post('/api/admin/download-backup', async (req, res) => {
     const { sessionToken } = req.body || {};
 
-    if (!isValidAdminSession(sessionToken)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
@@ -2675,7 +2862,7 @@ app.post('/api/admin/download-backup', async (req, res) => {
 app.post('/api/admin/restore-backup', async (req, res) => {
     const { sessionToken, backupData } = req.body || {};
 
-    if (!isValidAdminSession(sessionToken)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
@@ -2740,16 +2927,47 @@ app.post('/api/admin/restore-backup', async (req, res) => {
     }
 });
 
-// DEPRECATED: Old endpoint - redirect to new secure one
+// Backward-compatible admin players endpoint
 app.post('/api/admin/players', (req, res) => {
-    // Forward to new secure endpoint
-    req.url = '/api/admin/players-full';
-    app._router.handle(req, res);
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const playerCount = getPlayerCount();
+    const goalieCount = getGoalieCount();
+    const totalPaid = players.reduce((sum, p) => {
+        if (p.paidAmount && !isNaN(parseFloat(p.paidAmount))) {
+            return sum + parseFloat(p.paidAmount);
+        }
+        return sum;
+    }, 0);
+    const paidCount = players.filter(p => p.paid && !p.isGoalie && !(p.firstName === 'Phan' && p.lastName === 'Ly')).length;
+    const unpaidCount = players.filter(p => !p.paid && !p.isGoalie && !(p.firstName === 'Phan' && p.lastName === 'Ly')).length;
+
+    return res.json({
+        playerSpots,
+        playerCount,
+        goalieCount,
+        maxGoalies: MAX_GOALIES,
+        totalPlayers: players.length,
+        totalPaid: totalPaid.toFixed(2),
+        paidCount,
+        unpaidCount,
+        players,
+        waitlist,
+        location: gameLocation,
+        time: gameTime,
+        date: gameDate,
+        rosterReleased,
+        currentWeekData,
+        playerSignupCode,
+        requirePlayerCode
+    });
 });
 
 app.post('/api/admin/settings', (req, res) => {
     const { password, sessionToken } = req.body;
-    if (!isValidAdminSession(sessionToken) && !isValidAdminPassword(password)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).send("Unauthorized");
     }
     
@@ -2777,7 +2995,7 @@ app.post('/api/admin/settings', (req, res) => {
 
 app.post('/api/admin/update-details', (req, res) => {
     const { password, sessionToken, location, time, date } = req.body;
-    if (!isValidAdminSession(sessionToken) && !isValidAdminPassword(password)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).send("Unauthorized");
     }
     
@@ -2805,7 +3023,7 @@ app.post('/api/admin/update-details', (req, res) => {
 app.post('/api/admin/update-code', (req, res) => {
     const { password, sessionToken, newCode } = req.body;
     
-    if (!isValidAdminSession(sessionToken)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized - invalid session" });
     }
     
@@ -2827,7 +3045,7 @@ app.post('/api/admin/update-code', (req, res) => {
 app.post('/api/admin/update-schedules', async (req, res) => {
         const body = req.body || {};
     const { password, sessionToken, signupLockEnabled, signupLockStart, signupLockEnd, rosterReleaseEnabled, rosterReleaseAt: rosterReleaseAtInput, resetWeekEnabled, resetWeekAt: resetWeekAtInput } = body;
-    if (!isValidAdminSession(sessionToken) && !isValidAdminPassword(password)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).send("Unauthorized");
     }
 
@@ -2897,7 +3115,7 @@ app.post('/api/admin/update-schedules', async (req, res) => {
 
 app.post('/api/admin/toggle-code', (req, res) => {
     const { password, sessionToken } = req.body;
-    if (!isValidAdminSession(sessionToken) && !isValidAdminPassword(password)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).send("Unauthorized");
     }
     
@@ -2920,7 +3138,7 @@ app.post('/api/admin/toggle-code', (req, res) => {
 
 app.post('/api/admin/reset-schedule', (req, res) => {
     const { password, sessionToken } = req.body;
-    if (!isValidAdminSession(sessionToken) && !isValidAdminPassword(password)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).send("Unauthorized");
     }
     
@@ -2940,7 +3158,7 @@ app.post('/api/admin/reset-schedule', (req, res) => {
 
 app.post('/api/admin/promote-waitlist', async (req, res) => {
     const { password, sessionToken, waitlistId } = req.body;
-    if (!isValidAdminSession(sessionToken) && !isValidAdminPassword(password)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).send("Unauthorized");
     }
 
@@ -2995,7 +3213,7 @@ app.post('/api/admin/promote-waitlist', async (req, res) => {
 
 app.post('/api/admin/remove-waitlist', async (req, res) => {
     const { password, sessionToken, waitlistId } = req.body;
-    if (!isValidAdminSession(sessionToken) && !isValidAdminPassword(password)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).send("Unauthorized");
     }
 
@@ -3020,7 +3238,7 @@ app.post('/api/admin/remove-waitlist', async (req, res) => {
 
 app.post('/api/admin/add-player', async (req, res) => {
     const { password, sessionToken, firstName, lastName, phone, paymentMethod, rating, isGoalie, toWaitlist } = req.body;
-    if (!isValidAdminSession(sessionToken) && !isValidAdminPassword(password)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).send("Unauthorized");
     }
 
@@ -3110,7 +3328,7 @@ app.post('/api/admin/add-player', async (req, res) => {
 app.post('/api/admin/remove-player', async (req, res) => {
     const { password, sessionToken, playerId } = req.body;
     
-    if (!isValidAdminSession(sessionToken) && !isValidAdminPassword(password)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).send("Unauthorized");
     }
 
@@ -3151,7 +3369,7 @@ app.post('/api/admin/remove-player', async (req, res) => {
 
 app.post('/api/admin/update-spots', (req, res) => {
     const { password, sessionToken, newSpots } = req.body;
-    if (!isValidAdminSession(sessionToken) && !isValidAdminPassword(password)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).send("Unauthorized");
     }
     
@@ -3169,7 +3387,7 @@ app.post('/api/admin/update-spots', (req, res) => {
 app.post('/api/admin/update-paid-amount', async (req, res) => {
     const { password, sessionToken, playerId, amount } = req.body;
     
-    if (!isValidAdminSession(sessionToken) && !isValidAdminPassword(password)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).send("Unauthorized");
     }
 
@@ -3217,7 +3435,7 @@ app.post('/api/admin/update-paid-amount', async (req, res) => {
 app.post('/api/admin/update-rating', async (req, res) => {
     const { password, sessionToken, playerId, newRating } = req.body;
 
-    if (!isValidAdminSession(sessionToken) && !isValidAdminPassword(password)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).send("Unauthorized");
     }
 
@@ -3247,7 +3465,7 @@ app.post('/api/admin/update-rating', async (req, res) => {
 app.post('/api/admin/release-roster', async (req, res) => {
     const { password, sessionToken } = req.body;
     
-    if (!isValidAdminSession(sessionToken)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized" });
     }
     
@@ -3314,7 +3532,7 @@ app.post('/api/admin/release-roster', async (req, res) => {
 
 app.post('/api/admin/manual-reset', async (req, res) => {
     const { password, sessionToken } = req.body;
-    if (!isValidAdminSession(sessionToken) && !isValidAdminPassword(password)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).send("Unauthorized");
     }
     
@@ -3372,7 +3590,7 @@ app.post('/api/admin/manual-reset', async (req, res) => {
 app.get('/api/admin/export-payments', async (req, res) => {
     const { sessionToken } = req.query;
 
-    if (!isValidAdminSession(sessionToken)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized - Admin access only" });
     }
 
@@ -3390,7 +3608,7 @@ app.get('/api/admin/export-payments', async (req, res) => {
 app.get('/api/admin/payment-reports', async (req, res) => {
     const { sessionToken, limit } = req.query;
 
-    if (!isValidAdminSession(sessionToken)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: 'Unauthorized - Admin access only' });
     }
 
@@ -3401,7 +3619,7 @@ app.get('/api/admin/payment-reports', async (req, res) => {
 app.get('/api/admin/payment-reports/latest', async (req, res) => {
     const { sessionToken } = req.query;
 
-    if (!isValidAdminSession(sessionToken)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: 'Unauthorized - Admin access only' });
     }
 
@@ -3418,7 +3636,7 @@ app.get('/api/admin/payment-reports/latest', async (req, res) => {
 app.get('/api/admin/payment-reports/:id/download', async (req, res) => {
     const { sessionToken } = req.query;
 
-    if (!isValidAdminSession(sessionToken)) {
+    if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: 'Unauthorized - Admin access only' });
     }
 
