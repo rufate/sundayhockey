@@ -1351,9 +1351,9 @@
     <div class="container" id="loginBox">
         <h1>Admin Portal</h1>
         <p style="text-align:center; color:#888;">Phan's Hockey</p>
-        <input type="password" id="adminPass" placeholder="Enter Admin Password">
+        <input type="password" id="adminPass" placeholder="Enter Render ADMIN_PASSWORD">
         <button onclick="login()" style="width:100%;">Access Dashboard</button>
-        <p id="errorMsg" style="color:#ff4444; text-align:center; display:none;">Wrong Password</p>
+        <p id="errorMsg" style="color:#ff4444; text-align:center; display:none;">Wrong password or ADMIN_PASSWORD is not set on Render.</p>
     </div>
 
     <div class="container admin-panel" id="adminPanel">
@@ -2321,7 +2321,9 @@
                     loadPaymentReportSnapshots();
                     setTimeout(loadHistoryList, 500);
                 } else {
-                    document.getElementById('errorMsg').style.display = 'block';
+                    const errorEl = document.getElementById('errorMsg');
+                    errorEl.textContent = data.error || 'Wrong password or ADMIN_PASSWORD is not set on Render.';
+                    errorEl.style.display = 'block';
                 }
             } catch (err) {
                 console.error("Login error:", err);
