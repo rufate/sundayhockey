@@ -1357,9 +1357,14 @@
     </div>
 
     <div class="container admin-panel" id="adminPanel">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:10px; flex-wrap:wrap;">
             <h1 style="margin:0;">Admin Dashboard</h1>
-            <button class="logout-btn" onclick="logout()">Logout</button>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="control-btn" onclick="downloadBackup()" style="background:#2e7d32;">⬇ Download Backup</button>
+                <button class="control-btn" onclick="document.getElementById('restoreBackupFile').click()" style="background:#8e24aa;">⤴ Restore Backup</button>
+                <input type="file" id="restoreBackupFile" accept=".json,application/json" style="display:none;" onchange="restoreBackupFromFile(event)">
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
         </div>
         
         <div class="success-message" id="releaseSuccess">
@@ -3721,6 +3726,52 @@
             if (upload) upload.value = '';
         }
 
+
+        async function downloadBackup() {
+            if (!sessionToken) {
+                alert('Please log in again.');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/api/admin/download-backup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionToken })
+                });
+
+                let errorText = 'Download failed';
+                if (!res.ok) {
+                    try {
+                        const err = await res.json();
+                        errorText = err.error || errorText;
+                    } catch (e) {
+                        try {
+                            errorText = await res.text() || errorText;
+                        } catch (_) {}
+                    }
+                    throw new Error(errorText);
+                }
+
+                const blob = await res.blob();
+                const contentDisposition = res.headers.get('content-disposition') || '';
+                const match = contentDisposition.match(/filename="?([^";]+)"?/i);
+                const filename = match ? match[1] : `phans-hockey-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (err) {
+                console.error('Download backup error:', err);
+                alert(err.message || 'Download failed');
+            }
+        }
+
         async function saveAnnouncementSettings() {
             const button = document.getElementById('saveAnnouncementBtn');
             return withBusyButton(button, 'Saving...', async () => {
@@ -3766,7 +3817,64 @@
 
         initializeEnhancedDateTimeControls();
         checkSession();
-    </script>
+    
+        async function restoreBackupFromFile(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+
+            try {
+                const text = await file.text();
+                let backupData;
+                try {
+                    backupData = JSON.parse(text);
+                } catch (parseErr) {
+                    throw new Error('That file is not valid JSON.');
+                }
+
+                const playerCount = Array.isArray(backupData.players) ? backupData.players.length : 0;
+                const waitlistCount = Array.isArray(backupData.waitlist) ? backupData.waitlist.length : 0;
+
+                const ok = confirm(
+                    `Restore this backup?\n\nPlayers: ${playerCount}\nWaitlist: ${waitlistCount}\n\nThis will overwrite the current live signup data.`
+                );
+                if (!ok) {
+                    event.target.value = '';
+                    return;
+                }
+
+                const res = await fetch(`${API_URL}/api/admin/restore-backup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionToken: sessionToken,
+                        backupData: backupData
+                    })
+                });
+
+                let data = {};
+                try {
+                    data = await res.json();
+                } catch (e) {}
+
+                if (!res.ok) {
+                    throw new Error((data && data.error) || 'Restore failed');
+                }
+
+                alert(`Backup restored successfully.\n\nPlayers: ${data.restoredPlayers}\nWaitlist: ${data.restoredWaitlist}`);
+                loadData();
+                loadSettings();
+                loadAppSettings();
+                loadPaymentReportSnapshots();
+                setTimeout(loadHistoryList, 500);
+            } catch (err) {
+                console.error('Restore backup error:', err);
+                alert(err.message || 'Restore failed');
+            } finally {
+                event.target.value = '';
+            }
+        }
+
+</script>
 
     <div class="clock-modal" id="clockModal">
         <div class="clock-modal-card">
