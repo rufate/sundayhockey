@@ -1565,26 +1565,34 @@ function isGoalieSpotsAvailable() {
 }
 
 function generateFairTeams() {
-    const goalies = players.filter(p => p.isGoalie);
-    const skaters = players.filter(p => !p.isGoalie);
-    
-    skaters.sort((a, b) => {
-        const nameA = (a.firstName + ' ' + a.lastName).toLowerCase();
-        const nameB = (b.firstName + ' ' + b.lastName).toLowerCase();
-        return nameA.localeCompare(nameB);
-    });
-    
-    goalies.sort((a, b) => {
-        const nameA = (a.firstName + ' ' + a.lastName).toLowerCase();
-        const nameB = (b.firstName + ' ' + b.lastName).toLowerCase();
-        return nameA.localeCompare(nameB);
-    });
-    
+    const goalies = players
+        .filter(p => p.isGoalie)
+        .sort((a, b) => {
+            const ratingDiff = (parseInt(b.rating) || 0) - (parseInt(a.rating) || 0);
+            if (ratingDiff !== 0) return ratingDiff;
+
+            const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+            const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+            return nameA.localeCompare(nameB);
+        });
+
+    const skaters = players
+        .filter(p => !p.isGoalie)
+        .sort((a, b) => {
+            const ratingDiff = (parseInt(b.rating) || 0) - (parseInt(a.rating) || 0);
+            if (ratingDiff !== 0) return ratingDiff;
+
+            const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+            const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+            return nameA.localeCompare(nameB);
+        });
+
     let whiteTeam = [];
     let darkTeam = [];
     let whiteRating = 0;
     let darkRating = 0;
-    
+
+    // Split goalies first
     if (goalies.length >= 2) {
         whiteTeam.push({ ...goalies[0], team: 'White' });
         darkTeam.push({ ...goalies[1], team: 'Dark' });
@@ -1594,42 +1602,53 @@ function generateFairTeams() {
         whiteTeam.push({ ...goalies[0], team: 'White' });
         whiteRating += parseInt(goalies[0].rating) || 0;
     }
-    
-    let whiteTurn = whiteTeam.length <= darkTeam.length;
-    
-    for (let i = 0; i < skaters.length; i++) {
-        const skater = skaters[i];
-        
-        if (whiteTurn) {
+
+    // Balance skaters by total team rating first, then by count
+    for (const skater of skaters) {
+        const skaterRating = parseInt(skater.rating) || 0;
+
+        const whiteSkaterCount = whiteTeam.filter(p => !p.isGoalie).length;
+        const darkSkaterCount = darkTeam.filter(p => !p.isGoalie).length;
+
+        let assignToWhite = false;
+
+        if (whiteSkaterCount < darkSkaterCount) {
+            assignToWhite = true;
+        } else if (darkSkaterCount < whiteSkaterCount) {
+            assignToWhite = false;
+        } else if (whiteRating < darkRating) {
+            assignToWhite = true;
+        } else if (darkRating < whiteRating) {
+            assignToWhite = false;
+        } else {
+            assignToWhite = whiteTeam.length <= darkTeam.length;
+        }
+
+        if (assignToWhite) {
             whiteTeam.push({ ...skater, team: 'White' });
-            whiteRating += parseInt(skater.rating) || 0;
+            whiteRating += skaterRating;
         } else {
             darkTeam.push({ ...skater, team: 'Dark' });
-            darkRating += parseInt(skater.rating) || 0;
-        }
-        
-        whiteTurn = !whiteTurn;
-        
-        if (Math.abs(whiteTeam.length - darkTeam.length) > 1) {
-            whiteTurn = whiteTeam.length < darkTeam.length;
+            darkRating += skaterRating;
         }
     }
-    
-    const sortTeam = (team) => {
+
+    const sortTeamForDisplay = (team) => {
         return team.sort((a, b) => {
             if (a.isGoalie && !b.isGoalie) return -1;
             if (!a.isGoalie && b.isGoalie) return 1;
-            const nameA = (a.firstName + ' ' + a.lastName).toLowerCase();
-            const nameB = (b.firstName + ' ' + b.lastName).toLowerCase();
+
+            const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+            const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
             return nameA.localeCompare(nameB);
         });
     };
-    
-    whiteTeam = sortTeam(whiteTeam);
-    darkTeam = sortTeam(darkTeam);
-    
+
+    whiteTeam = sortTeamForDisplay(whiteTeam);
+    darkTeam = sortTeamForDisplay(darkTeam);
+
     players = [...whiteTeam, ...darkTeam];
-    
+
     return { whiteTeam, darkTeam, whiteRating, darkRating };
 }
 
