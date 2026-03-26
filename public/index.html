@@ -227,61 +227,92 @@
         }
 
         .roster-notice {
-            background: linear-gradient(135deg, #1a3a1a, #2d4d2d);
-            border: 2px solid #4CAF50;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
+            position: relative;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at top left, rgba(84, 255, 119, 0.16), transparent 34%),
+                radial-gradient(circle at top right, rgba(86, 190, 255, 0.12), transparent 26%),
+                linear-gradient(90deg, #0f3f15 0%, #173d1b 34%, #1d4320 64%, #244a25 100%);
+            border: 2px solid rgba(90, 214, 99, 0.9);
+            border-radius: 18px;
+            padding: 24px 22px 22px;
+            margin: 22px 0;
             text-align: center;
+            box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+
+        .roster-notice::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0));
+            pointer-events: none;
+        }
+
+        .roster-notice::after {
+            content: '';
+            position: absolute;
+            left: 18px;
+            right: 18px;
+            top: 0;
+            height: 4px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(120,255,126,0), rgba(120,255,126,0.95), rgba(120,255,126,0));
+            pointer-events: none;
         }
 
         .roster-notice h3 {
-            display: none;
-        }
-
-        .roster-meta {
             position: relative;
             z-index: 1;
-            margin-top: 12px;
-            font-size: clamp(0.95rem, 2vw, 1.08rem);
-            font-weight: 700;
-            color: #8fe98c;
+            color: #54d85a;
+            margin: 0;
+            font-size: clamp(1.15rem, 2.8vw, 1.9rem);
+            line-height: 1.25;
             letter-spacing: 0.2px;
-            opacity: 0.96;
-            text-wrap: balance;
+            text-shadow: 0 1px 0 rgba(0,0,0,0.15);
         }
 
         .roster-countdown {
-            margin-top: 14px;
+            position: relative;
+            z-index: 1;
+            margin-top: 16px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
         }
 
         .roster-countdown-value {
-            font-size: 1.9rem;
-            font-weight: 700;
-            color: #fff;
+            font-size: clamp(2.2rem, 6vw, 3.25rem);
+            font-weight: 800;
+            color: #fff8ea;
             letter-spacing: 1px;
+            text-shadow: 0 6px 16px rgba(0, 0, 0, 0.32);
         }
 
         .roster-countdown-label {
-            font-size: 0.9rem;
-            color: #d8c08f;
+            font-size: 0.95rem;
+            color: #f4d48f;
+            letter-spacing: 0.25px;
         }
 
         .roster-countdown-placeholder {
+            position: relative;
+            z-index: 1;
+            margin-top: 4px;
             font-size: 0.95rem;
-            color: #d8c08f;
+            color: #f4d48f;
         }
 
         .roster-link {
+            position: relative;
+            z-index: 1;
             display: inline-block;
-            margin-top: 10px;
+            margin-top: 14px;
             color: var(--accent);
             text-decoration: none;
-            font-weight: bold;
+            font-weight: 800;
+            font-size: 1.05rem;
         }
 
         .roster-link:hover {
@@ -914,14 +945,13 @@
             </div>
 
             <div class="roster-notice" id="rosterNotice">
-                <h3 id="rosterNoticeHeadline">📋 Team Roster</h3>
-                <p id="rosterNoticeLine">Teams are auto-generated based on players self rating</p>
+                <h3 id="rosterNoticeHeadline">📅 Check Back Sunday • Roster Release 5:00 PM ET</h3>
                 <div class="roster-countdown" id="rosterCountdown" style="display:none;">
                     <div class="roster-countdown-value" id="rosterCountdownValue">--:--:--</div>
                     <div class="roster-countdown-label" id="rosterCountdownLabel">until roster release</div>
                 </div>
                 <div class="roster-countdown-placeholder" id="rosterCountdownPlaceholder" style="display:none;">Countdown will appear once a roster release time is scheduled.</div>
-                <div class="roster-meta" id="rosterMeta">Sunday, March 29 • 5:00 PM ET</div>
+                <div class="roster-meta" id="rosterMeta">Roster release time to be announced</div>
                 <a href="/history" class="roster-link" style="font-size: 0.9rem; margin-top: 5px;">View Past Weeks →</a>
             </div>
 
@@ -1386,6 +1416,32 @@
             }
         }
 
+        function formatEliteRosterHeadline(releaseIso, fallbackHeadline) {
+            if (!releaseIso) return fallbackHeadline || '📅 Check Back for roster release';
+
+            const releaseDate = new Date(releaseIso);
+            if (Number.isNaN(releaseDate.getTime())) {
+                return fallbackHeadline || '📅 Check Back for roster release';
+            }
+
+            const datePart = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'America/New_York',
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+            }).format(releaseDate);
+
+            const timePart = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'America/New_York',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            }).format(releaseDate);
+
+            return `📅 Check Back ${datePart} • Roster Release ${timePart} ET`;
+        }
+
         function renderRosterCountdown() {
             const countdownWrap = document.getElementById('rosterCountdown');
             const countdownValue = document.getElementById('rosterCountdownValue');
@@ -1477,8 +1533,19 @@
                 document.getElementById('gameLocation').innerText = currentLocation;
                 document.getElementById('gameTime').innerText = currentTime;
                 document.getElementById('gameDate').innerText = currentDate;
-                document.getElementById('rosterNoticeHeadline').innerText = data.rosterReleaseHeadline || '📋 Team Roster';
-                document.getElementById('rosterNoticeLine').innerText = data.rosterReleaseLine || 'Teams are auto-generated based on players self rating';
+                document.getElementById('rosterNoticeHeadline').innerText = '';
+                document.getElementById('rosterMeta').innerText =
+                    data.rosterReleaseAt
+                        ? new Intl.DateTimeFormat('en-US', {
+                            timeZone: 'America/New_York',
+                            weekday: 'long',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                        }).format(new Date(data.rosterReleaseAt)).replace(' at ', ' • ') + ' ET'
+                        : 'Roster release time to be announced';
                 renderRosterCountdown();
                 
                 if (rosterReleased) {
