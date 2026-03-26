@@ -605,15 +605,17 @@
         .player-info-simple {
             flex: 1;
             min-width: 0;
-            overflow: hidden;
+            overflow: visible;
         }
 
         .player-name-simple {
             font-weight: 500;
-            font-size: 0.9rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            font-size: 0.95rem;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: unset;
+            line-height: 1.25;
+            word-break: break-word;
         }
 
         .goalie-label {
@@ -1578,9 +1580,22 @@
                 return;
             }
 
-            const sortedPlayers = players.sort((a, b) => {
-                const nameA = (a.lastName + ' ' + a.firstName).toLowerCase();
-                const nameB = (b.lastName + ' ' + b.firstName).toLowerCase();
+            const sortedPlayers = [...players].sort((a, b) => {
+                const aFirst = String(a.firstName || '').toLowerCase();
+                const aLast = String(a.lastName || '').toLowerCase();
+                const bFirst = String(b.firstName || '').toLowerCase();
+                const bLast = String(b.lastName || '').toLowerCase();
+
+                const aIsPhan = aFirst === 'phan' && aLast === 'ly';
+                const bIsPhan = bFirst === 'phan' && bLast === 'ly';
+                const aIsGoalie = !!a.isGoalie;
+                const bIsGoalie = !!b.isGoalie;
+
+                if (aIsGoalie !== bIsGoalie) return aIsGoalie ? -1 : 1;
+                if (aIsPhan !== bIsPhan) return aIsPhan ? -1 : 1;
+
+                const nameA = `${aLast} ${aFirst}`.trim();
+                const nameB = `${bLast} ${bFirst}`.trim();
                 return nameA.localeCompare(nameB);
             });
 
@@ -1589,31 +1604,30 @@
             grid.innerHTML = '';
             sortedPlayers.forEach(player => {
                 const card = document.createElement('div');
-                
-                // Check if player is protected (Phan Ly)
-                const isProtected = player.firstName.toLowerCase() === 'phan' && player.lastName.toLowerCase() === 'ly';
-                const isGoalie = player.isGoalie;
-                
-                // Set card class
+
+                const firstName = String(player.firstName || '');
+                const lastName = String(player.lastName || '');
+                const isProtected = firstName.toLowerCase() === 'phan' && lastName.toLowerCase() === 'ly';
+                const isGoalie = !!player.isGoalie;
+
                 let cardClass = 'player-card';
                 if (isGoalie) cardClass += ' goalie-card';
                 if (isProtected) cardClass += ' protected-card';
                 card.className = cardClass;
 
-                const initials = (player.firstName[0] + player.lastName[0]).toUpperCase();
+                const initials = ((firstName[0] || '') + (lastName[0] || '')).toUpperCase();
                 const goalieLabel = isGoalie ? '<div class="goalie-label">GOALIE</div>' : '';
                 const protectedLabel = isProtected ? '<div class="protected-label">PROTECTED</div>' : '';
-                
-                // Cancel button - hidden for protected players (Phan Ly) and goalies
+
                 let cancelButton = '';
                 if (!isGoalie && !isProtected && !rosterReleased && player.canCancel !== false) {
-                    cancelButton = `<button class="cancel-btn" onclick="openCancelModal(${player.id}, '${player.firstName}', '${player.lastName}')">Cancel</button>`;
+                    cancelButton = `<button class="cancel-btn" onclick="openCancelModal(${player.id}, '${firstName}', '${lastName}')">Cancel</button>`;
                 }
 
                 card.innerHTML = `
                     <div class="player-avatar">${initials}</div>
                     <div class="player-info-simple">
-                        <div class="player-name-simple">${player.firstName} ${player.lastName}</div>
+                        <div class="player-name-simple">${firstName} ${lastName}</div>
                         ${goalieLabel}
                         ${protectedLabel}
                     </div>

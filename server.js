@@ -913,66 +913,11 @@ async function autoReleaseRoster() {
 
 // --- AUTO-ADD PLAYERS FUNCTION ---
 async function addAutoPlayers() {
-    console.log('Adding auto-players for new week...');
-    let addedCount = 0;
-    
-    for (const autoPlayer of AUTO_ADD_PLAYERS) {
-        // Check if player already exists
-        const normalizedName = (autoPlayer.firstName + ' ' + autoPlayer.lastName).toLowerCase().trim();
-        const normalizedPhone = autoPlayer.phone.replace(/\D/g, '');
-        
-        const exists = players.find(p => 
-            (p.firstName + ' ' + p.lastName).toLowerCase().trim() === normalizedName ||
-            p.phone.replace(/\D/g, '') === normalizedPhone
-        );
-        
-        if (exists) {
-            console.log(`${autoPlayer.firstName} ${autoPlayer.lastName} already exists, skipping.`);
-            continue;
-        }
-        
-        const newPlayer = {
-            id: Date.now() + Math.floor(Math.random() * 1000),
-            firstName: autoPlayer.firstName,
-            lastName: autoPlayer.lastName,
-            phone: autoPlayer.phone,
-            paymentMethod: autoPlayer.paymentMethod,
-            paid: autoPlayer.isFree ? true : false,
-            paidAmount: autoPlayer.isFree ? 0 : null,
-            rating: autoPlayer.rating,
-            isGoalie: autoPlayer.isGoalie,
-            team: null,
-            registeredAt: new Date().toISOString(),
-            rulesAgreed: true,
-            protected: autoPlayer.protected || false
-        };
-        
-        try {
-            await pool.query(
-                `INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team, rules_agreed)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-                [newPlayer.id, newPlayer.firstName, newPlayer.lastName, newPlayer.phone,
-                 newPlayer.paymentMethod, newPlayer.paid, newPlayer.paidAmount, newPlayer.rating, 
-                 autoPlayer.isGoalie, null, true]
-            );
-            players.push(newPlayer);
-            
-            if (!autoPlayer.isGoalie) {
-                playerSpots--;
-            }
-            
-            addedCount++;
-            console.log(`Added ${autoPlayer.firstName} ${autoPlayer.lastName}`);
-        } catch (err) {
-            console.error(`Error adding ${autoPlayer.firstName} ${autoPlayer.lastName}:`, err);
-        }
-    }
-    
-    if (addedCount > 0) {
-        await saveData();
-    }
-    console.log(`Auto-added ${addedCount} players`);
-    return addedCount;
+    console.log('Ensuring locked auto-players are present...');
+    await enforceLockedAutoPlayers();
+    await saveData();
+    console.log('Locked auto-players enforced.');
+    return AUTO_ADD_PLAYERS.length;
 }
 
 
@@ -1257,7 +1202,10 @@ async function loadDataFromDB() {
             registeredAt: p.registered_at,
             rulesAgreed: !!p.rules_agreed
         }));
-        
+
+        await removeDuplicatePlayersInMemoryAndDb();
+        await enforceLockedAutoPlayers();
+
         // FIX: Recalculate playerSpots based on actual player count
         const nonGoalieCount = players.filter(p => !p.isGoalie).length;
         playerSpots = Math.max(0, 20 - nonGoalieCount);
@@ -1476,6 +1424,8 @@ function loadDataFromFile() {
             if (AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME && (!signupLockSchedule.start || !signupLockSchedule.end || !rosterReleaseSchedule.at || !resetWeekSchedule.at)) {
                 buildAutoSchedulesFromGameTime(gameTime, gameDate);
             }
+            dedupePlayersInMemory();
+            enforceLockedAutoPlayersInMemory();
             refreshDynamicSignupCode();
         } else {
             gameDate = calculateNextGameDate();
@@ -1535,20 +1485,205 @@ function formatPhoneNumber(phone) {
     return phone;
 }
 
-function isDuplicatePlayer(firstName, lastName, phone) {
-    const normalizedName = (capitalizeFullName(firstName) + ' ' + capitalizeFullName(lastName)).toLowerCase().trim();
+
+function getPlayerUniqueKey(firstName, lastName, phone) {
     const normalizedPhone = normalizePhoneDigits(phone);
-    
-    const inPlayers = players.find(p => 
-        (p.firstName + ' ' + p.lastName).toLowerCase().trim() === normalizedName ||
-        p.phone.replace(/\D/g, '') === normalizedPhone
+    if (normalizedPhone) return `phone:${normalizedPhone}`;
+
+    const normalizedName = `${capitalizeFullName(firstName)} ${capitalizeFullName(lastName)}`
+        .toLowerCase()
+        .trim();
+
+    return `name:${normalizedName}`;
+}
+
+function isAutoPlayerMatch(player, autoPlayer) {
+    if (!player || !autoPlayer) return false;
+
+    const playerPhone = normalizePhoneDigits(player.phone);
+    const autoPhone = normalizePhoneDigits(autoPlayer.phone);
+    if (playerPhone && autoPhone && playerPhone === autoPhone) return true;
+
+    const playerName = `${capitalizeFullName(player.firstName)} ${capitalizeFullName(player.lastName)}`
+        .toLowerCase()
+        .trim();
+    const autoName = `${capitalizeFullName(autoPlayer.firstName)} ${capitalizeFullName(autoPlayer.lastName)}`
+        .toLowerCase()
+        .trim();
+
+    return playerName === autoName;
+}
+
+function buildAutoPlayerObject(autoPlayer, existingId = null, existingRegisteredAt = null) {
+    return {
+        id: existingId || (Date.now() + Math.floor(Math.random() * 100000)),
+        firstName: capitalizeFullName(autoPlayer.firstName),
+        lastName: capitalizeFullName(autoPlayer.lastName),
+        phone: formatPhoneNumber(autoPlayer.phone),
+        paymentMethod: autoPlayer.paymentMethod,
+        paid: autoPlayer.isFree ? true : false,
+        paidAmount: autoPlayer.isFree ? 0 : null,
+        rating: parseInt(autoPlayer.rating, 10) || 5,
+        isGoalie: !!autoPlayer.isGoalie,
+        team: null,
+        registeredAt: existingRegisteredAt || new Date().toISOString(),
+        rulesAgreed: true,
+        protected: !!autoPlayer.protected
+    };
+}
+
+function dedupePlayersInMemory() {
+    const seen = new Set();
+    players = players.filter(player => {
+        const key = getPlayerUniqueKey(player.firstName, player.lastName, player.phone);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+
+    const nonGoalieCount = players.filter(p => !p.isGoalie).length;
+    playerSpots = Math.max(0, 20 - nonGoalieCount);
+}
+
+async function removeDuplicatePlayersInMemoryAndDb() {
+    const seen = new Set();
+    const deduped = [];
+    const duplicateIds = [];
+
+    for (const player of players) {
+        const key = getPlayerUniqueKey(player.firstName, player.lastName, player.phone);
+        if (seen.has(key)) {
+            duplicateIds.push(player.id);
+            continue;
+        }
+        seen.add(key);
+        deduped.push(player);
+    }
+
+    players = deduped;
+
+    if (pool && duplicateIds.length) {
+        await pool.query('DELETE FROM players WHERE id = ANY($1::bigint[])', [duplicateIds]);
+    }
+
+    const nonGoalieCount = players.filter(p => !p.isGoalie).length;
+    playerSpots = Math.max(0, 20 - nonGoalieCount);
+
+    return duplicateIds.length;
+}
+
+function enforceLockedAutoPlayersInMemory() {
+    for (const autoPlayer of AUTO_ADD_PLAYERS) {
+        const matches = players.filter(p => isAutoPlayerMatch(p, autoPlayer));
+        const keeper = matches[0];
+
+        if (matches.length > 1) {
+            const keepId = keeper.id;
+            players = players.filter(p => {
+                if (!isAutoPlayerMatch(p, autoPlayer)) return true;
+                return p.id === keepId;
+            });
+        }
+
+        if (keeper) {
+            Object.assign(keeper, {
+                firstName: capitalizeFullName(autoPlayer.firstName),
+                lastName: capitalizeFullName(autoPlayer.lastName),
+                phone: formatPhoneNumber(autoPlayer.phone),
+                paymentMethod: autoPlayer.paymentMethod,
+                paid: autoPlayer.isFree ? true : keeper.paid,
+                paidAmount: autoPlayer.isFree ? 0 : keeper.paidAmount,
+                rating: parseInt(autoPlayer.rating, 10) || keeper.rating,
+                isGoalie: !!autoPlayer.isGoalie,
+                protected: !!autoPlayer.protected
+            });
+        } else {
+            players.push(buildAutoPlayerObject(autoPlayer));
+        }
+    }
+
+    dedupePlayersInMemory();
+}
+
+async function enforceLockedAutoPlayers() {
+    for (const autoPlayer of AUTO_ADD_PLAYERS) {
+        const matches = players.filter(p => isAutoPlayerMatch(p, autoPlayer));
+
+        if (matches.length > 1) {
+            const keeper = matches[0];
+            const duplicates = matches.slice(1);
+
+            if (pool && duplicates.length) {
+                await pool.query('DELETE FROM players WHERE id = ANY($1::bigint[])', [duplicates.map(p => p.id)]);
+            }
+
+            players = players.filter(p => !duplicates.some(d => d.id === p.id));
+
+            Object.assign(keeper, {
+                firstName: capitalizeFullName(autoPlayer.firstName),
+                lastName: capitalizeFullName(autoPlayer.lastName),
+                phone: formatPhoneNumber(autoPlayer.phone),
+                paymentMethod: autoPlayer.paymentMethod,
+                paid: autoPlayer.isFree ? true : keeper.paid,
+                paidAmount: autoPlayer.isFree ? 0 : keeper.paidAmount,
+                rating: parseInt(autoPlayer.rating, 10) || keeper.rating,
+                isGoalie: !!autoPlayer.isGoalie,
+                protected: !!autoPlayer.protected
+            });
+        } else if (matches.length === 1) {
+            const keeper = matches[0];
+            Object.assign(keeper, {
+                firstName: capitalizeFullName(autoPlayer.firstName),
+                lastName: capitalizeFullName(autoPlayer.lastName),
+                phone: formatPhoneNumber(autoPlayer.phone),
+                paymentMethod: autoPlayer.paymentMethod,
+                paid: autoPlayer.isFree ? true : keeper.paid,
+                paidAmount: autoPlayer.isFree ? 0 : keeper.paidAmount,
+                rating: parseInt(autoPlayer.rating, 10) || keeper.rating,
+                isGoalie: !!autoPlayer.isGoalie,
+                protected: !!autoPlayer.protected
+            });
+        } else {
+            const newAutoPlayer = buildAutoPlayerObject(autoPlayer);
+
+            if (pool) {
+                await pool.query(
+                    `INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team, rules_agreed)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                    [
+                        newAutoPlayer.id,
+                        newAutoPlayer.firstName,
+                        newAutoPlayer.lastName,
+                        newAutoPlayer.phone,
+                        newAutoPlayer.paymentMethod,
+                        newAutoPlayer.paid,
+                        newAutoPlayer.paidAmount,
+                        newAutoPlayer.rating,
+                        newAutoPlayer.isGoalie,
+                        null,
+                        true
+                    ]
+                );
+            }
+
+            players.push(newAutoPlayer);
+        }
+    }
+
+    await removeDuplicatePlayersInMemoryAndDb();
+}
+
+function isDuplicatePlayer(firstName, lastName, phone) {
+    const targetKey = getPlayerUniqueKey(firstName, lastName, phone);
+
+    const inPlayers = players.find(p =>
+        getPlayerUniqueKey(p.firstName, p.lastName, p.phone) === targetKey
     );
-    
-    const inWaitlist = waitlist.find(p => 
-        (p.firstName + ' ' + p.lastName).toLowerCase().trim() === normalizedName ||
-        p.phone.replace(/\D/g, '') === normalizedPhone
+
+    const inWaitlist = waitlist.find(p =>
+        getPlayerUniqueKey(p.firstName, p.lastName, p.phone) === targetKey
     );
-    
+
     return inPlayers || inWaitlist;
 }
 
