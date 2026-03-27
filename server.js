@@ -4,14 +4,10 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const cron = require('node-cron');
 const { Pool } = require('pg');
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.set('trust proxy', 1);
-app.disable('x-powered-by');
 
 // Database setup
 const HAS_DB = !!process.env.DATABASE_URL;
@@ -66,34 +62,13 @@ async function pingDatabase() {
 }
 
 // Middleware
-app.use(helmet({
-    contentSecurityPolicy: false,
-    crossOriginResourcePolicy: false
-}));
 app.use(cors());
-
-const generalApiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: Number(process.env.GENERAL_RATE_LIMIT_MAX || 600),
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: (req) => ['/api/cron-ping', '/api/health', '/health', '/wake', '/api/force-check', '/api/debug-time'].includes(req.path)
-});
-const adminLoginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: Number(process.env.ADMIN_LOGIN_RATE_LIMIT_MAX || 10),
-    standardHeaders: true,
-    legacyHeaders: false
-});
-
-app.use('/api', generalApiLimiter);
 app.use(express.json({ limit: '12mb' }));
 app.use(express.urlencoded({ extended: true, limit: '12mb' }));
 app.use(express.static('public'));
 
 // --- DATA STORE ---
-const MAX_PLAYERS = Number(process.env.MAX_PLAYERS || 20);
-let playerSpots = MAX_PLAYERS;
+let playerSpots = 20;
 let players = []; 
 let waitlist = [];
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '').trim();
@@ -1121,7 +1096,7 @@ async function checkWeeklyReset() {
         );
     }
 
-    playerSpots = MAX_PLAYERS;
+    playerSpots = 20;
     players = [];
     waitlist = [];
     rosterReleased = false;
@@ -1338,7 +1313,7 @@ async function loadDataFromDB() {
         
         // FIX: Recalculate playerSpots based on actual player count
         const nonGoalieCount = players.filter(p => !p.isGoalie).length;
-        playerSpots = Math.max(0, MAX_PLAYERS - nonGoalieCount);
+        playerSpots = Math.max(0, 20 - nonGoalieCount);
                 
         const waitlistRes = await pool.query('SELECT * FROM waitlist ORDER BY joined_at');
         waitlist = waitlistRes.rows.map(p => ({
@@ -1590,31 +1565,6 @@ function capitalizeFullName(name) {
         .map(capitalizeNamePart)
         .join(' ');
 }
-function sanitizeTextInput(value, maxLen = 80) {
-    return String(value || '')
-        .replace(/[<>]/g, '')
-        .replace(/[\u0000-\u001F\u007F]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, maxLen);
-}
-
-function sanitizeName(value, maxLen = 40) {
-    return capitalizeFullName(sanitizeTextInput(value, maxLen));
-}
-
-function normalizePaymentMethod(value, fallback = 'Cash') {
-    const allowed = new Set(['Cash', 'E-Transfer', 'PIA', 'N/A', 'FREE']);
-    const normalized = sanitizeTextInput(value, 20);
-    return allowed.has(normalized) ? normalized : fallback;
-}
-
-function normalizeRating(value, fallback = 5) {
-    const parsed = parseInt(value, 10);
-    if (!Number.isFinite(parsed)) return fallback;
-    return Math.max(1, Math.min(10, parsed));
-}
-
 
 function normalizePhoneDigits(phone) {
     let cleaned = String(phone || '').replace(/\D/g, '');
@@ -2039,77 +1989,13 @@ app.get('/api/debug-time', (req, res) => {
     });
 });
 
-app.get('/api/force-check', async (req, res) => {
-    try {
-        const lockResult = checkAutoLock();
-        const maintenanceChanged = checkMaintenanceModeSchedule();
-        const rosterReleasedNow = await autoReleaseRoster();
-        const weeklyResetNow = await checkWeeklyReset();
-        await saveData();
-
-        return res.json({
-            ok: true,
-            message: 'Scheduler check forced',
-            maintenanceChanged,
-            rosterReleasedNow,
-            weeklyResetNow,
-            ...lockResult,
-            timestamp: new Date().toISOString()
-        });
-    } catch (err) {
-        console.error('Force-check endpoint error:', err);
-        return res.status(500).json({
-            ok: false,
-            error: 'Force-check failed'
-        });
-    }
-});
-
-// Ultra-low-output cron wake endpoint for cron-job.org / uptime pings.
-// Runs the scheduler tick, returns 204 No Content on success, and emits no body.
-app.get('/api/cron-ping', async (req, res) => {
-    try {
-        await runSchedulerTick();
-        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-        res.set('Pragma', 'no-cache');
-        res.set('Expires', '0');
-        return res.status(204).end();
-    } catch (err) {
-        console.error('Cron ping error:', err);
-        return res.status(500).type('text/plain').send('ERR');
-    }
-});
-
-app.head('/api/cron-ping', async (req, res) => {
-    try {
-        await runSchedulerTick();
-        return res.sendStatus(204);
-    } catch (err) {
-        console.error('Cron ping HEAD error:', err);
-        return res.sendStatus(500);
-    }
-});
-
-// Tiny wake endpoint for simple external wake checks.
-app.get('/wake', async (req, res) => {
-    try {
-        await runSchedulerTick();
-        res.set('Cache-Control', 'no-store');
-        return res.status(200).type('text/plain').send('OK');
-    } catch (err) {
-        console.error('Wake endpoint error:', err);
-        return res.status(500).type('text/plain').send('ERR');
-    }
-});
-
-app.head('/wake', async (req, res) => {
-    try {
-        await runSchedulerTick();
-        return res.sendStatus(200);
-    } catch (err) {
-        console.error('Wake HEAD endpoint error:', err);
-        return res.sendStatus(500);
-    }
+app.get('/api/force-check', (req, res) => {
+    const result = checkAutoLock();
+    res.json({ 
+        message: 'Lock check forced',
+        ...result,
+        timestamp: new Date().toISOString()
+    });
 });
 
 // HTML Page Routes - Fixed to use root-relative paths
@@ -2448,10 +2334,9 @@ app.post('/api/register-init', async (req, res) => {
         return res.status(400).json({ error: "All fields are required." });
     }
 
-    const cleanFirstName = sanitizeName(firstName);
-    const cleanLastName = sanitizeName(lastName);
+    const cleanFirstName = capitalizeFullName(firstName);
+    const cleanLastName = capitalizeFullName(lastName);
     const cleanPhone = formatPhoneNumber(phone);
-    const safePaymentMethod = normalizePaymentMethod(paymentMethod, 'E-Transfer');
 
     if (isDuplicatePlayer(cleanFirstName, cleanLastName, cleanPhone)) {
         return res.status(400).json({ error: "A player with this name or phone number is already registered." });
@@ -2461,8 +2346,8 @@ app.post('/api/register-init', async (req, res) => {
         return res.status(400).json({ error: "Please enter a valid 10-digit phone number." });
     }
 
-    const ratingNum = normalizeRating(rating, NaN);
-    if (!Number.isFinite(ratingNum)) {
+    const ratingNum = parseInt(rating);
+    if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 10) {
         return res.status(400).json({ error: "Rating must be a number between 1 and 10." });
     }
 
@@ -2473,7 +2358,7 @@ app.post('/api/register-init', async (req, res) => {
             firstName: cleanFirstName,
             lastName: cleanLastName,
             phone: formattedPhone,
-            paymentMethod: safePaymentMethod,
+            paymentMethod,
             rating: ratingNum,
             isGoalie: false,
             joinedAt: new Date()
@@ -2513,7 +2398,7 @@ app.post('/api/register-init', async (req, res) => {
             firstName: cleanFirstName,
             lastName: cleanLastName,
             phone: cleanPhone,
-            paymentMethod: safePaymentMethod,
+            paymentMethod,
             rating: ratingNum,
             isGoalie: false
         }
@@ -2537,13 +2422,13 @@ app.post('/api/register-final', async (req, res) => {
     
     const newPlayer = {
         id: Date.now(),
-        firstName: sanitizeName(tempData.firstName),
-        lastName: sanitizeName(tempData.lastName),
-        phone: formatPhoneNumber(tempData.phone),
-        paymentMethod: normalizePaymentMethod(tempData.paymentMethod, 'E-Transfer'),
+        firstName: tempData.firstName,
+        lastName: tempData.lastName,
+        phone: tempData.phone,
+        paymentMethod: tempData.paymentMethod,
         paid: false,
         paidAmount: null,
-        rating: normalizeRating(tempData.rating, 5),
+        rating: parseInt(tempData.rating) || 5,
         isGoalie: false,
         team: null,
         registeredAt: new Date().toISOString(),
@@ -2725,7 +2610,7 @@ app.post('/api/admin/check-session', (req, res) => {
     });
 });
 
-app.post('/api/admin/login', adminLoginLimiter, (req, res) => {
+app.post('/api/admin/login', (req, res) => {
     const { password, rememberMe } = req.body || {};
 
     if (!hasConfiguredAdminPassword()) {
@@ -3442,20 +3327,15 @@ app.post('/api/admin/add-player', async (req, res) => {
         return res.status(400).json({ error: "First name, last name, phone, and rating required" });
     }
 
-    const cleanFirstName = sanitizeName(firstName);
-    const cleanLastName = sanitizeName(lastName);
+    const cleanFirstName = capitalizeFullName(firstName);
+    const cleanLastName = capitalizeFullName(lastName);
     if (!validatePhoneNumber(phone)) {
         return res.status(400).json({ error: "Invalid phone number format" });
     }
 
     const formattedPhone = formatPhoneNumber(phone);
-    const ratingNum = normalizeRating(rating, 5);
-    const safePaymentMethod = normalizePaymentMethod(paymentMethod, 'Cash');
+    const ratingNum = parseInt(rating) || 5;
     const isGoalieBool = isGoalie || false;
-
-    if (isDuplicatePlayer(cleanFirstName, cleanLastName, formattedPhone)) {
-        return res.status(400).json({ error: "A player with this name or phone number already exists." });
-    }
 
     if (toWaitlist) {
         const waitlistPlayer = {
@@ -3463,7 +3343,7 @@ app.post('/api/admin/add-player', async (req, res) => {
             firstName: cleanFirstName,
             lastName: cleanLastName,
             phone: formattedPhone,
-            paymentMethod: safePaymentMethod,
+            paymentMethod: paymentMethod || 'Cash',
             rating: ratingNum,
             isGoalie: isGoalieBool,
             joinedAt: new Date()
@@ -3494,7 +3374,7 @@ app.post('/api/admin/add-player', async (req, res) => {
             firstName: cleanFirstName,
             lastName: cleanLastName,
             phone: formattedPhone,
-            paymentMethod: safePaymentMethod,
+            paymentMethod: paymentMethod || 'Cash',
             paid: isGoalieBool ? true : false,
             paidAmount: isGoalieBool ? 0 : null,
             rating: ratingNum,
@@ -3751,7 +3631,7 @@ app.post('/api/admin/manual-reset', async (req, res) => {
     const etTime = getCurrentETTime();
     const { week, year } = getWeekNumber(etTime);
     
-    playerSpots = MAX_PLAYERS;
+    playerSpots = 20;
     players = [];
     waitlist = [];
     rosterReleased = false;
@@ -3872,15 +3752,63 @@ app.get('/api/cron/heartbeat', async (req, res) => {
     });
 });
 
+async function respondCronPing(req, res) {
+    try {
+        await runSchedulerTick();
+    } catch (err) {
+        console.error('Cron ping error:', err.message || err);
+    }
+
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    return res.status(200).type('text/plain').send('OK');
+}
+
+function respondWake(req, res) {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    return res.status(200).type('text/plain').send('OK');
+}
+
+app.get('/api/cron-ping', respondCronPing);
+app.head('/api/cron-ping', async (req, res) => {
+    try {
+        await runSchedulerTick();
+    } catch (err) {
+        console.error('Cron ping HEAD error:', err.message || err);
+    }
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    return res.sendStatus(200);
+});
+
+app.get('/api/cron/heartbeat', respondCronPing);
 app.head('/api/cron/heartbeat', async (req, res) => {
-    await runSchedulerTick();
-    res.sendStatus(200);
+    try {
+        await runSchedulerTick();
+    } catch (err) {
+        console.error('Cron heartbeat HEAD error:', err.message || err);
+    }
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    return res.sendStatus(200);
+});
+
+app.get('/wake', respondWake);
+app.head('/wake', (req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    return res.sendStatus(200);
 });
 
 // Health check endpoint (for Render + cron-job.org)
 app.get('/health', async (req, res) => {
     const db = await pingDatabase();
-    res.set('Cache-Control', 'no-store');
     res.status(db.ok || db.mode === 'file' ? 200 : 503).json({
         ok: db.ok || db.mode === 'file',
         service: process.env.LEAGUE_NAME || 'hockey',
@@ -3899,7 +3827,6 @@ app.head('/health', (req, res) => {
 
 app.get('/api/health', async (req, res) => {
     const db = await pingDatabase();
-    res.set('Cache-Control', 'no-store');
     res.status(db.ok || db.mode === 'file' ? 200 : 503).json({
         ok: db.ok || db.mode === 'file',
         service: process.env.LEAGUE_NAME || 'hockey',
