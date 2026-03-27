@@ -71,6 +71,7 @@ app.use(express.static('public'));
 let playerSpots = 20;
 let players = []; 
 let waitlist = [];
+let cancelledRegistrations = [];
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '').trim();
 const ADMIN_TOKEN_SECRET = String(process.env.ADMIN_TOKEN_SECRET || '').trim() || `fallback:${ADMIN_PASSWORD || 'change-me'}`;
 const ADMIN_REMEMBER_TOKEN_TTL_DAYS = Number(process.env.ADMIN_TOKEN_TTL_DAYS || 30);
@@ -1279,6 +1280,7 @@ async function loadDataFromDB() {
         if (settings.lastResetWeek) lastResetWeek = settings.lastResetWeek;
         if (settings.rosterReleased !== undefined) rosterReleased = settings.rosterReleased;
         if (settings.currentWeekData) currentWeekData = settings.currentWeekData;
+        if (settings.cancelledRegistrations) cancelledRegistrations = Array.isArray(settings.cancelledRegistrations) ? settings.cancelledRegistrations : [];
         if (settings.signupLockStartAt !== undefined) signupLockStartAt = settings.signupLockStartAt || '';
         if (settings.signupLockEndAt !== undefined) signupLockEndAt = settings.signupLockEndAt || '';
         if (settings.rosterReleaseAt !== undefined) rosterReleaseAt = settings.rosterReleaseAt || '';
@@ -1382,6 +1384,7 @@ async function saveData() {
         await saveSetting('lastResetWeek', lastResetWeek);
         await saveSetting('rosterReleased', rosterReleased);
         await saveSetting('currentWeekData', currentWeekData);
+        await saveSetting('cancelledRegistrations', cancelledRegistrations);
         await saveSetting('signupLockStartAt', signupLockStartAt);
         await saveSetting('signupLockEndAt', signupLockEndAt);
         await saveSetting('rosterReleaseAt', rosterReleaseAt);
@@ -1433,6 +1436,7 @@ function getSettingsSnapshot() {
         manualOverrideState,
         rosterReleased,
         currentWeekData,
+        cancelledRegistrations,
         lastExactResetMinuteKey,
         lastExactRosterReleaseMinuteKey
     };
@@ -1513,6 +1517,7 @@ function loadDataFromFile() {
             signupLockSchedule = data.signupLockSchedule ?? signupLockSchedule;
             rosterReleaseSchedule = data.rosterReleaseSchedule ?? rosterReleaseSchedule;
             resetWeekSchedule = data.resetWeekSchedule ?? resetWeekSchedule;
+            cancelledRegistrations = Array.isArray(data.cancelledRegistrations) ? data.cancelledRegistrations : [];
             currentWeekData = data.currentWeekData ?? {
                 weekNumber: null,
                 year: null,
@@ -1572,6 +1577,30 @@ function normalizePhoneDigits(phone) {
         cleaned = cleaned.slice(1);
     }
     return cleaned;
+}
+
+
+function appendCancellationLog(entry) {
+    const normalized = {
+        id: entry && entry.id !== undefined ? entry.id : Date.now(),
+        firstName: String(entry?.firstName || '').trim(),
+        lastName: String(entry?.lastName || '').trim(),
+        phone: String(entry?.phone || '').trim(),
+        rating: entry?.rating ?? null,
+        isGoalie: !!entry?.isGoalie,
+        paymentMethod: entry?.paymentMethod ?? '',
+        source: entry?.source || 'player',
+        action: entry?.action || 'cancelled',
+        cancelledAt: entry?.cancelledAt || new Date().toISOString(),
+        cancelledBy: entry?.cancelledBy || 'player',
+        notes: entry?.notes || ''
+    };
+    cancelledRegistrations = Array.isArray(cancelledRegistrations) ? cancelledRegistrations : [];
+    cancelledRegistrations.unshift(normalized);
+    if (cancelledRegistrations.length > 250) {
+        cancelledRegistrations = cancelledRegistrations.slice(0, 250);
+    }
+    return normalized;
 }
 
 function validatePhoneNumber(phone) {
@@ -2501,6 +2530,20 @@ app.post('/api/cancel-registration', async (req, res) => {
             return res.status(401).json({ error: "Phone number does not match registration." });
         }
 
+        appendCancellationLog({
+            id: player.id,
+            firstName: player.firstName,
+            lastName: player.lastName,
+            phone: player.phone,
+            rating: player.rating,
+            isGoalie: player.isGoalie,
+            paymentMethod: player.paymentMethod,
+            source: 'players',
+            action: 'cancelled',
+            cancelledBy: 'player',
+            cancelledAt: new Date().toISOString()
+        });
+
         try {
             if (pool) {
                 await pool.query('DELETE FROM players WHERE id = $1', [player.id]);
@@ -2575,6 +2618,20 @@ app.post('/api/cancel-registration', async (req, res) => {
         if (submittedPhone !== storedPhone) {
             return res.status(401).json({ error: "Phone number does not match registration." });
         }
+
+        appendCancellationLog({
+            id: waitlistPlayer.id,
+            firstName: waitlistPlayer.firstName,
+            lastName: waitlistPlayer.lastName,
+            phone: waitlistPlayer.phone,
+            rating: waitlistPlayer.rating,
+            isGoalie: waitlistPlayer.isGoalie,
+            paymentMethod: waitlistPlayer.paymentMethod,
+            source: 'waitlist',
+            action: 'cancelled',
+            cancelledBy: 'player',
+            cancelledAt: new Date().toISOString()
+        });
 
         try {
             if (pool) {
@@ -2871,6 +2928,7 @@ app.post('/api/admin/players-full', (req, res) => {
         unpaidCount: unpaidCount,
         players: players,  // Full data with payment AND rating
         waitlist: waitlist, // Full waitlist data
+        cancellations: cancelledRegistrations,
         location: gameLocation, 
         time: gameTime,
         date: gameDate,
@@ -3304,6 +3362,20 @@ app.post('/api/admin/remove-waitlist', async (req, res) => {
     }
 
     const player = waitlist.splice(index, 1)[0];
+
+    appendCancellationLog({
+        id: player.id,
+        firstName: player.firstName,
+        lastName: player.lastName,
+        phone: player.phone,
+        rating: player.rating,
+        isGoalie: player.isGoalie,
+        paymentMethod: player.paymentMethod,
+        source: 'waitlist',
+        action: 'removed',
+        cancelledBy: 'admin',
+        cancelledAt: new Date().toISOString()
+    });
     
     try {
         if (pool) {
@@ -3426,9 +3498,23 @@ app.post('/api/admin/remove-player', async (req, res) => {
 
     const wasGoalie = players[index].isGoalie;
     const player = players.splice(index, 1)[0];
+
+    appendCancellationLog({
+        id: player.id,
+        firstName: player.firstName,
+        lastName: player.lastName,
+        phone: player.phone,
+        rating: player.rating,
+        isGoalie: player.isGoalie,
+        paymentMethod: player.paymentMethod,
+        source: 'players',
+        action: 'removed',
+        cancelledBy: 'admin',
+        cancelledAt: new Date().toISOString()
+    });
     
     try {
-        await pool.query('DELETE FROM players WHERE id = $1', [player.id]);
+        if (pool) await pool.query('DELETE FROM players WHERE id = $1', [player.id]);
         
         if (!wasGoalie) {
             playerSpots++;
@@ -3752,58 +3838,9 @@ app.get('/api/cron/heartbeat', async (req, res) => {
     });
 });
 
-async function respondCronPing(req, res) {
-    try {
-        await runSchedulerTick();
-    } catch (err) {
-        console.error('Cron ping error:', err.message || err);
-    }
-
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.set('Pragma', 'no-cache');
-    res.set('Expires', '0');
-    return res.status(200).type('text/plain').send('OK');
-}
-
-function respondWake(req, res) {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.set('Pragma', 'no-cache');
-    res.set('Expires', '0');
-    return res.status(200).type('text/plain').send('OK');
-}
-
-app.get('/api/cron-ping', respondCronPing);
-app.head('/api/cron-ping', async (req, res) => {
-    try {
-        await runSchedulerTick();
-    } catch (err) {
-        console.error('Cron ping HEAD error:', err.message || err);
-    }
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.set('Pragma', 'no-cache');
-    res.set('Expires', '0');
-    return res.sendStatus(200);
-});
-
-app.get('/api/cron/heartbeat', respondCronPing);
 app.head('/api/cron/heartbeat', async (req, res) => {
-    try {
-        await runSchedulerTick();
-    } catch (err) {
-        console.error('Cron heartbeat HEAD error:', err.message || err);
-    }
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.set('Pragma', 'no-cache');
-    res.set('Expires', '0');
-    return res.sendStatus(200);
-});
-
-app.get('/wake', respondWake);
-app.head('/wake', (req, res) => {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.set('Pragma', 'no-cache');
-    res.set('Expires', '0');
-    return res.sendStatus(200);
+    await runSchedulerTick();
+    res.sendStatus(200);
 });
 
 // Health check endpoint (for Render + cron-job.org)
