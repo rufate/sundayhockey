@@ -1693,7 +1693,7 @@
         <div class="goalies-section">
             <h3>🥅 Auto-Add Regular Goalies (Weekly Reset)</h3>
             <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">
-                These goalies are automatically added on weekly/manual reset. Check to add manually now.
+                These goalies can be added manually now. Weekly reset is dynamic: Friday auto-adds Craig + Hao, Sunday auto-adds Craig + Mat.
             </p>
             <div class="goalie-list" id="predefinedGoalies">
                 <div class="goalie-item">
@@ -1716,6 +1716,16 @@
                         <input type="number" id="ratingHao" min="1" max="10" value="8">
                     </div>
                 </div>
+                <div class="goalie-item">
+                    <div class="goalie-checkbox-wrapper">
+                        <input type="checkbox" id="goalieMat" value="Mat Carriere">
+                        <label for="goalieMat">Mat Carriere</label>
+                    </div>
+                    <div class="goalie-rating">
+                        <label>Rating:</label>
+                        <input type="number" id="ratingMat" min="1" max="10" value="7">
+                    </div>
+                </div>
             </div>
             <button class="add-goalies-btn" onclick="addSelectedGoalies()">➕ Add Selected Goalies Now</button>
         </div>
@@ -1724,7 +1734,7 @@
         <div class="backup-goalies-section">
             <h3>🔄 Backup Goalies (Substitutions)</h3>
             <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">
-                Select a backup goalie to substitute for Craig or Hao when needed.
+                Select a backup goalie to substitute when needed. Sunday regular setup now uses Craig + Mat.
             </p>
             <div class="backup-goalie-select">
                 <select id="backupGoalieSelect">
@@ -2312,7 +2322,8 @@
         // Pre-defined goalie data
         const PREDEFINED_GOALIES = [
             { id: 'goalieCraig', name: 'Craig Scolack', phone: '(519) 982-6311', defaultRating: 9 },
-            { id: 'goalieHao', name: 'Hao Chau', phone: '(519) 995-9884', defaultRating: 8 }
+            { id: 'goalieHao', name: 'Hao Chau', phone: '(519) 995-9884', defaultRating: 8 },
+            { id: 'goalieMat', name: 'Mat Carriere', phone: '(226) 350-0217', defaultRating: 7 }
         ];
 
         function formatAuditAction(action) {
@@ -2844,7 +2855,7 @@
             }
         }
 
-        // Add selected predefined goalies (Craig and Hao)
+        // Add selected predefined goalies
         async function addSelectedGoalies() {
             const selectedGoalies = [];
             
