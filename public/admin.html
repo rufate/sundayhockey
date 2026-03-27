@@ -354,6 +354,29 @@
             font-size: 1.1rem;
         }
 
+
+        .cancellations-section {
+            background: linear-gradient(135deg, #2a1a1a, #332222);
+            border: 2px solid #b86b00;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .cancellations-section h3 {
+            margin: 0 0 15px 0;
+            color: #ffb347;
+            font-size: 1.1rem;
+        }
+
+        .cancelled-badge {
+            background: #b86b00;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.72rem;
+            margin-left: 8px;
+        }
         .logout-btn {
             background: #666;
             width: auto;
@@ -1848,6 +1871,22 @@
                     </tr>
                 </thead>
                 <tbody id="waitlistList"></tbody>
+            </table>
+        </div>
+
+        <div class="cancellations-section">
+            <h3>📋 Recent Cancellations (<span id="cancellationCount">0</span>)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Source</th>
+                        <th>Type</th>
+                        <th>Phone</th>
+                        <th>Cancelled</th>
+                    </tr>
+                </thead>
+                <tbody id="cancellationList"></tbody>
             </table>
         </div>
     </div>
@@ -3422,6 +3461,33 @@
                             </td>
                         `;
                         waitlistBody.appendChild(tr);
+                    });
+                }
+
+                const cancellationBody = document.getElementById('cancellationList');
+                const cancellationCount = document.getElementById('cancellationCount');
+                const cancellations = Array.isArray(data.cancellations) ? data.cancellations : [];
+                cancellationCount.innerText = cancellations.length;
+                cancellationBody.innerHTML = '';
+
+                if (cancellations.length === 0) {
+                    cancellationBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#666; padding:30px;">No cancellations logged yet</td></tr>';
+                } else {
+                    cancellations.forEach(item => {
+                        const tr = document.createElement('tr');
+                        const goalieBadge = item.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
+                        const typeBadge = item.action === 'removed'
+                            ? '<span class="cancelled-badge">ADMIN REMOVED</span>'
+                            : '<span class="cancelled-badge">PLAYER CANCELLED</span>';
+                        const when = item.cancelledAt ? new Date(item.cancelledAt).toLocaleString() : '--';
+                        tr.innerHTML = `
+                            <td>${item.firstName || ''} ${item.lastName || ''} ${goalieBadge}</td>
+                            <td>${item.source || '--'}</td>
+                            <td>${typeBadge}</td>
+                            <td>${item.phone || '--'}</td>
+                            <td>${when}</td>
+                        `;
+                        cancellationBody.appendChild(tr);
                     });
                 }
             } catch (err) {
