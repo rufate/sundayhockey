@@ -755,6 +755,93 @@ function getCurrentOrNextOccurrenceEtParts(scheduleAt, etDate = getCurrentETTime
     return getNextOccurrenceEtParts(scheduleAt, etDate);
 }
 
+function getLatestOccurrenceEtParts(scheduleAt, etDate = getCurrentETTime()) {
+    if (!scheduleAt) return null;
+
+    const latest = new Date(etDate);
+    latest.setHours(Number(scheduleAt.hour), Number(scheduleAt.minute), 0, 0);
+
+    const currentDow = latest.getDay();
+    let daysBack = (currentDow - Number(scheduleAt.dow) + 7) % 7;
+
+    const nowMinutes = (etDate.getHours() * 60) + etDate.getMinutes();
+    const targetMinutes = (Number(scheduleAt.hour) * 60) + Number(scheduleAt.minute);
+    if (daysBack === 0 && nowMinutes < targetMinutes) {
+        daysBack = 7;
+    }
+
+    latest.setDate(latest.getDate() - daysBack);
+    latest.setHours(Number(scheduleAt.hour), Number(scheduleAt.minute), 0, 0);
+
+    return {
+        year: latest.getFullYear(),
+        month: latest.getMonth() + 1,
+        day: latest.getDate(),
+        hour: latest.getHours(),
+        minute: latest.getMinutes()
+    };
+}
+
+function getOccurrenceKeyFromEtParts(scheduleAt, occurrenceParts) {
+    if (!scheduleAt || !occurrenceParts) return '';
+    const anchor = new Date(
+        occurrenceParts.year,
+        occurrenceParts.month - 1,
+        occurrenceParts.day,
+        occurrenceParts.hour,
+        occurrenceParts.minute,
+        0,
+        0
+    );
+    const weekInfo = getWeekNumber(anchor);
+    return `${weekInfo.year}-W${weekInfo.week}-${scheduleAt.dow}-${scheduleAt.hour}-${scheduleAt.minute}`;
+}
+
+function minutesSinceEtParts(occurrenceParts, etDate = getCurrentETTime()) {
+    if (!occurrenceParts) return null;
+    const occurrence = new Date(
+        occurrenceParts.year,
+        occurrenceParts.month - 1,
+        occurrenceParts.day,
+        occurrenceParts.hour,
+        occurrenceParts.minute,
+        0,
+        0
+    );
+    return Math.floor((etDate.getTime() - occurrence.getTime()) / 60000);
+}
+
+function shouldRunScheduledAction(scheduleAt, lastRunOccurrenceKey, etDate = getCurrentETTime(), maxCatchUpMinutes = 360) {
+    if (!scheduleAt) {
+        return { shouldRun: false, reason: 'missing_schedule', occurrenceKey: '', minuteKey: '', lagMinutes: null };
+    }
+
+    const occurrenceParts = getLatestOccurrenceEtParts(scheduleAt, etDate);
+    const occurrenceKey = getOccurrenceKeyFromEtParts(scheduleAt, occurrenceParts);
+    const minuteKey = String(nowETMinuteKey(etDate));
+    const lagMinutes = minutesSinceEtParts(occurrenceParts, etDate);
+
+    if (!Number.isFinite(lagMinutes) || lagMinutes < 0) {
+        return { shouldRun: false, reason: 'before_schedule', occurrenceKey, minuteKey, lagMinutes };
+    }
+
+    if (lagMinutes > maxCatchUpMinutes) {
+        return { shouldRun: false, reason: 'outside_catchup_window', occurrenceKey, minuteKey, lagMinutes };
+    }
+
+    if (lastRunOccurrenceKey === occurrenceKey) {
+        return { shouldRun: false, reason: 'already_ran_occurrence', occurrenceKey, minuteKey, lagMinutes };
+    }
+
+    return {
+        shouldRun: true,
+        reason: lagMinutes === 0 ? 'exact_minute' : 'catchup',
+        occurrenceKey,
+        minuteKey,
+        lagMinutes
+    };
+}
+
 function formatScheduleDowTime(scheduleAt) {
     if (!scheduleAt) return '';
     const dayName = INDEX_TO_DAY_NAME[Number(scheduleAt.dow)] || 'Unknown';
@@ -906,15 +993,17 @@ async function autoReleaseRoster() {
     if (!rosterReleaseSchedule || !rosterReleaseSchedule.enabled) return false;
     if (!rosterReleaseSchedule.at) return false;
     if (rosterReleased || players.length === 0) return false;
-    if (!isNowAtSchedule(rosterReleaseSchedule.at, etTime)) return false;
 
-    const occurrenceKey = getScheduleOccurrenceKey(rosterReleaseSchedule.at, etTime);
-    const minuteKey = String(nowETMinuteKey(etTime));
-    if (lastExactRosterReleaseRunAt === occurrenceKey) return false;
-    if (lastExactRosterReleaseMinuteKey === minuteKey) return false;
+    const releaseCheck = shouldRunScheduledAction(
+        rosterReleaseSchedule.at,
+        lastExactRosterReleaseRunAt,
+        etTime,
+        Number(process.env.ROSTER_RELEASE_CATCHUP_MINUTES || (31 * 60))
+    );
+    if (!releaseCheck.shouldRun) return false;
 
-    lastExactRosterReleaseRunAt = occurrenceKey;
-    lastExactRosterReleaseMinuteKey = minuteKey;
+    lastExactRosterReleaseRunAt = releaseCheck.occurrenceKey;
+    lastExactRosterReleaseMinuteKey = releaseCheck.minuteKey;
     await saveData();
 
     try {
@@ -1061,24 +1150,23 @@ async function checkWeeklyReset() {
 
     if (!resetWeekSchedule || !resetWeekSchedule.enabled) return false;
     if (!resetWeekSchedule.at) return false;
-    if (!isNowAtSchedule(resetWeekSchedule.at, etTime)) return false;
 
-    const occurrenceKey = getScheduleOccurrenceKey(resetWeekSchedule.at, etTime);
-    const minuteKey = String(nowETMinuteKey(etTime));
-    if (lastExactResetRunAt === occurrenceKey) return false;
-    if (lastExactResetMinuteKey === minuteKey) return false;
+    const resetCheck = shouldRunScheduledAction(
+        resetWeekSchedule.at,
+        lastExactResetRunAt,
+        etTime,
+        Number(process.env.WEEKLY_RESET_CATCHUP_MINUTES || (18 * 60))
+    );
+    if (!resetCheck.shouldRun) return false;
 
     const resetSafety = canSafelyRunWeeklyReset(etTime);
     if (!resetSafety.ok) {
-        console.warn(`[SAFETY] Weekly reset skipped at ${minuteKey}: ${resetSafety.reason}`);
-        lastExactResetRunAt = occurrenceKey;
-        lastExactResetMinuteKey = minuteKey;
-        await saveData();
+        console.warn(`[SAFETY] Weekly reset skipped at ${resetCheck.minuteKey}: ${resetSafety.reason}`);
         return false;
     }
 
-    lastExactResetRunAt = occurrenceKey;
-    lastExactResetMinuteKey = minuteKey;
+    lastExactResetRunAt = resetCheck.occurrenceKey;
+    lastExactResetMinuteKey = resetCheck.minuteKey;
     await saveData();
 
     await savePaymentReportSnapshot('scheduled_reset');
@@ -1352,6 +1440,8 @@ async function loadDataFromDB() {
                 announcementImages = [];
             }
         }
+
+        await reconcileFromFileBackup();
         
     } catch (err) {
         console.error('Error loading from DB:', err);
@@ -1372,7 +1462,9 @@ async function saveSetting(key, value) {
 }
 
 async function saveData() {
+    persistDataToFile('saveData');
     try {
+        if (!pool) return;
         await saveSetting('playerSpots', playerSpots);
         await saveSetting('gameLocation', gameLocation);
         await saveSetting('gameTime', gameTime);
@@ -1412,6 +1504,137 @@ async function saveData() {
 
 const DATA_FILE = './data.json';
 const SETTINGS_BACKUP_FILE = './app-settings.backup.json';
+
+
+function buildFullDataSnapshot() {
+    return {
+        playerSpots,
+        players,
+        waitlist,
+        cancelledRegistrations,
+        gameLocation,
+        gameTime,
+        gameDate,
+        playerSignupCode,
+        requirePlayerCode,
+        manualOverride,
+        manualOverrideState,
+        lastResetWeek,
+        rosterReleased,
+        currentWeekData,
+        signupLockStartAt,
+        signupLockEndAt,
+        rosterReleaseAt,
+        resetWeekAt,
+        lastExactResetRunAt,
+        lastExactRosterReleaseRunAt,
+        lastExactResetMinuteKey,
+        lastExactRosterReleaseMinuteKey,
+        signupLockSchedule,
+        rosterReleaseSchedule,
+        resetWeekSchedule,
+        maintenanceMode,
+        customTitle,
+        announcementEnabled,
+        announcementText,
+        announcementImages,
+        savedAt: new Date().toISOString()
+    };
+}
+
+function persistDataToFile(reason = 'saveData') {
+    try {
+        const snapshot = buildFullDataSnapshot();
+        fs.writeFileSync(DATA_FILE, JSON.stringify(snapshot, null, 2));
+        writeSettingsBackup(reason);
+        return true;
+    } catch (err) {
+        console.error('Error writing local data snapshot:', err.message);
+        return false;
+    }
+}
+
+async function reconcileFromFileBackup() {
+    if (!pool || !fs.existsSync(DATA_FILE)) return;
+
+    try {
+        const backup = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        const backupPlayers = Array.isArray(backup.players) ? backup.players : [];
+        const backupWaitlist = Array.isArray(backup.waitlist) ? backup.waitlist : [];
+
+        let mergedPlayers = 0;
+        for (const player of backupPlayers) {
+            const exists = players.some(p =>
+                String(p.id) === String(player.id) ||
+                normalizePhoneDigits(p.phone) === normalizePhoneDigits(player.phone)
+            );
+            if (exists) continue;
+
+            players.push(player);
+            try {
+                await pool.query(
+                    `INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team, rules_agreed)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                     ON CONFLICT (id) DO NOTHING`,
+                    [
+                        player.id,
+                        player.firstName,
+                        player.lastName,
+                        player.phone,
+                        player.paymentMethod || null,
+                        !!player.paid,
+                        player.paidAmount ?? null,
+                        parseInt(player.rating) || 5,
+                        !!player.isGoalie,
+                        player.team || null,
+                        !!player.rulesAgreed
+                    ]
+                );
+                mergedPlayers += 1;
+            } catch (err) {
+                console.error('Error reconciling backup player to DB:', err.message);
+            }
+        }
+
+        let mergedWaitlist = 0;
+        for (const player of backupWaitlist) {
+            const exists = waitlist.some(p =>
+                String(p.id) === String(player.id) ||
+                normalizePhoneDigits(p.phone) === normalizePhoneDigits(player.phone)
+            );
+            if (exists) continue;
+
+            waitlist.push(player);
+            try {
+                await pool.query(
+                    `INSERT INTO waitlist (id, first_name, last_name, phone, payment_method, rating, is_goalie)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7)
+                     ON CONFLICT (id) DO NOTHING`,
+                    [
+                        player.id,
+                        player.firstName,
+                        player.lastName,
+                        player.phone,
+                        player.paymentMethod || null,
+                        parseInt(player.rating) || 5,
+                        !!player.isGoalie
+                    ]
+                );
+                mergedWaitlist += 1;
+            } catch (err) {
+                console.error('Error reconciling backup waitlist player to DB:', err.message);
+            }
+        }
+
+        if (mergedPlayers || mergedWaitlist) {
+            playerSpots = Math.max(0, 20 - players.filter(p => !p.isGoalie).length);
+            console.log(`Reconciled local backup into DB: ${mergedPlayers} players, ${mergedWaitlist} waitlist.`);
+            await saveData();
+        }
+    } catch (err) {
+        console.error('Error reconciling local backup:', err.message);
+    }
+}
 
 function getSettingsSnapshot() {
     return {
@@ -2393,16 +2616,20 @@ app.post('/api/register-init', async (req, res) => {
             joinedAt: new Date()
         };
 
-        try {
-            await pool.query(
-                `INSERT INTO waitlist (id, first_name, last_name, phone, payment_method, rating, is_goalie)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                [waitlistPlayer.id, waitlistPlayer.firstName, waitlistPlayer.lastName, 
-                 waitlistPlayer.phone, waitlistPlayer.paymentMethod, waitlistPlayer.rating, false]
-            );
-            waitlist.push(waitlistPlayer);
-        } catch (err) {
-            console.error('Error adding to waitlist:', err);
+        waitlist.push(waitlistPlayer);
+        await saveData();
+
+        if (pool) {
+            try {
+                await pool.query(
+                    `INSERT INTO waitlist (id, first_name, last_name, phone, payment_method, rating, is_goalie)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                    [waitlistPlayer.id, waitlistPlayer.firstName, waitlistPlayer.lastName, 
+                     waitlistPlayer.phone, waitlistPlayer.paymentMethod, waitlistPlayer.rating, false]
+                );
+            } catch (err) {
+                console.error('Error adding to waitlist:', err.message);
+            }
         }
 
         return res.json({
@@ -2464,19 +2691,21 @@ app.post('/api/register-final', async (req, res) => {
         rulesAgreed: true
     };
 
-    try {
-        await pool.query(
-            `INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team, rules_agreed)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-            [newPlayer.id, newPlayer.firstName, newPlayer.lastName, newPlayer.phone,
-             newPlayer.paymentMethod, newPlayer.paid, newPlayer.paidAmount, newPlayer.rating, false, null, true]
-        );
-        players.push(newPlayer);
-        playerSpots--;
-        await saveData();
-    } catch (err) {
-        console.error('Error saving player:', err);
-        return res.status(500).json({ error: "Database error" });
+    players.push(newPlayer);
+    playerSpots = Math.max(0, playerSpots - 1);
+    await saveData();
+
+    if (pool) {
+        try {
+            await pool.query(
+                `INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team, rules_agreed)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                [newPlayer.id, newPlayer.firstName, newPlayer.lastName, newPlayer.phone,
+                 newPlayer.paymentMethod, newPlayer.paid, newPlayer.paidAmount, newPlayer.rating, false, null, true]
+            );
+        } catch (err) {
+            console.error('Error saving player to database, preserved in local backup:', err.message);
+        }
     }
 
     res.json({ 
@@ -3845,6 +4074,7 @@ app.head('/api/cron/heartbeat', async (req, res) => {
 
 // Health check endpoint (for Render + cron-job.org)
 app.get('/health', async (req, res) => {
+    await runSchedulerTick();
     const db = await pingDatabase();
     res.status(db.ok || db.mode === 'file' ? 200 : 503).json({
         ok: db.ok || db.mode === 'file',
@@ -3863,6 +4093,7 @@ app.head('/health', (req, res) => {
 });
 
 app.get('/api/health', async (req, res) => {
+    await runSchedulerTick();
     const db = await pingDatabase();
     res.status(db.ok || db.mode === 'file' ? 200 : 503).json({
         ok: db.ok || db.mode === 'file',
@@ -3890,6 +4121,10 @@ initDatabase().then(() => {
     }, {
         timezone: 'America/New_York'
     });
+
+    setInterval(() => {
+        runSchedulerTick().catch(err => console.error('Warm scheduler tick error:', err));
+    }, Number(process.env.WARM_TICK_MS || 60000));
     
     app.listen(PORT, () => {
         console.log(`Phan's Friday Hockey server running on port ${PORT}`);
@@ -3912,6 +4147,10 @@ initDatabase().then(() => {
     }, {
         timezone: 'America/New_York'
     });
+
+    setInterval(() => {
+        runSchedulerTick().catch(err => console.error('Warm scheduler tick error:', err));
+    }, Number(process.env.WARM_TICK_MS || 60000));
     
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT} (file fallback mode)`);
