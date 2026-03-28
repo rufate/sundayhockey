@@ -860,7 +860,40 @@
             line-height: 1.4;
         }
 
-    </style>
+    
+        .rating-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .rating-card {
+            background: #252525;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 12px;
+        }
+        .rating-card label, .profile-field label {
+            display:block;
+            color:#ddd;
+            font-size:0.9rem;
+            margin-bottom:6px;
+        }
+        .profile-field { margin-top: 12px; }
+        .rating-summary-box {
+            background: linear-gradient(135deg, #1f2f1f, #264026);
+            border: 1px solid #4CAF50;
+            border-radius: 10px;
+            padding: 14px;
+            margin-top: 12px;
+        }
+        .rating-summary-box .small-note {
+            color:#b8d8b8;
+            font-size:0.82rem;
+            margin-top:6px;
+        }
+
+</style>
 <base target="_blank">
 </head>
 <body>
@@ -984,20 +1017,72 @@
                 <input type="text" id="lastName" placeholder="Last Name" required>
                 <input type="tel" id="phone" placeholder="Phone Number (e.g., 519-123-4567)" required>
                 
-                <div style="margin: 15px 0 5px 0; color: #aaa; font-size: 0.9rem;">Skill Rating (1-10):</div>
-                <input type="number" id="rating" min="1" max="10" placeholder="Enter number 1-10" required style="width: 100%; padding: 12px; margin: 10px 0; background: var(--input-bg); border: 1px solid #555; color: white; border-radius: 5px; font-size: 1rem;">
+                <div style="margin: 15px 0 5px 0; color: #aaa; font-size: 0.9rem;">Player Skill Profile:</div>
+                <div class="rating-grid">
+                    <div class="rating-card">
+                        <label for="skatingRating">Skating (1-10)</label>
+                        <input type="number" id="skatingRating" min="1" max="10" step="1" placeholder="Speed / edges" required style="margin:0;">
+                    </div>
+                    <div class="rating-card">
+                        <label for="puckSkillsRating">Puck Skills (1-10)</label>
+                        <input type="number" id="puckSkillsRating" min="1" max="10" step="1" placeholder="Hands / passing" required style="margin:0;">
+                    </div>
+                    <div class="rating-card">
+                        <label for="hockeySenseRating">Hockey Sense (1-10)</label>
+                        <input type="number" id="hockeySenseRating" min="1" max="10" step="1" placeholder="Reads / positioning" required style="margin:0;">
+                    </div>
+                    <div class="rating-card">
+                        <label for="conditioningRating">Conditioning (1-10)</label>
+                        <input type="number" id="conditioningRating" min="1" max="10" step="1" placeholder="Game pace" required style="margin:0;">
+                    </div>
+                </div>
+
+                <div class="profile-field">
+                    <label for="levelPlayed">Highest recent level played</label>
+                    <select id="levelPlayed" required>
+                        <option value="">Select one</option>
+                        <option value="beginner">Beginner / shinny only</option>
+                        <option value="house">House league</option>
+                        <option value="pickup">Intermediate pickup</option>
+                        <option value="select">Strong pickup / select</option>
+                        <option value="competitive">High-level competitive / junior</option>
+                    </select>
+                </div>
+
+                <div class="profile-field">
+                    <label for="peerComparison">Compared to the average player in this group</label>
+                    <select id="peerComparison" required>
+                        <option value="">Select one</option>
+                        <option value="below">Below average</option>
+                        <option value="average">Average</option>
+                        <option value="above">Above average</option>
+                        <option value="top">One of the stronger players</option>
+                    </select>
+                </div>
+
+                <div class="profile-field">
+                    <label for="confidenceLevel">How confident are you in your self-rating?</label>
+                    <select id="confidenceLevel" required>
+                        <option value="">Select one</option>
+                        <option value="low">Not very confident</option>
+                        <option value="medium">Somewhat confident</option>
+                        <option value="high">Very confident</option>
+                    </select>
+                </div>
+
+                <div class="rating-summary-box">
+                    <div style="margin-bottom:6px; color:#d6ffd6;">Calculated team-balance rating</div>
+                    <input type="number" id="rating" min="1" max="10" step="0.1" readonly required style="width:100%; padding:12px; margin:0; background:#182118; border:1px solid #4CAF50; color:#fff; border-radius:5px; font-size:1.1rem; text-align:center; font-weight:bold;">
+                    <div class="small-note">Built from your skill profile so teams are matched more evenly. Admin may fine-tune after games.</div>
+                </div>
                 <div class="rating-info" style="background: #1a1a1a; padding: 12px; border-radius: 5px; margin-top: 10px; line-height: 1.6;">
-                    <strong style="color: var(--accent);">Skill Level Guide:</strong><br>
-                    <strong>1:</strong> Newbie, learning to skate, never played.<br>
-                    <strong>2:</strong> Beginner, better than newbie. Slow skater.<br>
-                    <strong>3:</strong> Novice, not strong skater but tries.<br>
-                    <strong>4:</strong> Low Intermediate, can skate but not very fast, can handle puck at slow speed.<br>
-                    <strong>5:</strong> Intermediate, good skater, good puck control, skates hard, makes good passes.<br>
-                    <strong>6:</strong> Upper Intermediate, skates hard, strong skater, good hands, accurate shot. Plays proper positions, makes smart passes.<br>
-                    <strong>7:</strong> Advanced, excellent skills, reads plays well. Fast!<br>
-                    <strong>8:</strong> Elite Rec, dominates most pickup games with ease. Very Fast!<br>
-                    <strong>9:</strong> Junior ABC. Skill level far above typical pickup. Stupid fast?!<br>
-                    <strong>10+:</strong> Connor McDavid. Lightning Fast Beetches!<br>
+                    <strong style="color: var(--accent);">Quick guide:</strong><br>
+                    <strong>3-4:</strong> lower recreational / newer player<br>
+                    <strong>5:</strong> average pickup player<br>
+                    <strong>6:</strong> solid pickup player<br>
+                    <strong>7:</strong> strong player<br>
+                    <strong>8:</strong> elite pickup player<br>
+                    <strong>9-10:</strong> rare high-end player for this skate
                 </div>
 
                 <div style="margin: 15px 0; color: #aaa; font-size: 0.9rem;">Payment Method:</div>
@@ -1166,6 +1251,87 @@
             errorEl.style.display = 'none';
         }
 
+        const LEVEL_PLAY_RATING_MAP = {
+            beginner: 3.5,
+            house: 4.5,
+            pickup: 5.5,
+            select: 6.8,
+            competitive: 8.0
+        };
+
+        const PEER_COMPARISON_ADJUSTMENT_MAP = {
+            below: -0.5,
+            average: 0,
+            above: 0.5,
+            top: 1.0
+        };
+
+        const CONFIDENCE_WEIGHT_MAP = {
+            low: { selfWeight: 0.50, levelWeight: 0.50 },
+            medium: { selfWeight: 0.65, levelWeight: 0.35 },
+            high: { selfWeight: 0.75, levelWeight: 0.25 }
+        };
+
+        function clampRatingInput(value) {
+            const num = Number(value);
+            if (!Number.isFinite(num)) return null;
+            return Math.max(1, Math.min(10, num));
+        }
+
+        function roundRatingValue(value) {
+            return Math.round(Number(value) * 10) / 10;
+        }
+
+        function buildRatingProfilePayload() {
+            const skating = clampRatingInput(document.getElementById('skatingRating')?.value);
+            const puck = clampRatingInput(document.getElementById('puckSkillsRating')?.value);
+            const sense = clampRatingInput(document.getElementById('hockeySenseRating')?.value);
+            const conditioning = clampRatingInput(document.getElementById('conditioningRating')?.value);
+            const levelPlayed = document.getElementById('levelPlayed')?.value || '';
+            const peerComparison = document.getElementById('peerComparison')?.value || '';
+            const confidenceLevel = document.getElementById('confidenceLevel')?.value || '';
+
+            if ([skating, puck, sense, conditioning].some(v => v === null) || !levelPlayed || !peerComparison || !confidenceLevel) {
+                return null;
+            }
+
+            const baseSkill = roundRatingValue((skating + puck + sense + conditioning) / 4);
+            const levelMapped = LEVEL_PLAY_RATING_MAP[levelPlayed] || 5.5;
+            const peerAdjustment = PEER_COMPARISON_ADJUSTMENT_MAP[peerComparison] ?? 0;
+            const weights = CONFIDENCE_WEIGHT_MAP[confidenceLevel] || CONFIDENCE_WEIGHT_MAP.medium;
+            const derivedRating = roundRatingValue((baseSkill * weights.selfWeight) + (levelMapped * weights.levelWeight) + peerAdjustment);
+
+            return {
+                skatingRating: skating,
+                puckSkillsRating: puck,
+                hockeySenseRating: sense,
+                conditioningRating: conditioning,
+                levelPlayed,
+                peerComparison,
+                confidenceLevel,
+                selfRatingRaw: baseSkill,
+                derivedRating,
+                finalRating: derivedRating
+            };
+        }
+
+        function updateCalculatedRating() {
+            const ratingEl = document.getElementById('rating');
+            if (!ratingEl) return;
+            const profile = buildRatingProfilePayload();
+            ratingEl.value = profile ? profile.derivedRating.toFixed(1) : '';
+            saveFormData();
+        }
+
+        function validateSkillProfile() {
+            const profile = buildRatingProfilePayload();
+            if (!profile) {
+                showSignupError('Please complete the full skill profile so your teams can be balanced properly.');
+                return false;
+            }
+            return true;
+        }
+
         function validateSignupNameAndPhone() {
             normalizeNameInputs();
             const phoneDigits = normalizePhoneInput();
@@ -1185,12 +1351,20 @@
                 document.getElementById('firstName').value = capitalizeFullName(data.firstName || '');
                 document.getElementById('lastName').value = capitalizeFullName(data.lastName || '');
                 document.getElementById('phone').value = formatPhoneInputValue(data.phone || '');
+                document.getElementById('skatingRating').value = data.skatingRating || '';
+                document.getElementById('puckSkillsRating').value = data.puckSkillsRating || '';
+                document.getElementById('hockeySenseRating').value = data.hockeySenseRating || '';
+                document.getElementById('conditioningRating').value = data.conditioningRating || '';
+                document.getElementById('levelPlayed').value = data.levelPlayed || '';
+                document.getElementById('peerComparison').value = data.peerComparison || '';
+                document.getElementById('confidenceLevel').value = data.confidenceLevel || '';
                 document.getElementById('rating').value = data.rating || '';
                 if (data.paymentMethod) {
                     const radio = document.querySelector(`input[name="payment"][value="${data.paymentMethod}"]`);
                     if (radio) radio.checked = true;
                 }
                 handlePaymentChange();
+                updateCalculatedRating();
             }
         }
 
@@ -1201,6 +1375,13 @@
                 firstName: document.getElementById('firstName').value,
                 lastName: document.getElementById('lastName').value,
                 phone: document.getElementById('phone').value,
+                skatingRating: document.getElementById('skatingRating').value,
+                puckSkillsRating: document.getElementById('puckSkillsRating').value,
+                hockeySenseRating: document.getElementById('hockeySenseRating').value,
+                conditioningRating: document.getElementById('conditioningRating').value,
+                levelPlayed: document.getElementById('levelPlayed').value,
+                peerComparison: document.getElementById('peerComparison').value,
+                confidenceLevel: document.getElementById('confidenceLevel').value,
                 rating: document.getElementById('rating').value,
                 paymentMethod: document.querySelector('input[name="payment"]:checked')?.value
             };
@@ -1859,6 +2040,10 @@
                 return;
             }
 
+            if (!validateSkillProfile()) {
+                return;
+            }
+
             if (maintenanceMode) {
                 showSignupError('Portal is currently down for maintenance. Please check back later.');
                 return;
@@ -1869,12 +2054,20 @@
             submitBtn.disabled = true;
             submitBtn.innerText = 'Processing...';
 
+            const skillProfile = buildRatingProfilePayload();
             const formData = {
                 firstName: capitalizeFullName(document.getElementById('firstName').value),
                 lastName: capitalizeFullName(document.getElementById('lastName').value),
                 phone: formatPhoneInputValue(document.getElementById('phone').value),
                 paymentMethod: document.querySelector('input[name="payment"]:checked').value,
                 rating: document.getElementById('rating').value,
+                skatingRating: skillProfile.skatingRating,
+                puckSkillsRating: skillProfile.puckSkillsRating,
+                hockeySenseRating: skillProfile.hockeySenseRating,
+                conditioningRating: skillProfile.conditioningRating,
+                levelPlayed: skillProfile.levelPlayed,
+                peerComparison: skillProfile.peerComparison,
+                confidenceLevel: skillProfile.confidenceLevel,
                 isGoalie: false,
                 signupCode: verifiedCode
             };
@@ -1926,8 +2119,23 @@
             loadSavedFormData();
             updatePIACalculation();
             
-            const inputs = ['firstName', 'lastName', 'phone', 'rating'];
+            const inputs = ['firstName', 'lastName', 'phone', 'skatingRating', 'puckSkillsRating', 'hockeySenseRating', 'conditioningRating'];
             inputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('change', updateCalculatedRating);
+                    el.addEventListener('input', updateCalculatedRating);
+                }
+            });
+
+            ['levelPlayed', 'peerComparison', 'confidenceLevel'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('change', updateCalculatedRating);
+                }
+            });
+
+            ['firstName', 'lastName', 'phone'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
                     el.addEventListener('change', saveFormData);

@@ -1293,13 +1293,37 @@ async function initDatabase() {
                 payment_method VARCHAR(20),
                 paid BOOLEAN DEFAULT false,
                 paid_amount NUMERIC(10,2),
-                rating INTEGER NOT NULL,
+                rating NUMERIC(4,1) NOT NULL,
+                skating_rating NUMERIC(4,1),
+                puck_skills_rating NUMERIC(4,1),
+                hockey_sense_rating NUMERIC(4,1),
+                conditioning_rating NUMERIC(4,1),
+                level_played VARCHAR(30),
+                peer_comparison VARCHAR(20),
+                confidence_level VARCHAR(20),
+                self_rating_raw NUMERIC(4,1),
+                derived_rating NUMERIC(4,1),
+                admin_rating NUMERIC(4,1),
+                admin_adjustment NUMERIC(4,1),
+                final_rating NUMERIC(4,1),
                 is_goalie BOOLEAN DEFAULT false,
                 team VARCHAR(10),
                 registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 rules_agreed BOOLEAN DEFAULT false
             )
         `);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS skating_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS puck_skills_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS hockey_sense_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS conditioning_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS level_played VARCHAR(30)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS peer_comparison VARCHAR(20)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS confidence_level VARCHAR(20)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS self_rating_raw NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS derived_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS admin_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS admin_adjustment NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS final_rating NUMERIC(4,1)`);
         
         await pool.query(`
             CREATE TABLE IF NOT EXISTS waitlist (
@@ -1308,11 +1332,31 @@ async function initDatabase() {
                 last_name VARCHAR(100) NOT NULL,
                 phone VARCHAR(20) NOT NULL,
                 payment_method VARCHAR(20),
-                rating INTEGER NOT NULL,
+                rating NUMERIC(4,1) NOT NULL,
+                skating_rating NUMERIC(4,1),
+                puck_skills_rating NUMERIC(4,1),
+                hockey_sense_rating NUMERIC(4,1),
+                conditioning_rating NUMERIC(4,1),
+                level_played VARCHAR(30),
+                peer_comparison VARCHAR(20),
+                confidence_level VARCHAR(20),
+                self_rating_raw NUMERIC(4,1),
+                derived_rating NUMERIC(4,1),
+                final_rating NUMERIC(4,1),
                 is_goalie BOOLEAN DEFAULT false,
                 joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS skating_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS puck_skills_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS hockey_sense_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS conditioning_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS level_played VARCHAR(30)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS peer_comparison VARCHAR(20)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS confidence_level VARCHAR(20)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS self_rating_raw NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS derived_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS final_rating NUMERIC(4,1)`);
         
         await pool.query(`
             CREATE TABLE IF NOT EXISTS history (
@@ -1402,7 +1446,7 @@ async function loadDataFromDB() {
         refreshDynamicSignupCode();
         
         const playersRes = await pool.query('SELECT * FROM players ORDER BY registered_at');
-        players = playersRes.rows.map(p => ({
+        players = playersRes.rows.map(p => hydratePlayerRatingProfile({
             id: Number(p.id),
             firstName: p.first_name,
             lastName: p.last_name,
@@ -1410,7 +1454,19 @@ async function loadDataFromDB() {
             paymentMethod: p.payment_method,
             paid: !!p.paid,
             paidAmount: p.paid_amount == null ? null : Number(p.paid_amount),
-            rating: Number(p.rating),
+            rating: p.rating == null ? null : Number(p.rating),
+            skatingRating: p.skating_rating == null ? null : Number(p.skating_rating),
+            puckSkillsRating: p.puck_skills_rating == null ? null : Number(p.puck_skills_rating),
+            hockeySenseRating: p.hockey_sense_rating == null ? null : Number(p.hockey_sense_rating),
+            conditioningRating: p.conditioning_rating == null ? null : Number(p.conditioning_rating),
+            levelPlayed: p.level_played,
+            peerComparison: p.peer_comparison,
+            confidenceLevel: p.confidence_level,
+            selfRatingRaw: p.self_rating_raw == null ? null : Number(p.self_rating_raw),
+            derivedRating: p.derived_rating == null ? null : Number(p.derived_rating),
+            adminRating: p.admin_rating == null ? null : Number(p.admin_rating),
+            adminAdjustment: p.admin_adjustment == null ? null : Number(p.admin_adjustment),
+            finalRating: p.final_rating == null ? null : Number(p.final_rating),
             isGoalie: !!p.is_goalie,
             team: p.team,
             registeredAt: p.registered_at,
@@ -1422,13 +1478,23 @@ async function loadDataFromDB() {
         playerSpots = Math.max(0, 20 - nonGoalieCount);
                 
         const waitlistRes = await pool.query('SELECT * FROM waitlist ORDER BY joined_at');
-        waitlist = waitlistRes.rows.map(p => ({
+        waitlist = waitlistRes.rows.map(p => hydratePlayerRatingProfile({
             id: Number(p.id),
             firstName: p.first_name,
             lastName: p.last_name,
             phone: p.phone,
             paymentMethod: p.payment_method,
-            rating: Number(p.rating),
+            rating: p.rating == null ? null : Number(p.rating),
+            skatingRating: p.skating_rating == null ? null : Number(p.skating_rating),
+            puckSkillsRating: p.puck_skills_rating == null ? null : Number(p.puck_skills_rating),
+            hockeySenseRating: p.hockey_sense_rating == null ? null : Number(p.hockey_sense_rating),
+            conditioningRating: p.conditioning_rating == null ? null : Number(p.conditioning_rating),
+            levelPlayed: p.level_played,
+            peerComparison: p.peer_comparison,
+            confidenceLevel: p.confidence_level,
+            selfRatingRaw: p.self_rating_raw == null ? null : Number(p.self_rating_raw),
+            derivedRating: p.derived_rating == null ? null : Number(p.derived_rating),
+            finalRating: p.final_rating == null ? null : Number(p.final_rating),
             isGoalie: !!p.is_goalie,
             joinedAt: p.joined_at
         }));
@@ -1734,8 +1800,8 @@ function loadDataFromFile() {
         if (fs.existsSync(DATA_FILE)) {
             const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
             playerSpots = data.playerSpots ?? 20;
-            players = data.players ?? [];
-            waitlist = data.waitlist ?? [];
+            players = Array.isArray(data.players) ? data.players.map(hydratePlayerRatingProfile) : [];
+            waitlist = Array.isArray(data.waitlist) ? data.waitlist.map(hydratePlayerRatingProfile) : [];
             gameLocation = data.gameLocation ?? "Capri Recreation Complex";
             gameTime = data.gameTime ?? "Friday 9:30 PM";
             gameDate = data.gameDate ?? calculateNextGameDate();
@@ -1856,6 +1922,132 @@ function formatPhoneNumber(phone) {
     return phone;
 }
 
+
+function clampRating(value, min = 1, max = 10) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return min;
+    return Math.max(min, Math.min(max, num));
+}
+
+function roundRating(value) {
+    return Math.round(clampRating(value) * 10) / 10;
+}
+
+const LEVEL_PLAY_RATING_MAP = {
+    beginner: 3.5,
+    house: 4.5,
+    pickup: 5.5,
+    select: 6.8,
+    competitive: 8.0
+};
+
+const PEER_COMPARISON_ADJUSTMENT_MAP = {
+    below: -0.5,
+    average: 0,
+    above: 0.5,
+    top: 1.0
+};
+
+const CONFIDENCE_WEIGHT_MAP = {
+    low: { selfWeight: 0.5, levelWeight: 0.5 },
+    medium: { selfWeight: 0.65, levelWeight: 0.35 },
+    high: { selfWeight: 0.75, levelWeight: 0.25 }
+};
+
+function normalizeSkillProfile(input = {}) {
+    const skating = clampRating(input.skatingRating);
+    const puckSkills = clampRating(input.puckSkillsRating);
+    const hockeySense = clampRating(input.hockeySenseRating);
+    const conditioning = clampRating(input.conditioningRating);
+
+    const levelPlayed = ['beginner', 'house', 'pickup', 'select', 'competitive'].includes(String(input.levelPlayed || '').toLowerCase())
+        ? String(input.levelPlayed).toLowerCase()
+        : '';
+    const peerComparison = ['below', 'average', 'above', 'top'].includes(String(input.peerComparison || '').toLowerCase())
+        ? String(input.peerComparison).toLowerCase()
+        : '';
+    const confidenceLevel = ['low', 'medium', 'high'].includes(String(input.confidenceLevel || '').toLowerCase())
+        ? String(input.confidenceLevel).toLowerCase()
+        : '';
+
+    const missing = [];
+    if (!Number.isFinite(Number(input.skatingRating))) missing.push('skating');
+    if (!Number.isFinite(Number(input.puckSkillsRating))) missing.push('puck skills');
+    if (!Number.isFinite(Number(input.hockeySenseRating))) missing.push('hockey sense');
+    if (!Number.isFinite(Number(input.conditioningRating))) missing.push('conditioning');
+    if (!levelPlayed) missing.push('recent level played');
+    if (!peerComparison) missing.push('peer comparison');
+    if (!confidenceLevel) missing.push('confidence');
+
+    const baseSkill = roundRating((skating + puckSkills + hockeySense + conditioning) / 4);
+    const levelMapped = LEVEL_PLAY_RATING_MAP[levelPlayed] || 5.5;
+    const peerAdjustment = PEER_COMPARISON_ADJUSTMENT_MAP[peerComparison] ?? 0;
+    const weights = CONFIDENCE_WEIGHT_MAP[confidenceLevel] || CONFIDENCE_WEIGHT_MAP.medium;
+    const derivedRating = roundRating((baseSkill * weights.selfWeight) + (levelMapped * weights.levelWeight) + peerAdjustment);
+
+    return {
+        skatingRating: skating,
+        puckSkillsRating: puckSkills,
+        hockeySenseRating: hockeySense,
+        conditioningRating: conditioning,
+        levelPlayed,
+        peerComparison,
+        confidenceLevel,
+        selfRatingRaw: baseSkill,
+        derivedRating,
+        finalRating: derivedRating,
+        adminRating: null,
+        adminAdjustment: 0,
+        missing
+    };
+}
+
+function hydratePlayerRatingProfile(player = {}) {
+    const fallbackRating = roundRating(player.rating ?? player.finalRating ?? player.derivedRating ?? 5);
+    const finalRating = roundRating(player.finalRating ?? player.rating ?? player.adminRating ?? player.derivedRating ?? fallbackRating);
+    const derivedRating = roundRating(player.derivedRating ?? finalRating);
+    const adminRating = player.adminRating == null ? null : roundRating(player.adminRating);
+    const adminAdjustment = roundRating(player.adminAdjustment ?? ((adminRating == null ? finalRating : adminRating) - derivedRating));
+
+    return {
+        ...player,
+        skatingRating: clampRating(player.skatingRating ?? derivedRating),
+        puckSkillsRating: clampRating(player.puckSkillsRating ?? derivedRating),
+        hockeySenseRating: clampRating(player.hockeySenseRating ?? derivedRating),
+        conditioningRating: clampRating(player.conditioningRating ?? derivedRating),
+        levelPlayed: player.levelPlayed || '',
+        peerComparison: player.peerComparison || '',
+        confidenceLevel: player.confidenceLevel || '',
+        selfRatingRaw: roundRating(player.selfRatingRaw ?? derivedRating),
+        derivedRating,
+        adminRating,
+        adminAdjustment,
+        finalRating,
+        rating: finalRating
+    };
+}
+
+function buildPlayerFromSkillProfile(basePlayer, skillProfile = {}) {
+    const profile = normalizeSkillProfile(skillProfile);
+    return hydratePlayerRatingProfile({
+        ...basePlayer,
+        skatingRating: profile.skatingRating,
+        puckSkillsRating: profile.puckSkillsRating,
+        hockeySenseRating: profile.hockeySenseRating,
+        conditioningRating: profile.conditioningRating,
+        levelPlayed: profile.levelPlayed,
+        peerComparison: profile.peerComparison,
+        confidenceLevel: profile.confidenceLevel,
+        selfRatingRaw: profile.selfRatingRaw,
+        derivedRating: profile.derivedRating,
+        adminRating: null,
+        adminAdjustment: 0,
+        finalRating: profile.finalRating,
+        rating: profile.finalRating
+    });
+}
+
+
 function isDuplicatePlayer(firstName, lastName, phone) {
     const normalizedName = (capitalizeFullName(firstName) + ' ' + capitalizeFullName(lastName)).toLowerCase().trim();
     const normalizedPhone = normalizePhoneDigits(phone);
@@ -1886,10 +2078,13 @@ function isGoalieSpotsAvailable() {
 }
 
 function generateFairTeams() {
+    const playerTeamRating = (player) => roundRating(player?.finalRating ?? player?.rating ?? 5);
+
     const goalies = players
         .filter(p => p.isGoalie)
+        .map(hydratePlayerRatingProfile)
         .sort((a, b) => {
-            const ratingDiff = (parseInt(b.rating) || 0) - (parseInt(a.rating) || 0);
+            const ratingDiff = playerTeamRating(b) - playerTeamRating(a);
             if (ratingDiff !== 0) return ratingDiff;
 
             const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
@@ -1899,8 +2094,9 @@ function generateFairTeams() {
 
     const skaters = players
         .filter(p => !p.isGoalie)
+        .map(hydratePlayerRatingProfile)
         .sort((a, b) => {
-            const ratingDiff = (parseInt(b.rating) || 0) - (parseInt(a.rating) || 0);
+            const ratingDiff = playerTeamRating(b) - playerTeamRating(a);
             if (ratingDiff !== 0) return ratingDiff;
 
             const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
@@ -1917,16 +2113,16 @@ function generateFairTeams() {
     if (goalies.length >= 2) {
         whiteTeam.push({ ...goalies[0], team: 'White' });
         darkTeam.push({ ...goalies[1], team: 'Dark' });
-        whiteRating += parseInt(goalies[0].rating) || 0;
-        darkRating += parseInt(goalies[1].rating) || 0;
+        whiteRating += playerTeamRating(goalies[0]);
+        darkRating += playerTeamRating(goalies[1]);
     } else if (goalies.length === 1) {
         whiteTeam.push({ ...goalies[0], team: 'White' });
-        whiteRating += parseInt(goalies[0].rating) || 0;
+        whiteRating += playerTeamRating(goalies[0]);
     }
 
     // Balance skaters by total team rating first, then by count
     for (const skater of skaters) {
-        const skaterRating = parseInt(skater.rating) || 0;
+        const skaterRating = playerTeamRating(skater);
 
         const whiteSkaterCount = whiteTeam.filter(p => !p.isGoalie).length;
         const darkSkaterCount = darkTeam.filter(p => !p.isGoalie).length;
@@ -1992,7 +2188,7 @@ function buildPaymentReportCsv() {
             escapeCsvValue(p.firstName),
             escapeCsvValue(p.lastName),
             escapeCsvValue(p.phone),
-            escapeCsvValue(p.rating),
+            escapeCsvValue(roundRating(p.finalRating ?? p.rating ?? 0)),
             escapeCsvValue(p.paymentMethod || 'N/A'),
             escapeCsvValue(p.paidAmount == null ? 0 : p.paidAmount),
             escapeCsvValue(p.paid ? 'PAID' : 'UNPAID'),
@@ -2017,7 +2213,7 @@ function buildPaymentReportCsv() {
             escapeCsvValue(p.firstName),
             escapeCsvValue(p.lastName),
             escapeCsvValue(p.phone),
-            escapeCsvValue(p.rating),
+            escapeCsvValue(roundRating(p.finalRating ?? p.rating ?? 0)),
             escapeCsvValue(p.paymentMethod || 'N/A'),
             escapeCsvValue('N/A'),
             escapeCsvValue('N/A'),
@@ -2592,13 +2788,27 @@ app.post('/api/register-init', async (req, res) => {
     refreshDynamicSignupCode();
     checkAutoLock();
 
-    const { firstName, lastName, phone, paymentMethod, rating, signupCode } = req.body;
+    const {
+        firstName,
+        lastName,
+        phone,
+        paymentMethod,
+        rating,
+        signupCode,
+        skatingRating,
+        puckSkillsRating,
+        hockeySenseRating,
+        conditioningRating,
+        levelPlayed,
+        peerComparison,
+        confidenceLevel
+    } = req.body;
 
     if (rosterReleased) {
         return res.status(403).json({ error: 'Signup is closed after roster release.' });
     }
 
-    if (!firstName || !lastName || !phone || !paymentMethod || !rating) {
+    if (!firstName || !lastName || !phone || !paymentMethod) {
         return res.status(400).json({ error: "All fields are required." });
     }
 
@@ -2614,23 +2824,46 @@ app.post('/api/register-init', async (req, res) => {
         return res.status(400).json({ error: "Please enter a valid 10-digit phone number." });
     }
 
-    const ratingNum = parseInt(rating);
-    if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 10) {
-        return res.status(400).json({ error: "Rating must be a number between 1 and 10." });
+    const skillProfile = normalizeSkillProfile({
+        skatingRating,
+        puckSkillsRating,
+        hockeySenseRating,
+        conditioningRating,
+        levelPlayed,
+        peerComparison,
+        confidenceLevel
+    });
+
+    if (skillProfile.missing.length > 0) {
+        return res.status(400).json({ error: `Please complete: ${skillProfile.missing.join(', ')}.` });
+    }
+
+    const submittedRating = Number(rating);
+    if (Number.isFinite(submittedRating) && Math.abs(submittedRating - skillProfile.derivedRating) > 0.2) {
+        return res.status(400).json({ error: "Skill profile changed. Please review your calculated rating and try again." });
     }
 
     if (playerSpots <= 0) {
-        const formattedPhone = cleanPhone;
-        const waitlistPlayer = {
+        const waitlistPlayer = hydratePlayerRatingProfile({
             id: Date.now(),
             firstName: cleanFirstName,
             lastName: cleanLastName,
-            phone: formattedPhone,
+            phone: cleanPhone,
             paymentMethod,
-            rating: ratingNum,
+            rating: skillProfile.finalRating,
+            finalRating: skillProfile.finalRating,
+            derivedRating: skillProfile.derivedRating,
+            selfRatingRaw: skillProfile.selfRatingRaw,
+            skatingRating: skillProfile.skatingRating,
+            puckSkillsRating: skillProfile.puckSkillsRating,
+            hockeySenseRating: skillProfile.hockeySenseRating,
+            conditioningRating: skillProfile.conditioningRating,
+            levelPlayed: skillProfile.levelPlayed,
+            peerComparison: skillProfile.peerComparison,
+            confidenceLevel: skillProfile.confidenceLevel,
             isGoalie: false,
             joinedAt: new Date()
-        };
+        });
 
         waitlist.push(waitlistPlayer);
         await saveData();
@@ -2638,10 +2871,19 @@ app.post('/api/register-init', async (req, res) => {
         if (pool) {
             try {
                 await pool.query(
-                    `INSERT INTO waitlist (id, first_name, last_name, phone, payment_method, rating, is_goalie)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                    [waitlistPlayer.id, waitlistPlayer.firstName, waitlistPlayer.lastName, 
-                     waitlistPlayer.phone, waitlistPlayer.paymentMethod, waitlistPlayer.rating, false]
+                    `INSERT INTO waitlist (
+                        id, first_name, last_name, phone, payment_method, rating,
+                        skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating,
+                        level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating, final_rating, is_goalie
+                    )
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+                    [
+                        waitlistPlayer.id, waitlistPlayer.firstName, waitlistPlayer.lastName,
+                        waitlistPlayer.phone, waitlistPlayer.paymentMethod, waitlistPlayer.rating,
+                        waitlistPlayer.skatingRating, waitlistPlayer.puckSkillsRating, waitlistPlayer.hockeySenseRating, waitlistPlayer.conditioningRating,
+                        waitlistPlayer.levelPlayed, waitlistPlayer.peerComparison, waitlistPlayer.confidenceLevel,
+                        waitlistPlayer.selfRatingRaw, waitlistPlayer.derivedRating, waitlistPlayer.finalRating, false
+                    ]
                 );
             } catch (err) {
                 console.error('Error adding to waitlist:', err.message);
@@ -2662,8 +2904,8 @@ app.post('/api/register-init', async (req, res) => {
         }
     }
 
-    res.json({ 
-        success: true, 
+    res.json({
+        success: true,
         proceedToRules: true,
         isGoalie: false,
         tempData: {
@@ -2671,7 +2913,17 @@ app.post('/api/register-init', async (req, res) => {
             lastName: cleanLastName,
             phone: cleanPhone,
             paymentMethod,
-            rating: ratingNum,
+            rating: skillProfile.finalRating,
+            finalRating: skillProfile.finalRating,
+            derivedRating: skillProfile.derivedRating,
+            selfRatingRaw: skillProfile.selfRatingRaw,
+            skatingRating: skillProfile.skatingRating,
+            puckSkillsRating: skillProfile.puckSkillsRating,
+            hockeySenseRating: skillProfile.hockeySenseRating,
+            conditioningRating: skillProfile.conditioningRating,
+            levelPlayed: skillProfile.levelPlayed,
+            peerComparison: skillProfile.peerComparison,
+            confidenceLevel: skillProfile.confidenceLevel,
             isGoalie: false
         }
     });
@@ -3651,27 +3903,37 @@ app.post('/api/admin/add-player', async (req, res) => {
     }
 
     const formattedPhone = formatPhoneNumber(phone);
-    const ratingNum = parseInt(rating) || 5;
+    const ratingNum = roundRating(parseFloat(rating) || 5);
     const isGoalieBool = isGoalie || false;
 
     if (toWaitlist) {
-        const waitlistPlayer = {
+        const waitlistPlayer = hydratePlayerRatingProfile({
             id: Date.now(),
             firstName: cleanFirstName,
             lastName: cleanLastName,
             phone: formattedPhone,
             paymentMethod: paymentMethod || 'Cash',
             rating: ratingNum,
+            derivedRating: ratingNum,
+            finalRating: ratingNum,
+            selfRatingRaw: ratingNum,
             isGoalie: isGoalieBool,
             joinedAt: new Date()
-        };
+        });
         
         try {
             await pool.query(
-                `INSERT INTO waitlist (id, first_name, last_name, phone, payment_method, rating, is_goalie)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                `INSERT INTO waitlist (
+                    id, first_name, last_name, phone, payment_method, rating,
+                    skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating,
+                    level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating, final_rating, is_goalie
+                )
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
                 [waitlistPlayer.id, waitlistPlayer.firstName, waitlistPlayer.lastName,
-                 waitlistPlayer.phone, waitlistPlayer.paymentMethod, waitlistPlayer.rating, isGoalieBool]
+                 waitlistPlayer.phone, waitlistPlayer.paymentMethod, waitlistPlayer.rating,
+                 waitlistPlayer.skatingRating, waitlistPlayer.puckSkillsRating, waitlistPlayer.hockeySenseRating, waitlistPlayer.conditioningRating,
+                 waitlistPlayer.levelPlayed, waitlistPlayer.peerComparison, waitlistPlayer.confidenceLevel,
+                 waitlistPlayer.selfRatingRaw, waitlistPlayer.derivedRating, waitlistPlayer.finalRating, isGoalieBool]
             );
             waitlist.push(waitlistPlayer);
         } catch (err) {
@@ -3686,7 +3948,7 @@ app.post('/api/admin/add-player', async (req, res) => {
             return res.status(400).json({ error: "Goalie spots are full (maximum 2)." });
         }
         
-        const newPlayer = {
+        const newPlayer = hydratePlayerRatingProfile({
             id: Date.now(),
             firstName: cleanFirstName,
             lastName: cleanLastName,
@@ -3695,16 +3957,27 @@ app.post('/api/admin/add-player', async (req, res) => {
             paid: isGoalieBool ? true : false,
             paidAmount: isGoalieBool ? 0 : null,
             rating: ratingNum,
+            derivedRating: ratingNum,
+            finalRating: ratingNum,
+            selfRatingRaw: ratingNum,
             isGoalie: isGoalieBool,
             team: null
-        };
+        });
         
         try {
             await pool.query(
-                `INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                `INSERT INTO players (
+                    id, first_name, last_name, phone, payment_method, paid, paid_amount, rating,
+                    skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating,
+                    level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating,
+                    admin_rating, admin_adjustment, final_rating, is_goalie, team
+                )
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
                 [newPlayer.id, newPlayer.firstName, newPlayer.lastName, newPlayer.phone,
-                 newPlayer.paymentMethod, newPlayer.paid, newPlayer.paidAmount, newPlayer.rating, isGoalieBool, null]
+                 newPlayer.paymentMethod, newPlayer.paid, newPlayer.paidAmount, newPlayer.rating,
+                 newPlayer.skatingRating, newPlayer.puckSkillsRating, newPlayer.hockeySenseRating, newPlayer.conditioningRating,
+                 newPlayer.levelPlayed, newPlayer.peerComparison, newPlayer.confidenceLevel, newPlayer.selfRatingRaw,
+                 newPlayer.derivedRating, newPlayer.adminRating, newPlayer.adminAdjustment, newPlayer.finalRating, isGoalieBool, null]
             );
             players.push(newPlayer);
             
@@ -3843,7 +4116,7 @@ app.post('/api/admin/update-paid-amount', async (req, res) => {
     }
 });
 
-// FIX: Store old rating before updating
+// Admin override for final player rating
 app.post('/api/admin/update-rating', async (req, res) => {
     const { password, sessionToken, playerId, newRating } = req.body;
 
@@ -3851,23 +4124,37 @@ app.post('/api/admin/update-rating', async (req, res) => {
         return res.status(401).send("Unauthorized");
     }
 
-    const ratingNum = parseInt(newRating);
-    if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 10) {
+    const ratingNum = roundRating(parseFloat(newRating));
+    if (!Number.isFinite(ratingNum) || ratingNum < 1 || ratingNum > 10) {
         return res.status(400).json({ error: "Rating must be a number between 1 and 10" });
     }
 
-    const player = players.find(p => p.id === parseInt(playerId));
+    const player = players.find(p => p.id === parseInt(playerId)) || waitlist.find(p => p.id === parseInt(playerId));
     if (!player) {
         return res.status(404).json({ error: "Player not found" });
     }
 
-    const oldRating = player.rating; // Store old rating before update
+    const oldRating = roundRating(player.finalRating ?? player.rating ?? 5);
+    const derivedRating = roundRating(player.derivedRating ?? oldRating);
+    player.adminRating = ratingNum;
+    player.adminAdjustment = roundRating(ratingNum - derivedRating);
+    player.finalRating = ratingNum;
     player.rating = ratingNum;
 
     try {
-        await pool.query('UPDATE players SET rating = $1 WHERE id = $2', [ratingNum, player.id]);
+        if (players.some(p => p.id === player.id)) {
+            await pool.query(
+                'UPDATE players SET rating = $1, admin_rating = $2, admin_adjustment = $3, final_rating = $4 WHERE id = $5',
+                [ratingNum, player.adminRating, player.adminAdjustment, player.finalRating, player.id]
+            );
+        } else if (waitlist.some(p => p.id === player.id)) {
+            await pool.query(
+                'UPDATE waitlist SET rating = $1, final_rating = $2 WHERE id = $3',
+                [ratingNum, player.finalRating, player.id]
+            );
+        }
         saveData();
-        res.json({ success: true, player, oldRating: oldRating, newRating: ratingNum });
+        res.json({ success: true, player: hydratePlayerRatingProfile(player), oldRating: oldRating, newRating: ratingNum });
     } catch (err) {
         console.error('Error updating rating:', err);
         res.status(500).json({ error: "Database error" });

@@ -1858,6 +1858,7 @@
                     <th>Name</th>
                     <th>Phone</th>
                     <th>Rating</th>
+                    <th>Profile</th>
                     <th>Payment</th>
                     <th>Paid ($) <span id="totalPaidDisplay" class="total-paid-display">($0.00)</span></th>
                     <th>Action</th>
@@ -1875,6 +1876,7 @@
                         <th>Name</th>
                         <th>Phone</th>
                         <th>Rating</th>
+                        <th>Profile</th>
                         <th>Action</th>
                     </tr>
                 </thead>
@@ -3467,11 +3469,16 @@
                             <td>${p.phone}</td>
                             <td>
                                 <div style="display:flex;align-items:center;gap:5px;">
-                                    <input type="number" id="rating-${p.id}" value="${p.rating}" min="1" max="10" 
-                                        style="width:50px;padding:5px;background:#3d3d3d;border:1px solid #555;color:white;border-radius:3px;text-align:center;"
+                                    <input type="number" id="rating-${p.id}" value="${Number(p.finalRating ?? p.rating ?? 5).toFixed(1)}" min="1" max="10" step="0.1" 
+                                        style="width:62px;padding:5px;background:#3d3d3d;border:1px solid #555;color:white;border-radius:3px;text-align:center;"
                                         onchange="updateRating(${p.id}, this.value)">
                                     <span>/10</span>
                                 </div>
+                            </td>
+                            <td style="font-size:0.8rem; color:#bbb; line-height:1.35;">
+                                Self ${Number(p.selfRatingRaw ?? p.finalRating ?? p.rating ?? 5).toFixed(1)}<br>
+                                Derived ${Number(p.derivedRating ?? p.finalRating ?? p.rating ?? 5).toFixed(1)}<br>
+                                Admin ${p.adminRating == null ? '—' : Number(p.adminRating).toFixed(1)}
                             </td>
                             <td>${p.isGoalie ? 'N/A' : p.paymentMethod}</td>
                             <td>${paidInput}</td>
@@ -3498,11 +3505,15 @@
                             <td>${p.phone}</td>
                             <td>
                                 <div style="display:flex;align-items:center;gap:5px;">
-                                    <input type="number" id="rating-${p.id}" value="${p.rating}" min="1" max="10" 
-                                        style="width:50px;padding:5px;background:#3d3d3d;border:1px solid #555;color:white;border-radius:3px;text-align:center;"
+                                    <input type="number" id="rating-${p.id}" value="${Number(p.finalRating ?? p.rating ?? 5).toFixed(1)}" min="1" max="10" step="0.1" 
+                                        style="width:62px;padding:5px;background:#3d3d3d;border:1px solid #555;color:white;border-radius:3px;text-align:center;"
                                         onchange="updateRating(${p.id}, this.value)">
                                     <span>/10</span>
                                 </div>
+                            </td>
+                            <td style="font-size:0.8rem; color:#bbb; line-height:1.35;">
+                                Self ${Number(p.selfRatingRaw ?? p.finalRating ?? p.rating ?? 5).toFixed(1)}<br>
+                                Derived ${Number(p.derivedRating ?? p.finalRating ?? p.rating ?? 5).toFixed(1)}
                             </td>
                             <td>
                                 <button class="promote-btn" data-player-id="${p.id}">Promote</button>
@@ -3696,7 +3707,7 @@
         }
 
         async function updateRating(id, newRating) {
-            const ratingNum = parseInt(newRating);
+            const ratingNum = parseFloat(newRating);
             if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 10) {
                 alert("Rating must be between 1 and 10");
                 loadData();
@@ -3712,7 +3723,7 @@
 
                 if (res.ok) {
                     const data = await res.json();
-                    console.log(`Updated ${data.player.firstName} ${data.player.lastName} rating to ${data.player.rating}`);
+                    console.log(`Updated ${data.player.firstName} ${data.player.lastName} final rating to ${data.player.finalRating ?? data.player.rating}`);
                 } else if (res.status === 401) {
                     logout();
                 } else {
