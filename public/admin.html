@@ -1408,6 +1408,14 @@
             <h3>📝 Recent Admin Activity</h3>
             <div id="adminAuditLog" style="color:#cfcfcf; line-height:1.7;">Loading activity...</div>
         </div>
+
+        <div class="control-box" style="border-color:#009688;">
+            <h3>🩺 System Monitor</h3>
+            <div id="systemMonitorStatus" style="color:#cfcfcf; line-height:1.7;">Loading system status...</div>
+            <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="control-btn" onclick="loadSystemStatus()" style="background:#009688;">Refresh Monitor</button>
+            </div>
+        </div>
         
         <div class="success-message" id="releaseSuccess">
             ✅ Roster Released Successfully! Players can now see the teams.
@@ -2348,6 +2356,7 @@
             // re-run the existing settings refresh flow
             try {
                 await loadAdminData();
+                await loadSystemStatus();
             } catch(e) {
                 console.error(e);
             }
@@ -2424,6 +2433,42 @@
             }
         }
 
+        async function loadSystemStatus() {
+            const el = document.getElementById('systemMonitorStatus');
+            if (!el || !sessionToken) return;
+            try {
+                const res = await adminFetch(`${API_URL}/api/admin/system-status`);
+                if (!res.ok) {
+                    el.textContent = 'Unable to load system status.';
+                    return;
+                }
+                const data = await res.json();
+                const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+                const warningHtml = warnings.length
+                    ? `<div style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,.08); color:${warnings.length ? '#ffb347' : '#8bc34a'};"><strong>${warnings.length ? 'Warnings' : 'Healthy'}</strong><br>${warnings.map(w => `• ${w}`).join('<br>')}</div>`
+                    : `<div style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,.08); color:#8bc34a;"><strong>No active warnings</strong></div>`;
+
+                const dbSummary = data.database
+                    ? `${data.database.mode}${data.database.ok === false ? ' (connection issue)' : ''}${data.database.latencyMs != null ? ` • ${data.database.latencyMs} ms` : ''}`
+                    : 'Unknown';
+
+                el.innerHTML = `
+                    <strong>Database:</strong> ${dbSummary}<br>
+                    <strong>Last scheduler run:</strong> ${formatDateTime(data.scheduler?.lastRunAt)}${data.scheduler?.lastDurationMs != null ? ` • ${data.scheduler.lastDurationMs} ms` : ''}<br>
+                    <strong>Last cron heartbeat:</strong> ${formatDateTime(data.heartbeat?.lastCronHeartbeatAt)}<br>
+                    <strong>Last health ping:</strong> ${formatDateTime(data.heartbeat?.lastHealthPingAt)}<br>
+                    <strong>Players / Waitlist:</strong> ${data.counts?.players ?? 0} / ${data.counts?.waitlist ?? 0}<br>
+                    <strong>Backup snapshot:</strong> ${data.consistency?.backupExists ? 'Present' : 'Missing'} • Players ${data.consistency?.backupPlayers ?? 0} • Waitlist ${data.consistency?.backupWaitlist ?? 0}<br>
+                    <strong>Backup saved:</strong> ${formatDateTime(data.consistency?.backupSavedAt)}<br>
+                    <strong>Memory:</strong> RSS ${data.process?.rssMb ?? 0} MB • Heap ${data.process?.heapUsedMb ?? 0}/${data.process?.heapTotalMb ?? 0} MB
+                    ${warningHtml}
+                `;
+            } catch (err) {
+                console.error(err);
+                el.textContent = 'Unable to load system status.';
+            }
+        }
+
         async function checkSession() {
             if (!sessionToken) {
                 showLogin();
@@ -2444,6 +2489,8 @@
                     loadPaymentReportSnapshots();
                     loadSessionInfo();
                     loadAuditLog();
+                    loadSystemStatus();
+                    loadSystemStatus();
                     setTimeout(loadHistoryList, 500);
                 } else {
                     clearStoredSessionToken();
@@ -2486,6 +2533,8 @@
                     loadPaymentReportSnapshots();
                     loadSessionInfo();
                     loadAuditLog();
+                    loadSystemStatus();
+                    loadSystemStatus();
                     setTimeout(loadHistoryList, 500);
                 } else {
                     const errorMsg = document.getElementById('errorMsg');
@@ -4052,6 +4101,9 @@
 
         initializeEnhancedDateTimeControls();
         checkSession();
+        setInterval(() => {
+            if (sessionToken) loadSystemStatus();
+        }, 60000);
     
         async function restoreBackupFromFile(event) {
             const file = event.target.files && event.target.files[0];

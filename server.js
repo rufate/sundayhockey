@@ -54,8 +54,10 @@ async function pingDatabase() {
     const startedAt = Date.now();
     try {
         await pool.query('SELECT 1');
+        consecutiveDbFailures = 0;
         return { ok: true, mode: 'postgres', latencyMs: Date.now() - startedAt };
     } catch (err) {
+        consecutiveDbFailures += 1;
         console.error('Database ping failed:', err.message);
         return { ok: false, mode: 'postgres', latencyMs: Date.now() - startedAt, error: err.message };
     }
@@ -1227,10 +1229,18 @@ async function checkWeeklyReset() {
 const CHECK_INTERVAL = process.env.NODE_ENV === 'production' ? 15000 : 5000;
 let schedulerRunning = false;
 let lastSchedulerMinuteKey = null;
+let lastSchedulerRunAt = null;
+let lastSchedulerDurationMs = null;
+let lastSchedulerError = '';
+let lastCronHeartbeatAt = null;
+let lastHealthPingAt = null;
+let lastCronUserAgent = '';
+let consecutiveDbFailures = 0;
 
 async function runSchedulerTick() {
     if (schedulerRunning) return;
 
+    const startedAt = Date.now();
     const etTime = getCurrentETTime();
     const minuteKey = nowETMinuteKey(etTime);
     if (process.env.NODE_ENV === 'production' && lastSchedulerMinuteKey === minuteKey) return;
@@ -1244,8 +1254,14 @@ async function runSchedulerTick() {
         await autoReleaseRoster();
         await checkWeeklyReset();
         await saveData();
+        lastSchedulerRunAt = new Date().toISOString();
+        lastSchedulerDurationMs = Date.now() - startedAt;
+        lastSchedulerError = '';
     } catch (err) {
         console.error('Scheduler tick error:', err);
+        lastSchedulerRunAt = new Date().toISOString();
+        lastSchedulerDurationMs = Date.now() - startedAt;
+        lastSchedulerError = err && err.message ? err.message : String(err || 'Unknown scheduler error');
     } finally {
         schedulerRunning = false;
     }
@@ -4052,7 +4068,118 @@ app.get('/api/admin/payment-reports/:id/download', async (req, res) => {
 });
 
 
+
+function readLocalBackupSummary() {
+    try {
+        if (!fs.existsSync(DATA_FILE)) {
+            return { exists: false, players: 0, waitlist: 0, savedAt: null };
+        }
+        const raw = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        return {
+            exists: true,
+            players: Array.isArray(raw.players) ? raw.players.length : 0,
+            waitlist: Array.isArray(raw.waitlist) ? raw.waitlist.length : 0,
+            savedAt: raw.savedAt || null
+        };
+    } catch (err) {
+        return {
+            exists: false,
+            players: 0,
+            waitlist: 0,
+            savedAt: null,
+            error: err.message
+        };
+    }
+}
+
+function getSystemWarnings(dbInfo, backupInfo) {
+    const warnings = [];
+    const nowMs = Date.now();
+
+    if (!lastSchedulerRunAt) {
+        warnings.push('Scheduler has not run yet on this process.');
+    } else if (nowMs - new Date(lastSchedulerRunAt).getTime() > 10 * 60 * 1000) {
+        warnings.push('Scheduler has not run in the last 10 minutes.');
+    }
+
+    if (lastCronHeartbeatAt && nowMs - new Date(lastCronHeartbeatAt).getTime() > 10 * 60 * 1000) {
+        warnings.push('No cron heartbeat received in the last 10 minutes.');
+    }
+
+    if (dbInfo && dbInfo.mode === 'postgres' && !dbInfo.ok) {
+        warnings.push('Postgres ping failed. Running app may be degraded until Neon reconnects.');
+    }
+
+    if (consecutiveDbFailures >= 3) {
+        warnings.push(`Database ping has failed ${consecutiveDbFailures} times in a row.`);
+    }
+
+    if (backupInfo && backupInfo.exists) {
+        if (backupInfo.players !== players.length || backupInfo.waitlist !== waitlist.length) {
+            warnings.push('Local backup counts do not match in-memory counts yet.');
+        }
+    } else {
+        warnings.push('Local backup file is missing.');
+    }
+
+    return warnings;
+}
+
+app.get('/api/admin/system-status', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const db = await pingDatabase();
+    const backup = readLocalBackupSummary();
+    const mem = process.memoryUsage();
+
+    return res.json({
+        ok: db.ok || db.mode === 'file',
+        database: db,
+        service: process.env.LEAGUE_NAME || 'hockey',
+        uptimeSeconds: Math.round(process.uptime()),
+        scheduler: {
+            running: schedulerRunning,
+            lastRunAt: lastSchedulerRunAt,
+            lastDurationMs: lastSchedulerDurationMs,
+            lastMinuteKey: lastSchedulerMinuteKey,
+            lastError: lastSchedulerError || null
+        },
+        heartbeat: {
+            lastCronHeartbeatAt,
+            lastHealthPingAt,
+            lastCronUserAgent
+        },
+        counts: {
+            players: players.length,
+            skaters: getPlayerCount(),
+            goalies: getGoalieCount(),
+            waitlist: waitlist.length,
+            playerSpotsRemaining: playerSpots
+        },
+        consistency: {
+            memoryPlayers: players.length,
+            memoryWaitlist: waitlist.length,
+            backupPlayers: backup.players,
+            backupWaitlist: backup.waitlist,
+            backupSavedAt: backup.savedAt,
+            backupExists: backup.exists
+        },
+        process: {
+            rssMb: Math.round(mem.rss / 1024 / 1024),
+            heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
+            heapTotalMb: Math.round(mem.heapTotal / 1024 / 1024),
+            nodeEnv: process.env.NODE_ENV || 'development'
+        },
+        warnings: getSystemWarnings(db, backup),
+        timestamp: new Date().toISOString()
+    });
+});
+
 app.get('/api/cron/heartbeat', async (req, res) => {
+    lastCronHeartbeatAt = new Date().toISOString();
+    lastCronUserAgent = req.headers['user-agent'] || '';
     await runSchedulerTick();
     const db = await pingDatabase();
     res.status(db.ok || db.mode === 'file' ? 200 : 503).json({
@@ -4068,12 +4195,15 @@ app.get('/api/cron/heartbeat', async (req, res) => {
 });
 
 app.head('/api/cron/heartbeat', async (req, res) => {
+    lastCronHeartbeatAt = new Date().toISOString();
+    lastCronUserAgent = req.headers['user-agent'] || '';
     await runSchedulerTick();
     res.sendStatus(200);
 });
 
 // Health check endpoint (for Render + cron-job.org)
 app.get('/health', async (req, res) => {
+    lastHealthPingAt = new Date().toISOString();
     await runSchedulerTick();
     const db = await pingDatabase();
     res.status(db.ok || db.mode === 'file' ? 200 : 503).json({
@@ -4093,6 +4223,7 @@ app.head('/health', (req, res) => {
 });
 
 app.get('/api/health', async (req, res) => {
+    lastHealthPingAt = new Date().toISOString();
     await runSchedulerTick();
     const db = await pingDatabase();
     res.status(db.ok || db.mode === 'file' ? 200 : 503).json({
@@ -4112,7 +4243,8 @@ app.head('/api/health', (req, res) => {
 });
 
 // Initialize and start
-initDatabase().then(() => {
+initDatabase().then(async () => {
+    await reconcileFromFileBackup();
     checkAutoLock();
     runSchedulerTick();
     
