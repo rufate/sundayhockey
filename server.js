@@ -919,17 +919,6 @@ function shouldBeLocked() {
 }
 
 function checkAutoLock() {
-    if (HARD_STOP_SAFE_MODE) {
-        refreshDynamicSignupCode();
-        return {
-            requirePlayerCode,
-            manualOverride,
-            manualOverrideState,
-            isLockedWindow: false,
-            rosterReleased,
-            safeMode: true
-        };
-    }
     refreshDynamicSignupCode();
     const etTime = getCurrentETTime();
 
@@ -1001,7 +990,12 @@ function checkAutoLock() {
 
 // Auto-release roster using recurring weekly ET schedule
 async function autoReleaseRoster() {
-    if (HARD_STOP_SAFE_MODE) return false;
+    writeAudit('autoReleaseRoster:start', {
+        rosterReleaseEnabled: !!(rosterReleaseSchedule && rosterReleaseSchedule.enabled),
+        rosterReleaseAt,
+        lastExactRosterReleaseRunAt
+    });
+
     const etTime = getCurrentETTime();
 
     if (!rosterReleaseSchedule || !rosterReleaseSchedule.enabled) return false;
@@ -1014,7 +1008,10 @@ async function autoReleaseRoster() {
         etTime,
         Number(process.env.ROSTER_RELEASE_CATCHUP_MINUTES || (31 * 60))
     );
-    if (!releaseCheck.shouldRun) return false;
+    if (!releaseCheck.shouldRun) {
+        writeAudit('autoReleaseRoster:skip', { reason: releaseCheck.reason, lagMinutes: releaseCheck.lagMinutes });
+        return false;
+    }
 
     lastExactRosterReleaseRunAt = releaseCheck.occurrenceKey;
     lastExactRosterReleaseMinuteKey = releaseCheck.minuteKey;
@@ -1059,9 +1056,16 @@ async function autoReleaseRoster() {
         }
 
         await saveData();
+        writeAudit('autoReleaseRoster:completed', {
+            occurrenceKey: releaseCheck.occurrenceKey,
+            minuteKey: releaseCheck.minuteKey,
+            whiteCount: teams.whiteTeam.length,
+            darkCount: teams.darkTeam.length
+        });
         return true;
     } catch (error) {
         console.error('Auto-release error:', error);
+        writeAudit('autoReleaseRoster:error', { error: error.message || String(error) });
         return false;
     }
 }
@@ -1114,6 +1118,9 @@ async function addAutoPlayers() {
             }
 
             players.push(newPlayer);
+            writeAudit('player_registered', {
+                player: { id: newPlayer.id, name: `${newPlayer.firstName} ${newPlayer.lastName}`, phone: newPlayer.phone, isGoalie: !!newPlayer.isGoalie }
+            });
 
             if (!autoPlayer.isGoalie) {
                 playerSpots = Math.max(0, playerSpots - 1);
@@ -1136,7 +1143,6 @@ async function addAutoPlayers() {
 
 
 function checkMaintenanceModeSchedule() {
-    if (HARD_STOP_SAFE_MODE) return false;
     const etTime = getCurrentETTime();
     const day = etTime.getDay();
     const hour = etTime.getHours();
@@ -1160,7 +1166,12 @@ function checkMaintenanceModeSchedule() {
 
 // Weekly reset using recurring weekly ET schedule
 async function checkWeeklyReset() {
-    if (HARD_STOP_SAFE_MODE) return false;
+    writeAudit('checkWeeklyReset:start', {
+        resetWeekScheduleEnabled: !!(resetWeekSchedule && resetWeekSchedule.enabled),
+        resetWeekAt,
+        lastExactResetRunAt
+    });
+
     const etTime = getCurrentETTime();
     const { week: currentWeek, year: currentYear } = getWeekNumber(etTime);
 
@@ -1173,11 +1184,15 @@ async function checkWeeklyReset() {
         etTime,
         Number(process.env.WEEKLY_RESET_CATCHUP_MINUTES || (18 * 60))
     );
-    if (!resetCheck.shouldRun) return false;
+    if (!resetCheck.shouldRun) {
+        writeAudit('checkWeeklyReset:skip', { reason: resetCheck.reason, lagMinutes: resetCheck.lagMinutes });
+        return false;
+    }
 
     const resetSafety = canSafelyRunWeeklyReset(etTime);
     if (!resetSafety.ok) {
         console.warn(`[SAFETY] Weekly reset skipped at ${resetCheck.minuteKey}: ${resetSafety.reason}`);
+        writeAudit('checkWeeklyReset:safety_block', { minuteKey: resetCheck.minuteKey, reason: resetSafety.reason });
         return false;
     }
 
@@ -1185,6 +1200,12 @@ async function checkWeeklyReset() {
     lastExactResetMinuteKey = resetCheck.minuteKey;
     await saveData();
 
+    writeAudit('checkWeeklyReset:about_to_clear', {
+        occurrenceKey: resetCheck.occurrenceKey,
+        minuteKey: resetCheck.minuteKey,
+        playersBefore: playerAuditSnapshot(players),
+        waitlistBefore: playerAuditSnapshot(waitlist)
+    });
     await savePaymentReportSnapshot('scheduled_reset');
 
     if (
@@ -1202,6 +1223,10 @@ async function checkWeeklyReset() {
     }
 
     playerSpots = 20;
+    writeAudit('manual_or_other_clear:before', {
+        playersBefore: playerAuditSnapshot(players),
+        waitlistBefore: playerAuditSnapshot(waitlist)
+    });
     players = [];
     waitlist = [];
     rosterReleased = false;
@@ -1237,12 +1262,16 @@ async function checkWeeklyReset() {
 
     await addAutoPlayers();
     await saveData();
+    writeAudit('checkWeeklyReset:completed', {
+        occurrenceKey: resetCheck.occurrenceKey,
+        minuteKey: resetCheck.minuteKey,
+        playersAfter: playerAuditSnapshot(players),
+        waitlistAfter: playerAuditSnapshot(waitlist)
+    });
     return true;
 }
 
 const CHECK_INTERVAL = process.env.NODE_ENV === 'production' ? 15000 : 5000;
-const HARD_STOP_SAFE_MODE = String(process.env.HARD_STOP_SAFE_MODE || 'true').toLowerCase() !== 'false';
-const HARD_STOP_SAFE_MODE_REASON = 'Automatic schedules are disabled in hard-stop safe mode. Admin manual actions still work.';
 let schedulerRunning = false;
 let lastSchedulerMinuteKey = null;
 let lastSchedulerRunAt = null;
@@ -1255,18 +1284,6 @@ let consecutiveDbFailures = 0;
 
 async function runSchedulerTick() {
     if (schedulerRunning) return;
-    if (HARD_STOP_SAFE_MODE) {
-        const startedAt = Date.now();
-        schedulerRunning = true;
-        try {
-            lastSchedulerRunAt = new Date().toISOString();
-            lastSchedulerDurationMs = Date.now() - startedAt;
-            lastSchedulerError = '';
-        } finally {
-            schedulerRunning = false;
-        }
-        return;
-    }
 
     const startedAt = Date.now();
     const etTime = getCurrentETTime();
@@ -1614,6 +1631,49 @@ async function saveData() {
 
 const DATA_FILE = './data.json';
 const SETTINGS_BACKUP_FILE = './app-settings.backup.json';
+
+const AUDIT_LOG_FILE = './write-audit.log';
+const MAX_AUDIT_LINES = Number(process.env.MAX_AUDIT_LINES || 5000);
+
+function safeAuditWrite(line) {
+    try {
+        fs.appendFileSync(AUDIT_LOG_FILE, line + "\n");
+        try {
+            const data = fs.readFileSync(AUDIT_LOG_FILE, 'utf8').split(/\r?\n/).filter(Boolean);
+            if (data.length > MAX_AUDIT_LINES) {
+                fs.writeFileSync(AUDIT_LOG_FILE, data.slice(-MAX_AUDIT_LINES).join("\n") + "\n");
+            }
+        } catch {}
+    } catch (err) {
+        console.error('Audit log write failed:', err.message);
+    }
+}
+
+function writeAudit(event, details = {}) {
+    const line = JSON.stringify({
+        at: new Date().toISOString(),
+        event,
+        playersCount: Array.isArray(players) ? players.length : null,
+        waitlistCount: Array.isArray(waitlist) ? waitlist.length : null,
+        rosterReleased: typeof rosterReleased !== 'undefined' ? rosterReleased : null,
+        gameTime: typeof gameTime !== 'undefined' ? gameTime : null,
+        gameDate: typeof gameDate !== 'undefined' ? gameDate : null,
+        ...details
+    });
+    safeAuditWrite(line);
+}
+
+function playerAuditSnapshot(list) {
+    if (!Array.isArray(list)) return [];
+    return list.map(p => ({
+        id: p.id,
+        name: `${p.firstName || ''} ${p.lastName || ''}`.trim(),
+        phone: p.phone || '',
+        isGoalie: !!p.isGoalie,
+        team: p.team || null
+    }));
+}
+
 
 
 function buildFullDataSnapshot() {
@@ -4603,6 +4663,38 @@ app.head('/api/health', (req, res) => {
 });
 
 // Initialize and start
+
+app.get('/api/admin/audit-log', (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+        if (!fs.existsSync(AUDIT_LOG_FILE)) {
+            return res.json({ lines: [] });
+        }
+        const lines = fs.readFileSync(AUDIT_LOG_FILE, 'utf8')
+            .split(/\r?\n/)
+            .filter(Boolean)
+            .slice(-300)
+            .map(line => {
+                try { return JSON.parse(line); } catch { return { raw: line }; }
+            });
+        res.json({ lines });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to read audit log' });
+    }
+});
+
+app.get('/api/admin/audit-log/download', (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (!fs.existsSync(AUDIT_LOG_FILE)) {
+        return res.status(404).send('No audit log yet');
+    }
+    res.download(AUDIT_LOG_FILE, 'write-audit.log');
+});
+
 initDatabase().then(async () => {
     await reconcileFromFileBackup();
     checkAutoLock();
