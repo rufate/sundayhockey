@@ -221,7 +221,7 @@ let lastExactRosterReleaseRunAt = '';
 let lastExactResetMinuteKey = '';
 let lastExactRosterReleaseMinuteKey = '';
 
-const AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME = true;
+const AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME = false;
 const AUTO_SCHEDULE_LOCK_HOUR = 17;
 const AUTO_SCHEDULE_LOCK_MINUTE = 0;
 const AUTO_SCHEDULE_RESET_HOUR = 0;
@@ -1955,6 +1955,32 @@ const CONFIDENCE_WEIGHT_MAP = {
 };
 
 function normalizeSkillProfile(input = {}) {
+    const ratingMode = String(input.ratingMode || '').toLowerCase() === 'direct' ? 'direct' : 'profile';
+
+    if (ratingMode === 'direct') {
+        const directRatingNum = Number(input.directRating ?? input.rating);
+        const missing = [];
+        if (!Number.isFinite(directRatingNum)) missing.push('direct rating');
+        const directRating = roundRating(directRatingNum);
+        return {
+            ratingMode: 'direct',
+            directRating,
+            skatingRating: null,
+            puckSkillsRating: null,
+            hockeySenseRating: null,
+            conditioningRating: null,
+            levelPlayed: '',
+            peerComparison: '',
+            confidenceLevel: '',
+            selfRatingRaw: directRating,
+            derivedRating: directRating,
+            finalRating: directRating,
+            adminRating: null,
+            adminAdjustment: 0,
+            missing
+        };
+    }
+
     const skating = clampRating(input.skatingRating);
     const puckSkills = clampRating(input.puckSkillsRating);
     const hockeySense = clampRating(input.hockeySenseRating);
@@ -1986,6 +2012,8 @@ function normalizeSkillProfile(input = {}) {
     const derivedRating = roundRating((baseSkill * weights.selfWeight) + (levelMapped * weights.levelWeight) + peerAdjustment);
 
     return {
+        ratingMode: 'profile',
+        directRating: null,
         skatingRating: skating,
         puckSkillsRating: puckSkills,
         hockeySenseRating: hockeySense,
@@ -2801,7 +2829,9 @@ app.post('/api/register-init', async (req, res) => {
         conditioningRating,
         levelPlayed,
         peerComparison,
-        confidenceLevel
+        confidenceLevel,
+        ratingMode,
+        directRating
     } = req.body;
 
     if (rosterReleased) {
@@ -2831,7 +2861,10 @@ app.post('/api/register-init', async (req, res) => {
         conditioningRating,
         levelPlayed,
         peerComparison,
-        confidenceLevel
+        confidenceLevel,
+        ratingMode,
+        directRating,
+        rating
     });
 
     if (skillProfile.missing.length > 0) {
@@ -2924,6 +2957,8 @@ app.post('/api/register-init', async (req, res) => {
             levelPlayed: skillProfile.levelPlayed,
             peerComparison: skillProfile.peerComparison,
             confidenceLevel: skillProfile.confidenceLevel,
+            ratingMode: skillProfile.ratingMode,
+            directRating: skillProfile.directRating,
             isGoalie: false
         }
     });
@@ -2944,7 +2979,7 @@ app.post('/api/register-final', async (req, res) => {
         return res.status(400).json({ error: "A player with this name or phone number is already registered." });
     }
     
-    const newPlayer = {
+    const newPlayer = hydratePlayerRatingProfile({
         id: Date.now(),
         firstName: tempData.firstName,
         lastName: tempData.lastName,
@@ -2952,12 +2987,22 @@ app.post('/api/register-final', async (req, res) => {
         paymentMethod: tempData.paymentMethod,
         paid: false,
         paidAmount: null,
-        rating: parseInt(tempData.rating) || 5,
+        rating: tempData.rating,
+        skatingRating: tempData.skatingRating,
+        puckSkillsRating: tempData.puckSkillsRating,
+        hockeySenseRating: tempData.hockeySenseRating,
+        conditioningRating: tempData.conditioningRating,
+        levelPlayed: tempData.levelPlayed,
+        peerComparison: tempData.peerComparison,
+        confidenceLevel: tempData.confidenceLevel,
+        selfRatingRaw: tempData.selfRatingRaw,
+        derivedRating: tempData.derivedRating,
+        finalRating: tempData.finalRating,
         isGoalie: false,
         team: null,
         registeredAt: new Date().toISOString(),
         rulesAgreed: true
-    };
+    });
 
     players.push(newPlayer);
     playerSpots = Math.max(0, playerSpots - 1);
@@ -2966,10 +3011,18 @@ app.post('/api/register-final', async (req, res) => {
     if (pool) {
         try {
             await pool.query(
-                `INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team, rules_agreed)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                `INSERT INTO players (
+                    id, first_name, last_name, phone, payment_method, paid, paid_amount, rating,
+                    skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating,
+                    level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating,
+                    admin_rating, admin_adjustment, final_rating, is_goalie, team, rules_agreed
+                )
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
                 [newPlayer.id, newPlayer.firstName, newPlayer.lastName, newPlayer.phone,
-                 newPlayer.paymentMethod, newPlayer.paid, newPlayer.paidAmount, newPlayer.rating, false, null, true]
+                 newPlayer.paymentMethod, newPlayer.paid, newPlayer.paidAmount, newPlayer.rating,
+                 newPlayer.skatingRating, newPlayer.puckSkillsRating, newPlayer.hockeySenseRating, newPlayer.conditioningRating,
+                 newPlayer.levelPlayed, newPlayer.peerComparison, newPlayer.confidenceLevel, newPlayer.selfRatingRaw,
+                 newPlayer.derivedRating, newPlayer.adminRating, newPlayer.adminAdjustment, newPlayer.finalRating, false, null, true]
             );
         } catch (err) {
             console.error('Error saving player to database, preserved in local backup:', err.message);
@@ -3282,24 +3335,16 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
         }
         if (selectedDayTime) {
             gameTime = selectedDayTime;
-            if (AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME) {
-                gameDate = newGameDate || calculateNextGameDate();
-                buildAutoSchedulesFromGameTime(gameTime, gameDate);
-                const guardTime = getCurrentETTime();
-                const resetGuard = armScheduleGuardForCurrentWeek(resetWeekSchedule.at, guardTime);
-                const rosterGuard = armScheduleGuardForCurrentWeek(rosterReleaseSchedule.at, guardTime);
-                lastExactResetRunAt = resetGuard.occurrenceKey;
-                lastExactResetMinuteKey = resetGuard.minuteKey;
-                lastExactRosterReleaseRunAt = rosterGuard.occurrenceKey;
-                lastExactRosterReleaseMinuteKey = rosterGuard.minuteKey;
+            // IMPORTANT: changing the displayed game day/time must NOT silently re-arm
+            // recurring lock / roster-release / reset schedules. Those are controlled
+            // only through the dedicated schedule editor.
+            if (!newGameDate) {
+                gameDate = calculateNextGameDate();
             }
         }
         if (selectedArena) gameLocation = selectedArena;
         if (newGameDate) {
             gameDate = newGameDate;
-            if (AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME) {
-                buildAutoSchedulesFromGameTime(gameTime, gameDate);
-            }
         }
 
         await saveAppSetting('maintenanceMode', maintenanceMode.toString());
