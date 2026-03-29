@@ -919,6 +919,17 @@ function shouldBeLocked() {
 }
 
 function checkAutoLock() {
+    if (HARD_STOP_SAFE_MODE) {
+        refreshDynamicSignupCode();
+        return {
+            requirePlayerCode,
+            manualOverride,
+            manualOverrideState,
+            isLockedWindow: false,
+            rosterReleased,
+            safeMode: true
+        };
+    }
     refreshDynamicSignupCode();
     const etTime = getCurrentETTime();
 
@@ -990,6 +1001,7 @@ function checkAutoLock() {
 
 // Auto-release roster using recurring weekly ET schedule
 async function autoReleaseRoster() {
+    if (HARD_STOP_SAFE_MODE) return false;
     const etTime = getCurrentETTime();
 
     if (!rosterReleaseSchedule || !rosterReleaseSchedule.enabled) return false;
@@ -1124,6 +1136,7 @@ async function addAutoPlayers() {
 
 
 function checkMaintenanceModeSchedule() {
+    if (HARD_STOP_SAFE_MODE) return false;
     const etTime = getCurrentETTime();
     const day = etTime.getDay();
     const hour = etTime.getHours();
@@ -1147,6 +1160,7 @@ function checkMaintenanceModeSchedule() {
 
 // Weekly reset using recurring weekly ET schedule
 async function checkWeeklyReset() {
+    if (HARD_STOP_SAFE_MODE) return false;
     const etTime = getCurrentETTime();
     const { week: currentWeek, year: currentYear } = getWeekNumber(etTime);
 
@@ -1227,6 +1241,8 @@ async function checkWeeklyReset() {
 }
 
 const CHECK_INTERVAL = process.env.NODE_ENV === 'production' ? 15000 : 5000;
+const HARD_STOP_SAFE_MODE = String(process.env.HARD_STOP_SAFE_MODE || 'true').toLowerCase() !== 'false';
+const HARD_STOP_SAFE_MODE_REASON = 'Automatic schedules are disabled in hard-stop safe mode. Admin manual actions still work.';
 let schedulerRunning = false;
 let lastSchedulerMinuteKey = null;
 let lastSchedulerRunAt = null;
@@ -1239,6 +1255,18 @@ let consecutiveDbFailures = 0;
 
 async function runSchedulerTick() {
     if (schedulerRunning) return;
+    if (HARD_STOP_SAFE_MODE) {
+        const startedAt = Date.now();
+        schedulerRunning = true;
+        try {
+            lastSchedulerRunAt = new Date().toISOString();
+            lastSchedulerDurationMs = Date.now() - startedAt;
+            lastSchedulerError = '';
+        } finally {
+            schedulerRunning = false;
+        }
+        return;
+    }
 
     const startedAt = Date.now();
     const etTime = getCurrentETTime();
