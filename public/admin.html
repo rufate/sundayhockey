@@ -4129,15 +4129,76 @@
                     throw new Error('That file is not valid JSON.');
                 }
 
-                const playerCount = Array.isArray(backupData.players) ? backupData.players.length : 0;
-                const waitlistCount = Array.isArray(backupData.waitlist) ? backupData.waitlist.length : 0;
+                const backupPlayerCount = Array.isArray(backupData.players) ? backupData.players.length : 0;
+                const backupWaitlistCount = Array.isArray(backupData.waitlist) ? backupData.waitlist.length : 0;
 
-                const ok = confirm(
-                    `Restore this backup?\n\nPlayers: ${playerCount}\nWaitlist: ${waitlistCount}\n\nThis will overwrite the current live signup data.`
+                let currentPlayerCount = 0;
+                let currentWaitlistCount = 0;
+                try {
+                    const currentRes = await fetch(`${API_URL}/api/admin/players`, {
+                        method: 'POST',
+                        headers: getAdminHeaders(),
+                        body: JSON.stringify({ sessionToken })
+                    });
+                    const currentData = await currentRes.json();
+                    if (currentRes.ok) {
+                        currentPlayerCount = Array.isArray(currentData.players) ? currentData.players.length : (currentData.totalPlayers || 0);
+                        currentWaitlistCount = Array.isArray(currentData.waitlist) ? currentData.waitlist.length : 0;
+                    }
+                } catch (e) {
+                    console.warn('Could not load current counts before restore', e);
+                }
+
+                const useReplace = confirm(
+                    `Safer Restore Options
+
+` +
+                    `Current Live Data
+Players: ${currentPlayerCount}
+Waitlist: ${currentWaitlistCount}
+
+` +
+                    `Backup File
+Players: ${backupPlayerCount}
+Waitlist: ${backupWaitlistCount}
+
+` +
+                    `Press OK for FULL REPLACE.
+Press Cancel for SAFE MERGE (recommended).`
                 );
-                if (!ok) {
-                    event.target.value = '';
-                    return;
+
+                let forceReplace = false;
+                if (useReplace && (backupPlayerCount < currentPlayerCount || backupWaitlistCount < currentWaitlistCount)) {
+                    const typed = prompt(
+                        `SAFETY BLOCK
+
+This backup has fewer records than live data.
+` +
+                        `Type REPLACE to confirm you want to overwrite anyway.
+
+` +
+                        `Current players: ${currentPlayerCount} | Backup players: ${backupPlayerCount}
+` +
+                        `Current waitlist: ${currentWaitlistCount} | Backup waitlist: ${backupWaitlistCount}`
+                    );
+                    if (typed !== 'REPLACE') {
+                        alert('Replace cancelled. No data was changed.');
+                        event.target.value = '';
+                        return;
+                    }
+                    forceReplace = true;
+                }
+
+                let restoreSettings = false;
+                if (useReplace) {
+                    restoreSettings = confirm(
+                        `Also restore settings from the backup?
+
+` +
+                        `OK = restore game/settings too
+` +
+                        `Cancel = restore players/waitlist only (recommended)`
+                    );
                 }
 
                 const res = await fetch(`${API_URL}/api/admin/restore-backup`, {
@@ -4145,7 +4206,10 @@
                     headers: getAdminHeaders(),
                     body: JSON.stringify({
                         sessionToken: sessionToken,
-                        backupData: backupData
+                        backupData: backupData,
+                        restoreMode: useReplace ? 'replace' : 'merge',
+                        forceReplace,
+                        restoreSettings
                     })
                 });
 
@@ -4155,10 +4219,29 @@
                 } catch (e) {}
 
                 if (!res.ok) {
+                    if (res.status === 409 && data && data.error) {
+                        throw new Error(
+                            `${data.error}
+
+` +
+                            `Live players: ${data.currentPlayers} | Backup players: ${data.backupPlayers}
+` +
+                            `Live waitlist: ${data.currentWaitlist} | Backup waitlist: ${data.backupWaitlist}`
+                        );
+                    }
                     throw new Error((data && data.error) || 'Restore failed');
                 }
 
-                alert(`Backup restored successfully.\n\nPlayers: ${data.restoredPlayers}\nWaitlist: ${data.restoredWaitlist}`);
+                alert(
+                    `${data.message || 'Backup restore complete.'}
+
+` +
+                    `Mode: ${(data.mode || (useReplace ? 'replace' : 'merge')).toUpperCase()}
+` +
+                    `Players now: ${data.restoredPlayers}
+` +
+                    `Waitlist now: ${data.restoredWaitlist}`
+                );
                 loadData();
                 loadSettings();
                 loadAppSettings();

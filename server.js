@@ -221,7 +221,7 @@ let lastExactRosterReleaseRunAt = '';
 let lastExactResetMinuteKey = '';
 let lastExactRosterReleaseMinuteKey = '';
 
-const AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME = false;
+const AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME = true;
 const AUTO_SCHEDULE_LOCK_HOUR = 17;
 const AUTO_SCHEDULE_LOCK_MINUTE = 0;
 const AUTO_SCHEDULE_RESET_HOUR = 0;
@@ -990,12 +990,6 @@ function checkAutoLock() {
 
 // Auto-release roster using recurring weekly ET schedule
 async function autoReleaseRoster() {
-    writeAudit('autoReleaseRoster:start', {
-        rosterReleaseEnabled: !!(rosterReleaseSchedule && rosterReleaseSchedule.enabled),
-        rosterReleaseAt,
-        lastExactRosterReleaseRunAt
-    });
-
     const etTime = getCurrentETTime();
 
     if (!rosterReleaseSchedule || !rosterReleaseSchedule.enabled) return false;
@@ -1008,10 +1002,7 @@ async function autoReleaseRoster() {
         etTime,
         Number(process.env.ROSTER_RELEASE_CATCHUP_MINUTES || (31 * 60))
     );
-    if (!releaseCheck.shouldRun) {
-        writeAudit('autoReleaseRoster:skip', { reason: releaseCheck.reason, lagMinutes: releaseCheck.lagMinutes });
-        return false;
-    }
+    if (!releaseCheck.shouldRun) return false;
 
     lastExactRosterReleaseRunAt = releaseCheck.occurrenceKey;
     lastExactRosterReleaseMinuteKey = releaseCheck.minuteKey;
@@ -1056,16 +1047,9 @@ async function autoReleaseRoster() {
         }
 
         await saveData();
-        writeAudit('autoReleaseRoster:completed', {
-            occurrenceKey: releaseCheck.occurrenceKey,
-            minuteKey: releaseCheck.minuteKey,
-            whiteCount: teams.whiteTeam.length,
-            darkCount: teams.darkTeam.length
-        });
         return true;
     } catch (error) {
         console.error('Auto-release error:', error);
-        writeAudit('autoReleaseRoster:error', { error: error.message || String(error) });
         return false;
     }
 }
@@ -1118,9 +1102,6 @@ async function addAutoPlayers() {
             }
 
             players.push(newPlayer);
-            writeAudit('player_registered', {
-                player: { id: newPlayer.id, name: `${newPlayer.firstName} ${newPlayer.lastName}`, phone: newPlayer.phone, isGoalie: !!newPlayer.isGoalie }
-            });
 
             if (!autoPlayer.isGoalie) {
                 playerSpots = Math.max(0, playerSpots - 1);
@@ -1166,12 +1147,6 @@ function checkMaintenanceModeSchedule() {
 
 // Weekly reset using recurring weekly ET schedule
 async function checkWeeklyReset() {
-    writeAudit('checkWeeklyReset:start', {
-        resetWeekScheduleEnabled: !!(resetWeekSchedule && resetWeekSchedule.enabled),
-        resetWeekAt,
-        lastExactResetRunAt
-    });
-
     const etTime = getCurrentETTime();
     const { week: currentWeek, year: currentYear } = getWeekNumber(etTime);
 
@@ -1184,15 +1159,11 @@ async function checkWeeklyReset() {
         etTime,
         Number(process.env.WEEKLY_RESET_CATCHUP_MINUTES || (18 * 60))
     );
-    if (!resetCheck.shouldRun) {
-        writeAudit('checkWeeklyReset:skip', { reason: resetCheck.reason, lagMinutes: resetCheck.lagMinutes });
-        return false;
-    }
+    if (!resetCheck.shouldRun) return false;
 
     const resetSafety = canSafelyRunWeeklyReset(etTime);
     if (!resetSafety.ok) {
         console.warn(`[SAFETY] Weekly reset skipped at ${resetCheck.minuteKey}: ${resetSafety.reason}`);
-        writeAudit('checkWeeklyReset:safety_block', { minuteKey: resetCheck.minuteKey, reason: resetSafety.reason });
         return false;
     }
 
@@ -1200,12 +1171,6 @@ async function checkWeeklyReset() {
     lastExactResetMinuteKey = resetCheck.minuteKey;
     await saveData();
 
-    writeAudit('checkWeeklyReset:about_to_clear', {
-        occurrenceKey: resetCheck.occurrenceKey,
-        minuteKey: resetCheck.minuteKey,
-        playersBefore: playerAuditSnapshot(players),
-        waitlistBefore: playerAuditSnapshot(waitlist)
-    });
     await savePaymentReportSnapshot('scheduled_reset');
 
     if (
@@ -1223,10 +1188,6 @@ async function checkWeeklyReset() {
     }
 
     playerSpots = 20;
-    writeAudit('manual_or_other_clear:before', {
-        playersBefore: playerAuditSnapshot(players),
-        waitlistBefore: playerAuditSnapshot(waitlist)
-    });
     players = [];
     waitlist = [];
     rosterReleased = false;
@@ -1262,12 +1223,6 @@ async function checkWeeklyReset() {
 
     await addAutoPlayers();
     await saveData();
-    writeAudit('checkWeeklyReset:completed', {
-        occurrenceKey: resetCheck.occurrenceKey,
-        minuteKey: resetCheck.minuteKey,
-        playersAfter: playerAuditSnapshot(players),
-        waitlistAfter: playerAuditSnapshot(waitlist)
-    });
     return true;
 }
 
@@ -1631,49 +1586,6 @@ async function saveData() {
 
 const DATA_FILE = './data.json';
 const SETTINGS_BACKUP_FILE = './app-settings.backup.json';
-
-const AUDIT_LOG_FILE = './write-audit.log';
-const MAX_AUDIT_LINES = Number(process.env.MAX_AUDIT_LINES || 5000);
-
-function safeAuditWrite(line) {
-    try {
-        fs.appendFileSync(AUDIT_LOG_FILE, line + "\n");
-        try {
-            const data = fs.readFileSync(AUDIT_LOG_FILE, 'utf8').split(/\r?\n/).filter(Boolean);
-            if (data.length > MAX_AUDIT_LINES) {
-                fs.writeFileSync(AUDIT_LOG_FILE, data.slice(-MAX_AUDIT_LINES).join("\n") + "\n");
-            }
-        } catch {}
-    } catch (err) {
-        console.error('Audit log write failed:', err.message);
-    }
-}
-
-function writeAudit(event, details = {}) {
-    const line = JSON.stringify({
-        at: new Date().toISOString(),
-        event,
-        playersCount: Array.isArray(players) ? players.length : null,
-        waitlistCount: Array.isArray(waitlist) ? waitlist.length : null,
-        rosterReleased: typeof rosterReleased !== 'undefined' ? rosterReleased : null,
-        gameTime: typeof gameTime !== 'undefined' ? gameTime : null,
-        gameDate: typeof gameDate !== 'undefined' ? gameDate : null,
-        ...details
-    });
-    safeAuditWrite(line);
-}
-
-function playerAuditSnapshot(list) {
-    if (!Array.isArray(list)) return [];
-    return list.map(p => ({
-        id: p.id,
-        name: `${p.firstName || ''} ${p.lastName || ''}`.trim(),
-        phone: p.phone || '',
-        isGoalie: !!p.isGoalie,
-        team: p.team || null
-    }));
-}
-
 
 
 function buildFullDataSnapshot() {
@@ -3423,16 +3335,24 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
         }
         if (selectedDayTime) {
             gameTime = selectedDayTime;
-            // IMPORTANT: changing the displayed game day/time must NOT silently re-arm
-            // recurring lock / roster-release / reset schedules. Those are controlled
-            // only through the dedicated schedule editor.
-            if (!newGameDate) {
-                gameDate = calculateNextGameDate();
+            if (AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME) {
+                gameDate = newGameDate || calculateNextGameDate();
+                buildAutoSchedulesFromGameTime(gameTime, gameDate);
+                const guardTime = getCurrentETTime();
+                const resetGuard = armScheduleGuardForCurrentWeek(resetWeekSchedule.at, guardTime);
+                const rosterGuard = armScheduleGuardForCurrentWeek(rosterReleaseSchedule.at, guardTime);
+                lastExactResetRunAt = resetGuard.occurrenceKey;
+                lastExactResetMinuteKey = resetGuard.minuteKey;
+                lastExactRosterReleaseRunAt = rosterGuard.occurrenceKey;
+                lastExactRosterReleaseMinuteKey = rosterGuard.minuteKey;
             }
         }
         if (selectedArena) gameLocation = selectedArena;
         if (newGameDate) {
             gameDate = newGameDate;
+            if (AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME) {
+                buildAutoSchedulesFromGameTime(gameTime, gameDate);
+            }
         }
 
         await saveAppSetting('maintenanceMode', maintenanceMode.toString());
@@ -3627,12 +3547,51 @@ app.post('/api/admin/download-backup', async (req, res) => {
     }
 });
 
-// ADMIN ONLY: Restore players and waitlist from a previously downloaded backup JSON
+// ADMIN ONLY: Safer restore players and waitlist from a previously downloaded backup JSON
 app.post('/api/admin/restore-backup', async (req, res) => {
-    const { sessionToken, backupData } = req.body || {};
+    const {
+        sessionToken,
+        backupData,
+        restoreMode = 'merge',
+        forceReplace = false,
+        restoreSettings = false
+    } = req.body || {};
 
     if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    function clonePlain(value) {
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    function normalizeRestoreList(list) {
+        return Array.isArray(list) ? list.filter(item => item && typeof item === 'object') : null;
+    }
+
+    function buildRestoreKey(item) {
+        const idPart = item && item.id != null ? `id:${String(item.id)}` : '';
+        const phoneDigits = normalizePhoneDigits(item && item.phone);
+        if (phoneDigits) return `phone:${phoneDigits}`;
+        const first = String(item && item.firstName || '').trim().toLowerCase();
+        const last = String(item && item.lastName || '').trim().toLowerCase();
+        if (first || last) return `name:${first}|${last}`;
+        return idPart || '';
+    }
+
+    function mergeUnique(currentList, backupList) {
+        const merged = Array.isArray(currentList) ? currentList.map(clonePlain) : [];
+        const seen = new Set(merged.map(buildRestoreKey).filter(Boolean));
+
+        for (const rawItem of Array.isArray(backupList) ? backupList : []) {
+            const item = clonePlain(rawItem);
+            const key = buildRestoreKey(item);
+            if (key && seen.has(key)) continue;
+            if (key) seen.add(key);
+            merged.push(item);
+        }
+
+        return merged;
     }
 
     try {
@@ -3640,40 +3599,77 @@ app.post('/api/admin/restore-backup', async (req, res) => {
             return res.status(400).json({ error: "Invalid backup file" });
         }
 
-        const restoredPlayers = Array.isArray(backupData.players) ? backupData.players : null;
-        const restoredWaitlist = Array.isArray(backupData.waitlist) ? backupData.waitlist : null;
+        const restoredPlayers = normalizeRestoreList(backupData.players);
+        const restoredWaitlist = normalizeRestoreList(backupData.waitlist);
 
         if (!restoredPlayers || !restoredWaitlist) {
             return res.status(400).json({ error: "Backup file is missing players or waitlist" });
         }
 
-        // Replace in-memory data
-        players = restoredPlayers;
-        waitlist = restoredWaitlist;
+        const requestedMode = String(restoreMode || 'merge').trim().toLowerCase();
+        const mode = requestedMode === 'replace' ? 'replace' : 'merge';
 
-        // Restore supported settings only when present
-        if (backupData.currentWeekData && typeof backupData.currentWeekData === 'object') {
-            currentWeekData = backupData.currentWeekData;
+        const beforeCounts = {
+            players: Array.isArray(players) ? players.length : 0,
+            waitlist: Array.isArray(waitlist) ? waitlist.length : 0
+        };
+
+        if (
+            mode === 'replace' &&
+            !forceReplace &&
+            (
+                restoredPlayers.length < beforeCounts.players ||
+                restoredWaitlist.length < beforeCounts.waitlist
+            )
+        ) {
+            return res.status(409).json({
+                error: "Backup has fewer records than live data. Replace blocked for safety.",
+                requiresForce: true,
+                currentPlayers: beforeCounts.players,
+                currentWaitlist: beforeCounts.waitlist,
+                backupPlayers: restoredPlayers.length,
+                backupWaitlist: restoredWaitlist.length
+            });
         }
 
-        if (backupData.summary && typeof backupData.summary === 'object') {
-            if (typeof backupData.summary.gameLocation === 'string') gameLocation = backupData.summary.gameLocation;
-            if (typeof backupData.summary.gameTime === 'string') gameTime = backupData.summary.gameTime;
-            if (typeof backupData.summary.gameDate === 'string') gameDate = backupData.summary.gameDate;
-            if (typeof backupData.summary.rosterReleased === 'boolean') rosterReleased = backupData.summary.rosterReleased;
+        const originalPlayers = Array.isArray(players) ? players.map(clonePlain) : [];
+        const originalWaitlist = Array.isArray(waitlist) ? waitlist.map(clonePlain) : [];
+
+        if (mode === 'replace') {
+            players = restoredPlayers.map(clonePlain);
+            waitlist = restoredWaitlist.map(clonePlain);
+        } else {
+            players = mergeUnique(originalPlayers, restoredPlayers);
+            waitlist = mergeUnique(originalWaitlist, restoredWaitlist);
         }
 
-        if (backupData.appSettings && typeof backupData.appSettings === 'object') {
-            const s = backupData.appSettings;
-            if (typeof s.maintenanceMode === 'boolean') maintenanceMode = s.maintenanceMode;
-            if (typeof s.customTitle === 'string') customTitle = s.customTitle;
-            if (typeof s.announcementEnabled === 'boolean') announcementEnabled = s.announcementEnabled;
-            if (typeof s.announcementText === 'string') announcementText = s.announcementText;
-            if (Array.isArray(s.announcementImages)) announcementImages = s.announcementImages;
-            if (typeof s.playerSpots === 'number' && !isNaN(s.playerSpots)) playerSpots = s.playerSpots;
-            if (typeof s.requirePlayerCode === 'boolean') requirePlayerCode = s.requirePlayerCode;
-            if (typeof s.playerSignupCode === 'string') playerSignupCode = s.playerSignupCode;
+        // Restore supported settings only when explicitly requested on a full replace
+        if (mode === 'replace' && restoreSettings === true) {
+            if (backupData.currentWeekData && typeof backupData.currentWeekData === 'object') {
+                currentWeekData = backupData.currentWeekData;
+            }
+
+            if (backupData.summary && typeof backupData.summary === 'object') {
+                if (typeof backupData.summary.gameLocation === 'string') gameLocation = backupData.summary.gameLocation;
+                if (typeof backupData.summary.gameTime === 'string') gameTime = backupData.summary.gameTime;
+                if (typeof backupData.summary.gameDate === 'string') gameDate = backupData.summary.gameDate;
+                if (typeof backupData.summary.rosterReleased === 'boolean') rosterReleased = backupData.summary.rosterReleased;
+            }
+
+            if (backupData.appSettings && typeof backupData.appSettings === 'object') {
+                const s = backupData.appSettings;
+                if (typeof s.maintenanceMode === 'boolean') maintenanceMode = s.maintenanceMode;
+                if (typeof s.customTitle === 'string') customTitle = s.customTitle;
+                if (typeof s.announcementEnabled === 'boolean') announcementEnabled = s.announcementEnabled;
+                if (typeof s.announcementText === 'string') announcementText = s.announcementText;
+                if (Array.isArray(s.announcementImages)) announcementImages = s.announcementImages;
+                if (typeof s.requirePlayerCode === 'boolean') requirePlayerCode = s.requirePlayerCode;
+                if (typeof s.playerSignupCode === 'string') playerSignupCode = s.playerSignupCode;
+            }
         }
+
+        // Always recalculate spots from the resulting live roster instead of trusting backup counts.
+        playerSpots = Math.max(0, 20 - players.filter(p => !(p && p.isGoalie)).length);
 
         // Persist using existing save helper if available
         try {
@@ -3684,11 +3680,35 @@ app.post('/api/admin/restore-backup', async (req, res) => {
             console.error('Restore completed in memory but saveData failed:', saveErr);
         }
 
+        try {
+            if (typeof addAdminAuditEntry === 'function') {
+                addAdminAuditEntry(`restore-backup-${mode}`, req, {
+                    beforePlayers: beforeCounts.players,
+                    beforeWaitlist: beforeCounts.waitlist,
+                    backupPlayers: restoredPlayers.length,
+                    backupWaitlist: restoredWaitlist.length,
+                    afterPlayers: players.length,
+                    afterWaitlist: waitlist.length,
+                    restoreSettings: mode === 'replace' && restoreSettings === true
+                });
+            }
+        } catch (auditErr) {
+            console.error('Error auditing restore action:', auditErr.message);
+        }
+
         return res.json({
             success: true,
+            mode,
             restoredPlayers: players.length,
             restoredWaitlist: waitlist.length,
-            message: "Backup restored successfully"
+            currentPlayersBefore: beforeCounts.players,
+            currentWaitlistBefore: beforeCounts.waitlist,
+            backupPlayers: restoredPlayers.length,
+            backupWaitlist: restoredWaitlist.length,
+            restoreSettingsApplied: mode === 'replace' && restoreSettings === true,
+            message: mode === 'merge'
+                ? "Backup merged safely with live data"
+                : "Backup replaced live data successfully"
         });
     } catch (err) {
         console.error('Error restoring backup:', err);
@@ -4663,38 +4683,6 @@ app.head('/api/health', (req, res) => {
 });
 
 // Initialize and start
-
-app.get('/api/admin/audit-log', (req, res) => {
-    if (!isAuthorizedAdminRequest(req)) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    try {
-        if (!fs.existsSync(AUDIT_LOG_FILE)) {
-            return res.json({ lines: [] });
-        }
-        const lines = fs.readFileSync(AUDIT_LOG_FILE, 'utf8')
-            .split(/\r?\n/)
-            .filter(Boolean)
-            .slice(-300)
-            .map(line => {
-                try { return JSON.parse(line); } catch { return { raw: line }; }
-            });
-        res.json({ lines });
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to read audit log' });
-    }
-});
-
-app.get('/api/admin/audit-log/download', (req, res) => {
-    if (!isAuthorizedAdminRequest(req)) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
-    if (!fs.existsSync(AUDIT_LOG_FILE)) {
-        return res.status(404).send('No audit log yet');
-    }
-    res.download(AUDIT_LOG_FILE, 'write-audit.log');
-});
-
 initDatabase().then(async () => {
     await reconcileFromFileBackup();
     checkAutoLock();
