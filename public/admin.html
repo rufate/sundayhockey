@@ -1566,13 +1566,15 @@
                 <button class="control-btn restore-btn" id="restoreBtn" onclick="restoreSchedule()" style="display:none;">Restore Auto</button>
             </div>
             <div class="control-row">
-                <input type="text" id="codeInput" class="control-input" maxlength="4" placeholder="New 4-digit code" style="width:120px;">
-                <button class="control-btn" onclick="updateCode()" style="background: #4a90e2;">Change Code</button>
+                <input type="text" id="codeInput" class="control-input" maxlength="4" inputmode="numeric" placeholder="New 4-digit code" style="width:120px;">
+                <button class="control-btn" onclick="updateCode()" style="background: #4a90e2;">Set Override Code</button>
                 <button class="control-btn" onclick="generateNewCode()" style="background: #ff6b00;">🎲 Generate New</button>
+                <button class="control-btn" onclick="clearCustomCode()" style="background: #666;">Clear Override</button>
                 <div class="status-display">
                     Status: <span id="codeStatusDisplay">...</span>
                 </div>
             </div>
+            <div class="schedule-info" id="codeOverrideInfo" style="margin-top:10px;">Loading code settings...</div>
             
             <div class="schedule-editor">
                 <h4 style="margin:10px 0 8px 0;">🗓️ Schedules (ET)</h4>
@@ -3053,7 +3055,8 @@
                 document.getElementById('timeInput').value = data.time;
                 document.getElementById('dateInput').value = data.date || '';
                 document.getElementById('currentCodeDisplay').innerText = data.code;
-                document.getElementById('codeInput').value = '';
+                document.getElementById('codeInput').value = data.customSignupCode || '';
+                renderSignupCodeState(data);
 
                 // Populate schedules
                 if (data.signupLockSchedule) {
@@ -3209,6 +3212,22 @@
             return Math.floor(1000 + Math.random() * 9000).toString();
         }
 
+        function renderSignupCodeState(data) {
+            const overrideInfo = document.getElementById('codeOverrideInfo');
+            if (!overrideInfo || !data) return;
+
+            const activeCode = data.code || '----';
+            const defaultCode = data.defaultSignupCode || '----';
+            const hasOverride = !!data.hasCustomSignupCode;
+            const customCode = data.customSignupCode || '';
+
+            if (hasOverride) {
+                overrideInfo.innerHTML = `Manual override code is <strong>${customCode}</strong>. Default day-based code would be <strong>${defaultCode}</strong>. Active signup code: <strong>${activeCode}</strong>.`;
+            } else {
+                overrideInfo.innerHTML = `Using automatic default code <strong>${defaultCode}</strong>. No custom override is active.`;
+            }
+        }
+
         async function generateNewCode() {
             const newCode = generateRandomCode();
             document.getElementById('codeInput').value = newCode;
@@ -3233,8 +3252,10 @@
                 if (res.ok) {
                     const data = await res.json();
                     document.getElementById('currentCodeDisplay').innerText = data.code;
-                    document.getElementById('codeInput').value = '';
-                    alert("Code updated successfully to: " + data.code);
+                    document.getElementById('codeInput').value = data.customSignupCode || '';
+                    renderSignupCodeState(data);
+                    alert("Override code updated successfully to: " + data.code);
+                    loadSettings();
                 } else if (res.status === 401) {
                     alert("Session expired. Please login again.");
                     logout();
@@ -3244,6 +3265,33 @@
                 }
             } catch (err) {
                 console.error("Update code error:", err);
+            }
+        }
+
+        async function clearCustomCode() {
+            if (!confirm("Clear the custom signup code override and go back to the automatic default code?")) return;
+            try {
+                const res = await fetch(`${API_URL}/api/admin/clear-custom-code`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken: sessionToken })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('currentCodeDisplay').innerText = data.code;
+                    document.getElementById('codeInput').value = '';
+                    renderSignupCodeState(data);
+                    alert(`Custom override cleared. Active code is now ${data.code}.`);
+                    loadSettings();
+                } else if (res.status === 401) {
+                    logout();
+                } else {
+                    const err = await res.json();
+                    alert("Error: " + (err.error || "Failed to clear custom code"));
+                }
+            } catch (err) {
+                console.error("Clear custom code error:", err);
             }
         }
 

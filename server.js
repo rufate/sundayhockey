@@ -171,12 +171,26 @@ function getGameDayName() {
 const FRIDAY_SIGNUP_CODE = '9855';
 const SUNDAY_SIGNUP_CODE = '7666';
 const DEFAULT_SIGNUP_CODE = FRIDAY_SIGNUP_CODE;
+let customSignupCode = '';
 
-function getDynamicSignupCode(dayName = getGameDayName()) {
+function normalizeSignupCodeValue(value) {
+    return String(value || '').replace(/\D/g, '').slice(0, 4);
+}
+
+function hasCustomSignupCodeOverride() {
+    return /^\d{4}$/.test(customSignupCode);
+}
+
+function getDefaultSignupCodeForDay(dayName = getGameDayName()) {
     const day = String(dayName || '').trim().toLowerCase();
     if (day === 'friday') return FRIDAY_SIGNUP_CODE;
     if (day === 'sunday') return SUNDAY_SIGNUP_CODE;
     return DEFAULT_SIGNUP_CODE;
+}
+
+function getDynamicSignupCode(dayName = getGameDayName()) {
+    if (hasCustomSignupCodeOverride()) return customSignupCode;
+    return getDefaultSignupCodeForDay(dayName);
 }
 
 function refreshDynamicSignupCode() {
@@ -1421,6 +1435,7 @@ async function loadDataFromDB() {
         if (settings.gameTime) gameTime = settings.gameTime;
         if (settings.gameDate) gameDate = settings.gameDate;
         else gameDate = calculateNextGameDate();
+        if (settings.customSignupCode !== undefined) customSignupCode = normalizeSignupCodeValue(settings.customSignupCode || '');
         if (settings.playerSignupCode) playerSignupCode = settings.playerSignupCode;
         if (settings.requirePlayerCode !== undefined) requirePlayerCode = settings.requirePlayerCode;
         if (settings.manualOverride !== undefined) manualOverride = settings.manualOverride;
@@ -1548,6 +1563,7 @@ async function saveData() {
     try {
         if (!pool) return;
         await saveSetting('playerSpots', playerSpots);
+        await saveSetting('customSignupCode', customSignupCode);
         await saveSetting('gameLocation', gameLocation);
         await saveSetting('gameTime', gameTime);
         await saveSetting('gameDate', gameDate);
@@ -1597,6 +1613,7 @@ function buildFullDataSnapshot() {
         gameLocation,
         gameTime,
         gameDate,
+        customSignupCode,
         playerSignupCode,
         requirePlayerCode,
         manualOverride,
@@ -2630,6 +2647,9 @@ app.get('/api/status', (req, res) => {
         waitlistCount: waitlist.length,
         requireCode: requirePlayerCode,
         signupLocked: requirePlayerCode,
+        currentSignupCode: playerSignupCode,
+        hasCustomSignupCode: hasCustomSignupCodeOverride(),
+        defaultSignupCode: getDefaultSignupCodeForDay(),
         isLockedWindow: lockStatus.isLockedWindow,
         manualOverride: lockStatus.manualOverride,
         manualOverrideState: lockStatus.manualOverrideState,
@@ -3664,6 +3684,7 @@ app.post('/api/admin/restore-backup', async (req, res) => {
                 if (typeof s.announcementText === 'string') announcementText = s.announcementText;
                 if (Array.isArray(s.announcementImages)) announcementImages = s.announcementImages;
                 if (typeof s.requirePlayerCode === 'boolean') requirePlayerCode = s.requirePlayerCode;
+                if (typeof s.customSignupCode === 'string') customSignupCode = normalizeSignupCodeValue(s.customSignupCode);
                 if (typeof s.playerSignupCode === 'string') playerSignupCode = s.playerSignupCode;
             }
         }
@@ -3749,6 +3770,8 @@ app.post('/api/admin/players', (req, res) => {
         date: gameDate,
         rosterReleased,
         currentWeekData,
+        customSignupCode,
+        defaultSignupCode: getDefaultSignupCodeForDay(),
         playerSignupCode,
         requirePlayerCode
     });
@@ -3764,6 +3787,9 @@ app.post('/api/admin/settings', (req, res) => {
     
     res.json({
         code: playerSignupCode,
+        customSignupCode,
+        hasCustomSignupCode: hasCustomSignupCodeOverride(),
+        defaultSignupCode: getDefaultSignupCodeForDay(),
         requireCode: requirePlayerCode,
         isLockedWindow: lockStatus.isLockedWindow,
         manualOverride: manualOverride,
@@ -3816,17 +3842,43 @@ app.post('/api/admin/update-code', (req, res) => {
         return res.status(401).json({ error: "Unauthorized - invalid session" });
     }
     
-    if (!newCode || !/^\d{4}$/.test(newCode)) {
+    const normalizedCode = normalizeSignupCodeValue(newCode);
+    if (!/^\d{4}$/.test(normalizedCode)) {
         return res.status(400).json({ error: "Code must be exactly 4 digits" });
     }
     
+    customSignupCode = normalizedCode;
     playerSignupCode = getDynamicSignupCode();
     saveData();
     
     res.json({ 
         success: true, 
-        code: playerSignupCode, 
+        code: playerSignupCode,
+        customSignupCode,
+        hasCustomSignupCode: hasCustomSignupCodeOverride(),
+        defaultSignupCode: getDefaultSignupCodeForDay(),
         requireCode: requirePlayerCode 
+    });
+});
+
+app.post('/api/admin/clear-custom-code', (req, res) => {
+    const { password, sessionToken } = req.body;
+
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: "Unauthorized - invalid session" });
+    }
+
+    customSignupCode = '';
+    playerSignupCode = getDynamicSignupCode();
+    saveData();
+
+    res.json({
+        success: true,
+        code: playerSignupCode,
+        customSignupCode,
+        hasCustomSignupCode: false,
+        defaultSignupCode: getDefaultSignupCodeForDay(),
+        requireCode: requirePlayerCode
     });
 });
 
