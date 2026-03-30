@@ -1566,15 +1566,14 @@
                 <button class="control-btn restore-btn" id="restoreBtn" onclick="restoreSchedule()" style="display:none;">Restore Auto</button>
             </div>
             <div class="control-row">
-                <input type="text" id="codeInput" class="control-input" maxlength="4" inputmode="numeric" placeholder="New 4-digit code" style="width:120px;">
+                <input type="text" id="codeInput" class="control-input" maxlength="4" placeholder="New 4-digit code" style="width:120px;">
                 <button class="control-btn" onclick="updateCode()" style="background: #4a90e2;">Set Override Code</button>
                 <button class="control-btn" onclick="generateNewCode()" style="background: #ff6b00;">🎲 Generate New</button>
-                <button class="control-btn" onclick="clearCustomCode()" style="background: #666;">Clear Override</button>
+                <button class="control-btn" onclick="clearCodeOverride()" style="background: #666;">Clear Override</button>
                 <div class="status-display">
                     Status: <span id="codeStatusDisplay">...</span>
                 </div>
             </div>
-            <div class="schedule-info" id="codeOverrideInfo" style="margin-top:10px;">Loading code settings...</div>
             
             <div class="schedule-editor">
                 <h4 style="margin:10px 0 8px 0;">🗓️ Schedules (ET)</h4>
@@ -1887,7 +1886,10 @@
         </div>
 
         <div class="cancellations-section">
-            <h3>📋 Recent Cancellations (<span id="cancellationCount">0</span>)</h3>
+            <div class="control-row" style="justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <h3 style="margin:0;">📋 Recent Cancellations (<span id="cancellationCount">0</span>)</h3>
+                <button class="control-btn" onclick="clearCancellations()" style="background:#b86b00; width:auto; margin:0;">🧹 Clear Cancellations</button>
+            </div>
             <table>
                 <thead>
                     <tr>
@@ -3055,8 +3057,7 @@
                 document.getElementById('timeInput').value = data.time;
                 document.getElementById('dateInput').value = data.date || '';
                 document.getElementById('currentCodeDisplay').innerText = data.code;
-                document.getElementById('codeInput').value = data.customSignupCode || '';
-                renderSignupCodeState(data);
+                document.getElementById('codeInput').value = '';
 
                 // Populate schedules
                 if (data.signupLockSchedule) {
@@ -3083,13 +3084,17 @@
                 const statusSpan = document.getElementById('codeStatusDisplay');
                 const toggleBtn = document.getElementById('toggleCodeBtn');
                 
+                const codeModeText = data.usingCustomSignupCode
+                    ? `Manual Override (${data.code})`
+                    : `Default Code (${data.defaultSignupCode || data.code})`;
+
                 if (data.requireCode) {
-                    statusSpan.innerText = "LOCKED (Code Required)";
+                    statusSpan.innerText = `LOCKED • ${codeModeText}`;
                     statusSpan.className = "status-locked";
                     toggleBtn.innerText = "Unlock Signup";
                     toggleBtn.className = "control-btn toggle-btn locked-state";
                 } else {
-                    statusSpan.innerText = "OPEN (No Code)";
+                    statusSpan.innerText = `OPEN • ${codeModeText}`;
                     statusSpan.className = "status-open";
                     toggleBtn.innerText = "Lock Signup";
                     toggleBtn.className = "control-btn toggle-btn open-state";
@@ -3212,22 +3217,6 @@
             return Math.floor(1000 + Math.random() * 9000).toString();
         }
 
-        function renderSignupCodeState(data) {
-            const overrideInfo = document.getElementById('codeOverrideInfo');
-            if (!overrideInfo || !data) return;
-
-            const activeCode = data.code || '----';
-            const defaultCode = data.defaultSignupCode || '----';
-            const hasOverride = !!data.hasCustomSignupCode;
-            const customCode = data.customSignupCode || '';
-
-            if (hasOverride) {
-                overrideInfo.innerHTML = `Manual override code is <strong>${customCode}</strong>. Default day-based code would be <strong>${defaultCode}</strong>. Active signup code: <strong>${activeCode}</strong>.`;
-            } else {
-                overrideInfo.innerHTML = `Using automatic default code <strong>${defaultCode}</strong>. No custom override is active.`;
-            }
-        }
-
         async function generateNewCode() {
             const newCode = generateRandomCode();
             document.getElementById('codeInput').value = newCode;
@@ -3252,10 +3241,9 @@
                 if (res.ok) {
                     const data = await res.json();
                     document.getElementById('currentCodeDisplay').innerText = data.code;
-                    document.getElementById('codeInput').value = data.customSignupCode || '';
-                    renderSignupCodeState(data);
-                    alert("Override code updated successfully to: " + data.code);
-                    loadSettings();
+                    document.getElementById('codeInput').value = '';
+                    await loadSettings();
+                    alert("Code override updated successfully to: " + data.code);
                 } else if (res.status === 401) {
                     alert("Session expired. Please login again.");
                     logout();
@@ -3268,10 +3256,10 @@
             }
         }
 
-        async function clearCustomCode() {
-            if (!confirm("Clear the custom signup code override and go back to the automatic default code?")) return;
+        async function clearCodeOverride() {
+            if (!confirm("Clear the manual code override and go back to the automatic default code?")) return;
             try {
-                const res = await fetch(`${API_URL}/api/admin/clear-custom-code`, {
+                const res = await fetch(`${API_URL}/api/admin/clear-code-override`, {
                     method: 'POST',
                     headers: getAdminHeaders(),
                     body: JSON.stringify({ sessionToken: sessionToken })
@@ -3281,17 +3269,17 @@
                     const data = await res.json();
                     document.getElementById('currentCodeDisplay').innerText = data.code;
                     document.getElementById('codeInput').value = '';
-                    renderSignupCodeState(data);
-                    alert(`Custom override cleared. Active code is now ${data.code}.`);
-                    loadSettings();
+                    await loadSettings();
+                    alert("Manual code override cleared. Current active code: " + data.code);
                 } else if (res.status === 401) {
+                    alert("Session expired. Please login again.");
                     logout();
                 } else {
                     const err = await res.json();
-                    alert("Error: " + (err.error || "Failed to clear custom code"));
+                    alert("Error: " + (err.error || "Failed to clear code override"));
                 }
             } catch (err) {
-                console.error("Clear custom code error:", err);
+                console.error("Clear code override error:", err);
             }
         }
 
@@ -3600,6 +3588,30 @@
                 }
             } catch (err) {
                 console.error("Load data error:", err);
+            }
+        }
+
+        async function clearCancellations() {
+            if (!confirm("Clear all recent cancellations from the admin panel log? This only clears the log list.")) return;
+            try {
+                const res = await fetch(`${API_URL}/api/admin/clear-cancellations`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken: sessionToken })
+                });
+
+                if (res.ok) {
+                    await loadData();
+                    showNotification("✅ Recent cancellations cleared", "success");
+                } else if (res.status === 401) {
+                    logout();
+                } else {
+                    const err = await res.json();
+                    alert("Error: " + (err.error || "Failed to clear cancellations"));
+                }
+            } catch (err) {
+                console.error("Clear cancellations error:", err);
+                alert("Error clearing cancellations");
             }
         }
 

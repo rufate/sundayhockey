@@ -173,24 +173,14 @@ const SUNDAY_SIGNUP_CODE = '7666';
 const DEFAULT_SIGNUP_CODE = FRIDAY_SIGNUP_CODE;
 let customSignupCode = '';
 
-function normalizeSignupCodeValue(value) {
-    return String(value || '').replace(/\D/g, '').slice(0, 4);
-}
+function getDynamicSignupCode(dayName = getGameDayName()) {
+    const custom = String(customSignupCode || '').trim();
+    if (/^\d{4}$/.test(custom)) return custom;
 
-function hasCustomSignupCodeOverride() {
-    return /^\d{4}$/.test(customSignupCode);
-}
-
-function getDefaultSignupCodeForDay(dayName = getGameDayName()) {
     const day = String(dayName || '').trim().toLowerCase();
     if (day === 'friday') return FRIDAY_SIGNUP_CODE;
     if (day === 'sunday') return SUNDAY_SIGNUP_CODE;
     return DEFAULT_SIGNUP_CODE;
-}
-
-function getDynamicSignupCode(dayName = getGameDayName()) {
-    if (hasCustomSignupCodeOverride()) return customSignupCode;
-    return getDefaultSignupCodeForDay(dayName);
 }
 
 function refreshDynamicSignupCode() {
@@ -1435,7 +1425,6 @@ async function loadDataFromDB() {
         if (settings.gameTime) gameTime = settings.gameTime;
         if (settings.gameDate) gameDate = settings.gameDate;
         else gameDate = calculateNextGameDate();
-        if (settings.customSignupCode !== undefined) customSignupCode = normalizeSignupCodeValue(settings.customSignupCode || '');
         if (settings.playerSignupCode) playerSignupCode = settings.playerSignupCode;
         if (settings.requirePlayerCode !== undefined) requirePlayerCode = settings.requirePlayerCode;
         if (settings.manualOverride !== undefined) manualOverride = settings.manualOverride;
@@ -1444,6 +1433,7 @@ async function loadDataFromDB() {
         if (settings.rosterReleased !== undefined) rosterReleased = settings.rosterReleased;
         if (settings.currentWeekData) currentWeekData = settings.currentWeekData;
         if (settings.cancelledRegistrations) cancelledRegistrations = Array.isArray(settings.cancelledRegistrations) ? settings.cancelledRegistrations : [];
+        if (settings.customSignupCode !== undefined) customSignupCode = String(settings.customSignupCode || '').trim();
         if (settings.signupLockStartAt !== undefined) signupLockStartAt = settings.signupLockStartAt || '';
         if (settings.signupLockEndAt !== undefined) signupLockEndAt = settings.signupLockEndAt || '';
         if (settings.rosterReleaseAt !== undefined) rosterReleaseAt = settings.rosterReleaseAt || '';
@@ -1563,7 +1553,6 @@ async function saveData() {
     try {
         if (!pool) return;
         await saveSetting('playerSpots', playerSpots);
-        await saveSetting('customSignupCode', customSignupCode);
         await saveSetting('gameLocation', gameLocation);
         await saveSetting('gameTime', gameTime);
         await saveSetting('gameDate', gameDate);
@@ -1575,6 +1564,7 @@ async function saveData() {
         await saveSetting('rosterReleased', rosterReleased);
         await saveSetting('currentWeekData', currentWeekData);
         await saveSetting('cancelledRegistrations', cancelledRegistrations);
+        await saveSetting('customSignupCode', customSignupCode);
         await saveSetting('signupLockStartAt', signupLockStartAt);
         await saveSetting('signupLockEndAt', signupLockEndAt);
         await saveSetting('rosterReleaseAt', rosterReleaseAt);
@@ -1610,10 +1600,10 @@ function buildFullDataSnapshot() {
         players,
         waitlist,
         cancelledRegistrations,
+        customSignupCode,
         gameLocation,
         gameTime,
         gameDate,
-        customSignupCode,
         playerSignupCode,
         requirePlayerCode,
         manualOverride,
@@ -1759,6 +1749,7 @@ function getSettingsSnapshot() {
         rosterReleased,
         currentWeekData,
         cancelledRegistrations,
+        customSignupCode,
         lastExactResetMinuteKey,
         lastExactRosterReleaseMinuteKey
     };
@@ -1840,6 +1831,7 @@ function loadDataFromFile() {
             rosterReleaseSchedule = data.rosterReleaseSchedule ?? rosterReleaseSchedule;
             resetWeekSchedule = data.resetWeekSchedule ?? resetWeekSchedule;
             cancelledRegistrations = Array.isArray(data.cancelledRegistrations) ? data.cancelledRegistrations : [];
+            customSignupCode = String(data.customSignupCode || '').trim();
             currentWeekData = data.currentWeekData ?? {
                 weekNumber: null,
                 year: null,
@@ -2647,9 +2639,6 @@ app.get('/api/status', (req, res) => {
         waitlistCount: waitlist.length,
         requireCode: requirePlayerCode,
         signupLocked: requirePlayerCode,
-        currentSignupCode: playerSignupCode,
-        hasCustomSignupCode: hasCustomSignupCodeOverride(),
-        defaultSignupCode: getDefaultSignupCodeForDay(),
         isLockedWindow: lockStatus.isLockedWindow,
         manualOverride: lockStatus.manualOverride,
         manualOverrideState: lockStatus.manualOverrideState,
@@ -3499,6 +3488,8 @@ app.post('/api/admin/players-full', (req, res) => {
         players: players,  // Full data with payment AND rating
         waitlist: waitlist, // Full waitlist data
         cancellations: cancelledRegistrations,
+        customSignupCode,
+        usingCustomSignupCode: /^\d{4}$/.test(String(customSignupCode || '').trim()),
         location: gameLocation, 
         time: gameTime,
         date: gameDate,
@@ -3512,6 +3503,20 @@ app.post('/api/admin/players-full', (req, res) => {
 
 
 // ADMIN ONLY: Download live signup backup JSON
+app.post('/api/admin/clear-cancellations', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    cancelledRegistrations = [];
+    await saveData();
+
+    res.json({
+        success: true,
+        cancellations: cancelledRegistrations
+    });
+});
+
 app.post('/api/admin/download-backup', async (req, res) => {
     const { sessionToken } = req.body || {};
 
@@ -3684,7 +3689,6 @@ app.post('/api/admin/restore-backup', async (req, res) => {
                 if (typeof s.announcementText === 'string') announcementText = s.announcementText;
                 if (Array.isArray(s.announcementImages)) announcementImages = s.announcementImages;
                 if (typeof s.requirePlayerCode === 'boolean') requirePlayerCode = s.requirePlayerCode;
-                if (typeof s.customSignupCode === 'string') customSignupCode = normalizeSignupCodeValue(s.customSignupCode);
                 if (typeof s.playerSignupCode === 'string') playerSignupCode = s.playerSignupCode;
             }
         }
@@ -3770,8 +3774,6 @@ app.post('/api/admin/players', (req, res) => {
         date: gameDate,
         rosterReleased,
         currentWeekData,
-        customSignupCode,
-        defaultSignupCode: getDefaultSignupCodeForDay(),
         playerSignupCode,
         requirePlayerCode
     });
@@ -3787,9 +3789,6 @@ app.post('/api/admin/settings', (req, res) => {
     
     res.json({
         code: playerSignupCode,
-        customSignupCode,
-        hasCustomSignupCode: hasCustomSignupCodeOverride(),
-        defaultSignupCode: getDefaultSignupCodeForDay(),
         requireCode: requirePlayerCode,
         isLockedWindow: lockStatus.isLockedWindow,
         manualOverride: manualOverride,
@@ -3804,7 +3803,15 @@ app.post('/api/admin/settings', (req, res) => {
         signupLockStartAt,
         signupLockEndAt,
         rosterReleaseAt,
-        resetWeekAt
+        resetWeekAt,
+        customSignupCode,
+        usingCustomSignupCode: /^\d{4}$/.test(String(customSignupCode || '').trim()),
+        defaultSignupCode: (() => {
+            const day = String(getGameDayName() || '').trim().toLowerCase();
+            if (day === 'friday') return FRIDAY_SIGNUP_CODE;
+            if (day === 'sunday') return SUNDAY_SIGNUP_CODE;
+            return DEFAULT_SIGNUP_CODE;
+        })()
     });
 });
 
@@ -3837,33 +3844,29 @@ app.post('/api/admin/update-details', (req, res) => {
 
 app.post('/api/admin/update-code', (req, res) => {
     const { password, sessionToken, newCode } = req.body;
-    
+
     if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized - invalid session" });
     }
-    
-    const normalizedCode = normalizeSignupCodeValue(newCode);
-    if (!/^\d{4}$/.test(normalizedCode)) {
+
+    if (!newCode || !/^\d{4}$/.test(newCode)) {
         return res.status(400).json({ error: "Code must be exactly 4 digits" });
     }
-    
-    customSignupCode = normalizedCode;
+
+    customSignupCode = String(newCode).trim();
     playerSignupCode = getDynamicSignupCode();
     saveData();
-    
+
     res.json({ 
         success: true, 
         code: playerSignupCode,
         customSignupCode,
-        hasCustomSignupCode: hasCustomSignupCodeOverride(),
-        defaultSignupCode: getDefaultSignupCodeForDay(),
+        usingCustomSignupCode: true,
         requireCode: requirePlayerCode 
     });
 });
 
-app.post('/api/admin/clear-custom-code', (req, res) => {
-    const { password, sessionToken } = req.body;
-
+app.post('/api/admin/clear-code-override', (req, res) => {
     if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized - invalid session" });
     }
@@ -3876,12 +3879,10 @@ app.post('/api/admin/clear-custom-code', (req, res) => {
         success: true,
         code: playerSignupCode,
         customSignupCode,
-        hasCustomSignupCode: false,
-        defaultSignupCode: getDefaultSignupCodeForDay(),
+        usingCustomSignupCode: false,
         requireCode: requirePlayerCode
     });
 });
-
 
 app.post('/api/admin/update-schedules', async (req, res) => {
         const body = req.body || {};
