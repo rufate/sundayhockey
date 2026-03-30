@@ -1364,10 +1364,34 @@
             const directBox = document.getElementById('directRatingBox');
             const profileCard = document.getElementById('ratingModeProfileCard');
             const directCard = document.getElementById('ratingModeDirectCard');
+
             if (profileWrap) profileWrap.classList.toggle('hidden', mode !== 'profile');
             if (directBox) directBox.classList.toggle('hidden', mode !== 'direct');
             if (profileCard) profileCard.classList.toggle('active', mode === 'profile');
             if (directCard) directCard.classList.toggle('active', mode === 'direct');
+
+            const profileFields = [
+                'skatingRating',
+                'puckSkillsRating',
+                'hockeySenseRating',
+                'conditioningRating',
+                'levelPlayed',
+                'peerComparison',
+                'confidenceLevel'
+            ];
+
+            profileFields.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.required = (mode === 'profile');
+                if (mode !== 'profile') el.setCustomValidity('');
+            });
+
+            const directRatingEl = document.getElementById('directRating');
+            if (directRatingEl) {
+                directRatingEl.required = (mode === 'direct');
+                if (mode !== 'direct') directRatingEl.setCustomValidity('');
+            }
         }
 
         function buildRatingProfilePayload() {
@@ -2253,7 +2277,11 @@
             });
 
             document.querySelectorAll('input[name="ratingMode"]').forEach(el => {
-                el.addEventListener('change', updateCalculatedRating);
+                el.addEventListener('change', () => {
+                    updateRatingModeUi();
+                    updateCalculatedRating();
+                    saveFormData();
+                });
             });
 
             ['levelPlayed', 'peerComparison', 'confidenceLevel'].forEach(id => {
