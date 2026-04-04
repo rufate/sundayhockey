@@ -940,6 +940,20 @@
             margin-top:6px;
         }
 
+        .announcement-copy-email {
+            color: #1f5fbf;
+            font-weight: 800;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .announcement-copy-hint {
+            display: block;
+            margin-top: 6px;
+            font-size: 0.82rem;
+            color: #6b5310;
+        }
+
 </style>
 <base target="_blank">
 </head>
@@ -955,6 +969,7 @@
         <div class="announcement-copy">
             <strong>Attention:</strong>
             <span id="announcementText">&nbsp;</span>
+            <small id="announcementCopyHint" class="announcement-copy-hint" style="display:none;">Tap email to copy</small>
         </div>
     </div>
 
@@ -999,6 +1014,9 @@
             <h3 style="text-align: center; color: var(--accent); margin: 20px 0 15px 0; text-transform: uppercase; letter-spacing: 1px;">
                 🏒 Registered Players (<span id="registeredCount">0</span>)
             </h3>
+            <div style="text-align:center; color:#ffb366; margin: 0 0 14px 0; font-size: 0.95rem; font-weight: 700;">
+                Cancellation must be done before roster release. Late cancel / no-show owes.
+            </div>
             <div class="players-grid" id="playersGrid">
                 <!-- Players will be loaded here -->
             </div>
@@ -1085,54 +1103,65 @@
                 <div style="margin: 15px 0 5px 0; color: #aaa; font-size: 0.9rem;">Player Skill Profile:</div>
                 <div class="rating-grid">
                     <div class="rating-card">
-                        <label for="skatingRating">Skating (1-10)</label>
-                        <input type="number" id="skatingRating" min="1" max="10" step="1" placeholder="Speed / edges" required style="margin:0;">
+                        <label for="skatingRating">Skating ability</label>
+                        <select id="skatingRating" required style="margin:0;">
+                            <option value="">Select one</option>
+                            <option value="3">I struggle to keep up with the play</option>
+                            <option value="5">I can keep pace but not a standout skater</option>
+                            <option value="7">I’m one of the faster skaters most games</option>
+                            <option value="9">I’m among the fastest players on the ice</option>
+                        </select>
                     </div>
                     <div class="rating-card">
-                        <label for="puckSkillsRating">Puck Skills (1-10)</label>
-                        <input type="number" id="puckSkillsRating" min="1" max="10" step="1" placeholder="Hands / passing" required style="margin:0;">
+                        <label for="puckSkillsRating">Puck control under pressure</label>
+                        <select id="puckSkillsRating" required style="margin:0;">
+                            <option value="">Select one</option>
+                            <option value="3">I often lose control under pressure</option>
+                            <option value="5">I can make simple plays but struggle under pressure</option>
+                            <option value="7">I’m confident controlling and passing under pressure</option>
+                            <option value="9">I can create plays and beat defenders consistently</option>
+                        </select>
                     </div>
                     <div class="rating-card">
-                        <label for="hockeySenseRating">Hockey Sense (1-10)</label>
-                        <input type="number" id="hockeySenseRating" min="1" max="10" step="1" placeholder="Reads / positioning" required style="margin:0;">
+                        <label for="hockeySenseRating">Hockey IQ / positioning</label>
+                        <select id="hockeySenseRating" required style="margin:0;">
+                            <option value="">Select one</option>
+                            <option value="3">I’m often out of position or reacting late</option>
+                            <option value="5">I understand basic positioning</option>
+                            <option value="7">I read plays well and anticipate</option>
+                            <option value="9">I consistently make smart, high-level decisions</option>
+                        </select>
                     </div>
                     <div class="rating-card">
-                        <label for="conditioningRating">Conditioning (1-10)</label>
-                        <input type="number" id="conditioningRating" min="1" max="10" step="1" placeholder="Game pace" required style="margin:0;">
+                        <label for="conditioningRating">Conditioning / pace</label>
+                        <select id="conditioningRating" required style="margin:0;">
+                            <option value="">Select one</option>
+                            <option value="3">I get tired quickly and need long shifts off</option>
+                            <option value="5">I can keep up but fade late</option>
+                            <option value="7">I maintain a strong pace all game</option>
+                            <option value="9">I push the pace and rarely slow down</option>
+                        </select>
                     </div>
-                </div>
-
-                <div class="profile-field">
-                    <label for="levelPlayed">Highest recent level played</label>
-                    <select id="levelPlayed" required>
-                        <option value="">Select one</option>
-                        <option value="beginner">Beginner / shinny only</option>
-                        <option value="house">House league</option>
-                        <option value="pickup">Intermediate pickup</option>
-                        <option value="select">Strong pickup / select</option>
-                        <option value="competitive">High-level competitive / junior</option>
-                    </select>
-                </div>
-
-                <div class="profile-field">
-                    <label for="peerComparison">Compared to the average player in this group</label>
-                    <select id="peerComparison" required>
-                        <option value="">Select one</option>
-                        <option value="below">Below average</option>
-                        <option value="average">Average</option>
-                        <option value="above">Above average</option>
-                        <option value="top">One of the stronger players</option>
-                    </select>
-                </div>
-
-                <div class="profile-field">
-                    <label for="confidenceLevel">How confident are you in your self-rating?</label>
-                    <select id="confidenceLevel" required>
-                        <option value="">Select one</option>
-                        <option value="low">Not very confident</option>
-                        <option value="medium">Somewhat confident</option>
-                        <option value="high">Very confident</option>
-                    </select>
+                    <div class="rating-card">
+                        <label for="effortRating">Compete / effort level</label>
+                        <select id="effortRating" required style="margin:0;">
+                            <option value="">Select one</option>
+                            <option value="3">I play casually, minimal battle level</option>
+                            <option value="5">I give average effort</option>
+                            <option value="7">I work hard most shifts</option>
+                            <option value="9">I compete hard every shift, high intensity</option>
+                        </select>
+                    </div>
+                    <div class="rating-card">
+                        <label for="levelPlayed">Highest recent level played</label>
+                        <select id="levelPlayed" required style="margin:0;">
+                            <option value="">Select one</option>
+                            <option value="beginner">Beginner / Rec league</option>
+                            <option value="intermediate">Intermediate rec</option>
+                            <option value="competitive">Competitive / travel</option>
+                            <option value="junior">Junior / college / pro</option>
+                        </select>
+                    </div>
                 </div>
                 </div>
 
@@ -1175,7 +1204,7 @@
                 </div>
                 
                 <div id="etransferInfo" style="background: #222; padding: 10px; border-radius: 5px; font-size: 0.85rem; margin-bottom: 15px;">
-                    Send $15 to: <strong>okosoff@outlook.com</strong><br>
+                    Send $15 to: <strong id="paymentEmailDisplay">E-transfer email to be announced</strong><br>
                     <span style="color: var(--accent);">* E-Transfer payment must be received before stepping on the ice *</span>
                 </div>
 
@@ -1226,7 +1255,8 @@
     <div class="modal-overlay" id="cancelModal">
         <div class="modal-content">
             <h3>⚠️ Cancel Registration</h3>
-            <p>Enter the phone number you used to register to confirm cancellation:</p>
+            <p>Enter the phone number you used to register to confirm cancellation.</p>
+            <p style="color:#ffb3b3; font-weight:bold; margin-top:-6px;">Cancellation must be done before roster release. Late cancel / no-show owes.</p>
             <input type="tel" id="cancelPhoneInput" placeholder="Phone Number" inputmode="numeric" autocomplete="tel" maxlength="14" style="margin-bottom: 15px;">
             <div class="cancel-error" id="cancelError"></div>
             <div class="cancel-success" id="cancelSuccess"></div>
@@ -1324,24 +1354,10 @@
         }
 
         const LEVEL_PLAY_RATING_MAP = {
-            beginner: 3.5,
-            house: 4.5,
-            pickup: 5.5,
-            select: 6.8,
-            competitive: 8.0
-        };
-
-        const PEER_COMPARISON_ADJUSTMENT_MAP = {
-            below: -0.5,
-            average: 0,
-            above: 0.5,
-            top: 1.0
-        };
-
-        const CONFIDENCE_WEIGHT_MAP = {
-            low: { selfWeight: 0.50, levelWeight: 0.50 },
-            medium: { selfWeight: 0.65, levelWeight: 0.35 },
-            high: { selfWeight: 0.75, levelWeight: 0.25 }
+            beginner: 4.0,
+            intermediate: 5.5,
+            competitive: 7.0,
+            junior: 8.5
         };
 
         function clampRatingInput(value) {
@@ -1375,9 +1391,8 @@
                 'puckSkillsRating',
                 'hockeySenseRating',
                 'conditioningRating',
-                'levelPlayed',
-                'peerComparison',
-                'confidenceLevel'
+                'effortRating',
+                'levelPlayed'
             ];
 
             profileFields.forEach(id => {
@@ -1394,63 +1409,68 @@
             }
         }
 
-        function buildRatingProfilePayload() {
-            const ratingMode = getSelectedRatingMode();
-            if (ratingMode === 'direct') {
-                const directRating = clampRatingInput(document.getElementById('directRating')?.value);
-                if (directRating === null) return null;
-                const rounded = roundRatingValue(directRating);
-                return {
-                    ratingMode: 'direct',
-                    directRating: rounded,
-                    skatingRating: null,
-                    puckSkillsRating: null,
-                    hockeySenseRating: null,
-                    conditioningRating: null,
-                    levelPlayed: '',
-                    peerComparison: '',
-                    confidenceLevel: '',
-                    selfRatingRaw: rounded,
-                    derivedRating: rounded,
-                    finalRating: rounded
-                };
-            }
+function buildRatingProfilePayload() {
+    const ratingMode = getSelectedRatingMode();
+    if (ratingMode === 'direct') {
+        const directRating = clampRatingInput(document.getElementById('directRating')?.value);
+        if (directRating === null) return null;
+        const rounded = roundRatingValue(directRating);
+        return {
+            ratingMode: 'direct',
+            directRating: rounded,
+            skatingRating: null,
+            puckSkillsRating: null,
+            hockeySenseRating: null,
+            conditioningRating: null,
+            effortRating: null,
+            levelPlayed: '',
+            peerComparison: '',
+            confidenceLevel: '',
+            selfRatingRaw: rounded,
+            derivedRating: rounded,
+            finalRating: rounded
+        };
+    }
 
-            const skating = clampRatingInput(document.getElementById('skatingRating')?.value);
-            const puck = clampRatingInput(document.getElementById('puckSkillsRating')?.value);
-            const sense = clampRatingInput(document.getElementById('hockeySenseRating')?.value);
-            const conditioning = clampRatingInput(document.getElementById('conditioningRating')?.value);
-            const levelPlayed = document.getElementById('levelPlayed')?.value || '';
-            const peerComparison = document.getElementById('peerComparison')?.value || '';
-            const confidenceLevel = document.getElementById('confidenceLevel')?.value || '';
+    const skating = clampRatingInput(document.getElementById('skatingRating')?.value);
+    const puck = clampRatingInput(document.getElementById('puckSkillsRating')?.value);
+    const sense = clampRatingInput(document.getElementById('hockeySenseRating')?.value);
+    const conditioning = clampRatingInput(document.getElementById('conditioningRating')?.value);
+    const effort = clampRatingInput(document.getElementById('effortRating')?.value);
+    const levelPlayed = document.getElementById('levelPlayed')?.value || '';
 
-            if ([skating, puck, sense, conditioning].some(v => v === null) || !levelPlayed || !peerComparison || !confidenceLevel) {
-                return null;
-            }
+    if ([skating, puck, sense, conditioning, effort].some(v => v === null) || !levelPlayed) {
+        return null;
+    }
 
-            const baseSkill = roundRatingValue((skating + puck + sense + conditioning) / 4);
-            const levelMapped = LEVEL_PLAY_RATING_MAP[levelPlayed] || 5.5;
-            const peerAdjustment = PEER_COMPARISON_ADJUSTMENT_MAP[peerComparison] ?? 0;
-            const weights = CONFIDENCE_WEIGHT_MAP[confidenceLevel] || CONFIDENCE_WEIGHT_MAP.medium;
-            const derivedRating = roundRatingValue((baseSkill * weights.selfWeight) + (levelMapped * weights.levelWeight) + peerAdjustment);
+    const weightedSkill = roundRatingValue(
+        (skating * 0.24) +
+        (puck * 0.20) +
+        (sense * 0.28) +
+        (conditioning * 0.08) +
+        (effort * 0.14)
+    );
+    const levelMapped = LEVEL_PLAY_RATING_MAP[levelPlayed] || 5.5;
+    const derivedRating = roundRatingValue((weightedSkill * 0.94) + (levelMapped * 0.06));
 
-            return {
-                ratingMode: 'profile',
-                directRating: null,
-                skatingRating: skating,
-                puckSkillsRating: puck,
-                hockeySenseRating: sense,
-                conditioningRating: conditioning,
-                levelPlayed,
-                peerComparison,
-                confidenceLevel,
-                selfRatingRaw: baseSkill,
-                derivedRating,
-                finalRating: derivedRating
-            };
-        }
+    return {
+        ratingMode: 'profile',
+        directRating: null,
+        skatingRating: skating,
+        puckSkillsRating: puck,
+        hockeySenseRating: sense,
+        conditioningRating: conditioning,
+        effortRating: effort,
+        levelPlayed,
+        peerComparison: '',
+        confidenceLevel: '',
+        selfRatingRaw: weightedSkill,
+        derivedRating,
+        finalRating: derivedRating
+    };
+}
 
-        function updateCalculatedRating() {
+function updateCalculatedRating() {
             updateRatingModeUi();
             const ratingEl = document.getElementById('rating');
             if (!ratingEl) return;
@@ -1498,9 +1518,8 @@
                 document.getElementById('puckSkillsRating').value = data.puckSkillsRating || '';
                 document.getElementById('hockeySenseRating').value = data.hockeySenseRating || '';
                 document.getElementById('conditioningRating').value = data.conditioningRating || '';
+                document.getElementById('effortRating').value = data.effortRating || '';
                 document.getElementById('levelPlayed').value = data.levelPlayed || '';
-                document.getElementById('peerComparison').value = data.peerComparison || '';
-                document.getElementById('confidenceLevel').value = data.confidenceLevel || '';
                 document.getElementById('rating').value = data.rating || '';
                 if (data.paymentMethod) {
                     const radio = document.querySelector(`input[name="payment"][value="${data.paymentMethod}"]`);
@@ -1524,9 +1543,8 @@
                 puckSkillsRating: document.getElementById('puckSkillsRating').value,
                 hockeySenseRating: document.getElementById('hockeySenseRating').value,
                 conditioningRating: document.getElementById('conditioningRating').value,
+                effortRating: document.getElementById('effortRating').value,
                 levelPlayed: document.getElementById('levelPlayed').value,
-                peerComparison: document.getElementById('peerComparison').value,
-                confidenceLevel: document.getElementById('confidenceLevel').value,
                 rating: document.getElementById('rating').value,
                 paymentMethod: document.querySelector('input[name="payment"]:checked')?.value
             };
@@ -1690,27 +1708,86 @@
 
 
 
+        function copyTextToClipboard(text) {
+            const value = String(text || '').trim();
+            if (!value) return;
+
+            const onCopied = () => {
+                const hintEl = document.getElementById('announcementCopyHint');
+                if (!hintEl) return;
+                hintEl.textContent = 'Copied payment email';
+                hintEl.style.display = 'block';
+                setTimeout(() => {
+                    hintEl.textContent = 'Tap email to copy';
+                }, 1600);
+            };
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(value).then(onCopied).catch(() => {
+                    window.prompt('Copy payment email:', value);
+                });
+                return;
+            }
+
+            window.prompt('Copy payment email:', value);
+        }
+
         function renderAnnouncement(data) {
             const bulletin = document.getElementById('announcementBulletin');
             const textEl = document.getElementById('announcementText');
             const thumbEl = document.getElementById('announcementThumb');
+            const hintEl = document.getElementById('announcementCopyHint');
             if (!bulletin || !textEl || !thumbEl) return;
 
             const enabled = !!data.announcementEnabled;
             const text = (data.announcementText || '').trim();
             const images = Array.isArray(data.announcementImages) ? data.announcementImages : [];
             const image = images.length ? String(images[0] || '').trim() : '';
+            const email = String(data.paymentEmail || '').trim();
             const shouldShow = enabled && (!!text || !!image);
 
             if (!shouldShow) {
                 bulletin.classList.remove('active');
                 textEl.textContent = '';
+                textEl.onclick = null;
+                textEl.removeAttribute('role');
                 thumbEl.src = '';
                 thumbEl.classList.remove('visible');
+                if (hintEl) {
+                    hintEl.style.display = 'none';
+                    hintEl.textContent = 'Tap email to copy';
+                }
                 return;
             }
 
-            textEl.textContent = text || 'Attention';
+            const emailIndex = email ? text.toLowerCase().indexOf(email.toLowerCase()) : -1;
+            if (email && emailIndex !== -1) {
+                const before = text.slice(0, emailIndex);
+                const matchedEmail = text.slice(emailIndex, emailIndex + email.length);
+                const after = text.slice(emailIndex + email.length);
+                const escapeHtml = (value) => String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const safeEmail = escapeHtml(matchedEmail);
+                textEl.innerHTML = `${escapeHtml(before)}<span class="announcement-copy-email" data-copy-payment-email="${safeEmail}">${safeEmail}</span>${escapeHtml(after)}`;
+                const copyTarget = textEl.querySelector('[data-copy-payment-email]');
+                if (copyTarget) {
+                    copyTarget.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        copyTextToClipboard(email);
+                    });
+                }
+                if (hintEl) {
+                    hintEl.style.display = 'block';
+                    hintEl.textContent = 'Tap email to copy';
+                }
+            } else {
+                textEl.textContent = text || 'Attention';
+                if (hintEl) {
+                    hintEl.style.display = 'none';
+                    hintEl.textContent = 'Tap email to copy';
+                }
+            }
+
             if (image) {
                 thumbEl.src = image;
                 thumbEl.classList.add('visible');
@@ -1829,6 +1906,11 @@
                 }
 
                 renderAnnouncement(data);
+
+                const paymentEmailDisplay = document.getElementById('paymentEmailDisplay');
+                if (paymentEmailDisplay) {
+                    paymentEmailDisplay.textContent = data.paymentEmail || 'E-transfer email to be announced';
+                }
 
                 // Update dynamic title
                 if (data.customTitle) {
@@ -2104,6 +2186,9 @@
                     }, 2500);
                 } else {
                     errorDiv.innerText = data.error || 'Failed to cancel registration.';
+                    if (data && data.noShowOwes) {
+                        errorDiv.innerHTML = `<strong>${data.error || 'Cancellation closed.'}</strong><br><span style="color:#ffb3b3;">${data.policy || 'Late cancel / no-show owes.'}</span>`;
+                    }
                     errorDiv.style.display = 'block';
                 }
             } catch (err) {
@@ -2212,6 +2297,7 @@
                 puckSkillsRating: skillProfile.puckSkillsRating,
                 hockeySenseRating: skillProfile.hockeySenseRating,
                 conditioningRating: skillProfile.conditioningRating,
+                effortRating: skillProfile.effortRating,
                 levelPlayed: skillProfile.levelPlayed,
                 peerComparison: skillProfile.peerComparison,
                 confidenceLevel: skillProfile.confidenceLevel,
@@ -2267,7 +2353,7 @@
             updateRatingModeUi();
             updatePIACalculation();
             
-            const inputs = ['firstName', 'lastName', 'phone', 'directRating', 'skatingRating', 'puckSkillsRating', 'hockeySenseRating', 'conditioningRating'];
+            const inputs = ['firstName', 'lastName', 'phone', 'directRating', 'skatingRating', 'puckSkillsRating', 'hockeySenseRating', 'conditioningRating', 'effortRating'];
             inputs.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
@@ -2284,7 +2370,7 @@
                 });
             });
 
-            ['levelPlayed', 'peerComparison', 'confidenceLevel'].forEach(id => {
+            ['levelPlayed', 'effortRating'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
                     el.addEventListener('change', updateCalculatedRating);

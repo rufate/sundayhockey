@@ -322,7 +322,7 @@
         </div>
 
         <div style="text-align:center; color:#ffb366; margin: 14px 0 18px 0; font-size: 0.95rem;">
-            Notice: Waitlist position 1 will automatically be promoted if a player cancels.
+            Notice: Waitlist position 1 will automatically be promoted if a player cancels before roster release.
         </div>
 
         <ul class="waitlist-list" id="waitlistList">
@@ -341,6 +341,7 @@
         <div class="modal-content">
             <h3>Cancel Waitlist Spot</h3>
             <p>Enter the same 10-digit phone number used when you joined the waitlist.</p>
+            <p style="color:#ffb3b3; font-weight:bold; margin-top:-6px;">Cancellation closes at roster release.</p>
             <input type="tel" id="cancelPhoneInput" placeholder="(555) 555-5555" maxlength="14">
             <div class="cancel-error" id="cancelError"></div>
             <div class="cancel-success" id="cancelSuccess"></div>
@@ -436,6 +437,9 @@
                     }, 1500);
                 } else {
                     errorDiv.innerText = data.error || 'Failed to cancel waitlist registration.';
+                    if (data && data.noShowOwes) {
+                        errorDiv.innerHTML = `<strong>${data.error || 'Cancellation closed.'}</strong><br><span style="color:#ffb3b3;">${data.policy || ''}</span>`;
+                    }
                     errorDiv.style.display = 'block';
                 }
             } catch (err) {

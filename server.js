@@ -69,6 +69,36 @@ app.use(express.json({ limit: '12mb' }));
 app.use(express.urlencoded({ extended: true, limit: '12mb' }));
 app.use(express.static('public'));
 
+function shouldTriggerSchedulerOnRequest(req) {
+    const method = String(req.method || '').toUpperCase();
+    if (!['GET', 'HEAD', 'POST'].includes(method)) return false;
+
+    const url = String(req.path || req.originalUrl || '').toLowerCase();
+    if (!url || url === '/favicon.ico') return false;
+
+    // Skip obvious static assets. HTML routes and API routes should still trigger catch-up logic.
+    if (/\.(css|js|map|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot)$/i.test(url)) return false;
+
+    return true;
+}
+
+async function schedulerCatchupMiddleware(req, res, next) {
+    if (!shouldTriggerSchedulerOnRequest(req)) {
+        next();
+        return;
+    }
+
+    try {
+        await runSchedulerTick();
+    } catch (err) {
+        console.error('Request scheduler catch-up error:', err);
+    }
+
+    next();
+}
+
+app.use(schedulerCatchupMiddleware);
+
 // --- DATA STORE ---
 let playerSpots = 20;
 let players = []; 
@@ -394,18 +424,21 @@ let currentWeekData = {
 };
 
 const MAX_GOALIES = 2;
+const NO_SHOW_POLICY_TEXT = 'Cancellation must be done prior to roster release. Late cancel / no-show owes.';
 
 const GAME_RULES = [
-    "No Contact, may tie up player along board plays.",
-    "Keep negative comments to yourself.",
-    "Pass the puck!",
-    "Don't stick handle around everyone each and every shift. Don't be a hotdog.",
-    "Shift OFF often.",
-    "No slashing period., lift the bloody stick. If you slash, intentional or not and hurt the opposing player. You are done for the night and future infraction will end in being Banned period.",
-    "Skate hard, shift off when you're huffing and puffing.",
-    "Don't need to be overly aggressive, tone down the aggression. If pickup hockey.",
-    "Slap shots, don't take it if you can't control it. If you hit goalies in the head, or hurt anyone, you are banned from taking slapshots.",
-    "Have fun! And don't forget Traditional Handshake/Fist bump when game ends!"
+    "No contact. Board tie-ups only.",
+    "No slashing. Lift sticks. Injury = done + possible ban.",
+    "Move the puck. Don’t hog it.",
+    "Control slapshots. Head shots = no more slapshots.",
+    "Short shifts. Be fair with ice time.",
+    "No negativity. Keep it positive.",
+    "Skate hard, change often.",
+    "No excessive aggression. It’s pickup.",
+    "Don’t be “that guy.” You know who you are.",
+    "Handshake/fist bump after the game. Have fun.",
+    "Cancellation must be done prior to roster release. This gives waitlist players a chance for a spot. No-show owes.",
+    "Respect the game and players — or you’re done."
 ];
 
 // ============================================
@@ -475,6 +508,19 @@ function getWeeklyAutoAddPlayers(dayName = getGameDayName()) {
     return [...AUTO_ADD_CORE_PLAYERS, ...goalieList].map(player => ({ ...player }));
 }
 
+function buildRosterReleasePaymentAnnouncement() {
+    const email = String(paymentEmail || '').trim();
+    return email
+        ? `Payments must be received prior to stepping on the ice. E-transfer to ${email}.`
+        : 'Payments must be received prior to stepping on the ice.';
+}
+
+function clearAnnouncementState() {
+    announcementEnabled = false;
+    announcementText = '';
+    announcementImages = [];
+}
+
 // --- BACKUP GOALIES FOR SUBSTITUTION ---
 const BACKUP_GOALIES = [
     {
@@ -533,6 +579,7 @@ let customTitle = `Phan's ${getGameDayName()} Hockey`;
 let announcementEnabled = false;
 let announcementText = '';
 let announcementImages = [];
+let paymentEmail = String(process.env.PAYMENT_EMAIL || '').trim();
 
 // ============================================
 // END NEW CONFIGURATION SECTION
@@ -1022,7 +1069,7 @@ async function autoReleaseRoster() {
         manualOverrideState = 'locked';
 
         announcementEnabled = true;
-        announcementText = 'E-transfer required immediately after roster release.';
+        announcementText = buildRosterReleasePaymentAnnouncement();
 
         currentWeekData = {
             weekNumber: week,
@@ -1210,6 +1257,7 @@ async function checkWeeklyReset() {
     manualOverrideState = null;
     requirePlayerCode = true;
     maintenanceMode = false;
+    clearAnnouncementState();
     refreshDynamicSignupCode();
 
     // Keep weekly schedules intact
@@ -1302,6 +1350,7 @@ async function initDatabase() {
                 puck_skills_rating NUMERIC(4,1),
                 hockey_sense_rating NUMERIC(4,1),
                 conditioning_rating NUMERIC(4,1),
+                effort_rating NUMERIC(4,1),
                 level_played VARCHAR(30),
                 peer_comparison VARCHAR(20),
                 confidence_level VARCHAR(20),
@@ -1320,6 +1369,7 @@ async function initDatabase() {
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS puck_skills_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS hockey_sense_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS conditioning_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS effort_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS level_played VARCHAR(30)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS peer_comparison VARCHAR(20)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS confidence_level VARCHAR(20)`);
@@ -1341,6 +1391,7 @@ async function initDatabase() {
                 puck_skills_rating NUMERIC(4,1),
                 hockey_sense_rating NUMERIC(4,1),
                 conditioning_rating NUMERIC(4,1),
+                effort_rating NUMERIC(4,1),
                 level_played VARCHAR(30),
                 peer_comparison VARCHAR(20),
                 confidence_level VARCHAR(20),
@@ -1355,6 +1406,7 @@ async function initDatabase() {
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS puck_skills_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS hockey_sense_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS conditioning_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS effort_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS level_played VARCHAR(30)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS peer_comparison VARCHAR(20)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS confidence_level VARCHAR(20)`);
@@ -1464,6 +1516,7 @@ async function loadDataFromDB() {
             puckSkillsRating: p.puck_skills_rating == null ? null : Number(p.puck_skills_rating),
             hockeySenseRating: p.hockey_sense_rating == null ? null : Number(p.hockey_sense_rating),
             conditioningRating: p.conditioning_rating == null ? null : Number(p.conditioning_rating),
+            effortRating: p.effort_rating == null ? null : Number(p.effort_rating),
             levelPlayed: p.level_played,
             peerComparison: p.peer_comparison,
             confidenceLevel: p.confidence_level,
@@ -1494,6 +1547,7 @@ async function loadDataFromDB() {
             puckSkillsRating: p.puck_skills_rating == null ? null : Number(p.puck_skills_rating),
             hockeySenseRating: p.hockey_sense_rating == null ? null : Number(p.hockey_sense_rating),
             conditioningRating: p.conditioning_rating == null ? null : Number(p.conditioning_rating),
+            effortRating: p.effort_rating == null ? null : Number(p.effort_rating),
             levelPlayed: p.level_played,
             peerComparison: p.peer_comparison,
             confidenceLevel: p.confidence_level,
@@ -1519,6 +1573,7 @@ async function loadDataFromDB() {
         if (appSettings.selectedArena) gameLocation = appSettings.selectedArena;
         if (appSettings.announcementEnabled !== undefined) announcementEnabled = appSettings.announcementEnabled === 'true';
         if (appSettings.announcementText !== undefined) announcementText = appSettings.announcementText || '';
+        if (appSettings.paymentEmail !== undefined) paymentEmail = String(appSettings.paymentEmail || '').trim() || paymentEmail;
         if (appSettings.announcementImages !== undefined) {
             try {
                 announcementImages = JSON.parse(appSettings.announcementImages || '[]');
@@ -1581,6 +1636,7 @@ async function saveData() {
         await saveAppSetting('announcementEnabled', announcementEnabled.toString());
         await saveAppSetting('announcementText', announcementText);
         await saveAppSetting('announcementImages', JSON.stringify(announcementImages));
+        await saveAppSetting('paymentEmail', paymentEmail);
         await saveAppSetting('selectedDayTime', gameTime);
         await saveAppSetting('selectedArena', gameLocation);
         await saveAppSetting('gameDate', gameDate);
@@ -1627,6 +1683,7 @@ function buildFullDataSnapshot() {
         announcementEnabled,
         announcementText,
         announcementImages,
+        paymentEmail,
         savedAt: new Date().toISOString()
     };
 }
@@ -1733,6 +1790,7 @@ function getSettingsSnapshot() {
         announcementEnabled,
         announcementText,
         announcementImages,
+        paymentEmail,
         gameTime,
         gameLocation,
         gameDate,
@@ -1943,24 +2001,17 @@ function roundRating(value) {
 }
 
 const LEVEL_PLAY_RATING_MAP = {
-    beginner: 3.5,
-    house: 4.5,
-    pickup: 5.5,
-    select: 6.8,
-    competitive: 8.0
+    beginner: 4.0,
+    intermediate: 5.5,
+    competitive: 7.0,
+    junior: 8.5
 };
 
-const PEER_COMPARISON_ADJUSTMENT_MAP = {
-    below: -0.5,
-    average: 0,
-    above: 0.5,
-    top: 1.0
-};
-
-const CONFIDENCE_WEIGHT_MAP = {
-    low: { selfWeight: 0.5, levelWeight: 0.5 },
-    medium: { selfWeight: 0.65, levelWeight: 0.35 },
-    high: { selfWeight: 0.75, levelWeight: 0.25 }
+const LEVEL_PLAY_BOOST_MAP = {
+    beginner: 0.0,
+    intermediate: 0.2,
+    competitive: 0.45,
+    junior: 0.7
 };
 
 function normalizeSkillProfile(input = {}) {
@@ -1978,6 +2029,7 @@ function normalizeSkillProfile(input = {}) {
             puckSkillsRating: null,
             hockeySenseRating: null,
             conditioningRating: null,
+            effortRating: null,
             levelPlayed: '',
             peerComparison: '',
             confidenceLevel: '',
@@ -1994,31 +2046,29 @@ function normalizeSkillProfile(input = {}) {
     const puckSkills = clampRating(input.puckSkillsRating);
     const hockeySense = clampRating(input.hockeySenseRating);
     const conditioning = clampRating(input.conditioningRating);
+    const effort = clampRating(input.effortRating);
 
-    const levelPlayed = ['beginner', 'house', 'pickup', 'select', 'competitive'].includes(String(input.levelPlayed || '').toLowerCase())
+    const levelPlayed = ['beginner', 'intermediate', 'competitive', 'junior'].includes(String(input.levelPlayed || '').toLowerCase())
         ? String(input.levelPlayed).toLowerCase()
-        : '';
-    const peerComparison = ['below', 'average', 'above', 'top'].includes(String(input.peerComparison || '').toLowerCase())
-        ? String(input.peerComparison).toLowerCase()
-        : '';
-    const confidenceLevel = ['low', 'medium', 'high'].includes(String(input.confidenceLevel || '').toLowerCase())
-        ? String(input.confidenceLevel).toLowerCase()
         : '';
 
     const missing = [];
     if (!Number.isFinite(Number(input.skatingRating))) missing.push('skating');
-    if (!Number.isFinite(Number(input.puckSkillsRating))) missing.push('puck skills');
-    if (!Number.isFinite(Number(input.hockeySenseRating))) missing.push('hockey sense');
+    if (!Number.isFinite(Number(input.puckSkillsRating))) missing.push('puck control');
+    if (!Number.isFinite(Number(input.hockeySenseRating))) missing.push('hockey IQ');
     if (!Number.isFinite(Number(input.conditioningRating))) missing.push('conditioning');
-    if (!levelPlayed) missing.push('recent level played');
-    if (!peerComparison) missing.push('peer comparison');
-    if (!confidenceLevel) missing.push('confidence');
+    if (!Number.isFinite(Number(input.effortRating))) missing.push('compete / effort');
+    if (!levelPlayed) missing.push('highest recent level played');
 
-    const baseSkill = roundRating((skating + puckSkills + hockeySense + conditioning) / 4);
+    const weightedSkill = roundRating(
+        (skating * 0.24) +
+        (puckSkills * 0.20) +
+        (hockeySense * 0.28) +
+        (conditioning * 0.08) +
+        (effort * 0.14)
+    );
     const levelMapped = LEVEL_PLAY_RATING_MAP[levelPlayed] || 5.5;
-    const peerAdjustment = PEER_COMPARISON_ADJUSTMENT_MAP[peerComparison] ?? 0;
-    const weights = CONFIDENCE_WEIGHT_MAP[confidenceLevel] || CONFIDENCE_WEIGHT_MAP.medium;
-    const derivedRating = roundRating((baseSkill * weights.selfWeight) + (levelMapped * weights.levelWeight) + peerAdjustment);
+    const derivedRating = roundRating((weightedSkill * 0.94) + (levelMapped * 0.06));
 
     return {
         ratingMode: 'profile',
@@ -2027,10 +2077,11 @@ function normalizeSkillProfile(input = {}) {
         puckSkillsRating: puckSkills,
         hockeySenseRating: hockeySense,
         conditioningRating: conditioning,
+        effortRating: effort,
         levelPlayed,
-        peerComparison,
-        confidenceLevel,
-        selfRatingRaw: baseSkill,
+        peerComparison: '',
+        confidenceLevel: '',
+        selfRatingRaw: weightedSkill,
         derivedRating,
         finalRating: derivedRating,
         adminRating: null,
@@ -2052,6 +2103,7 @@ function hydratePlayerRatingProfile(player = {}) {
         puckSkillsRating: clampRating(player.puckSkillsRating ?? derivedRating),
         hockeySenseRating: clampRating(player.hockeySenseRating ?? derivedRating),
         conditioningRating: clampRating(player.conditioningRating ?? derivedRating),
+        effortRating: clampRating(player.effortRating ?? derivedRating),
         levelPlayed: player.levelPlayed || '',
         peerComparison: player.peerComparison || '',
         confidenceLevel: player.confidenceLevel || '',
@@ -2072,6 +2124,7 @@ function buildPlayerFromSkillProfile(basePlayer, skillProfile = {}) {
         puckSkillsRating: profile.puckSkillsRating,
         hockeySenseRating: profile.hockeySenseRating,
         conditioningRating: profile.conditioningRating,
+        effortRating: profile.effortRating,
         levelPlayed: profile.levelPlayed,
         peerComparison: profile.peerComparison,
         confidenceLevel: profile.confidenceLevel,
@@ -2114,96 +2167,184 @@ function isGoalieSpotsAvailable() {
     return getGoalieCount() < MAX_GOALIES;
 }
 
+function getLevelPlayedBoost(levelPlayed) {
+    return LEVEL_PLAY_BOOST_MAP[String(levelPlayed || '').toLowerCase()] ?? 0;
+}
+
+function getPlayerProfileScore(player) {
+    const profile = hydratePlayerRatingProfile(player);
+    return roundRating(
+        (profile.skatingRating * 0.24) +
+        (profile.puckSkillsRating * 0.20) +
+        (profile.hockeySenseRating * 0.28) +
+        (profile.conditioningRating * 0.08) +
+        (profile.effortRating * 0.14) +
+        (getLevelPlayedBoost(profile.levelPlayed) * 0.06)
+    );
+}
+
+function getPlayerBalanceScore(player) {
+    const profile = hydratePlayerRatingProfile(player);
+    const finalRating = roundRating(profile.finalRating ?? profile.rating ?? 5);
+    const profileScore = getPlayerProfileScore(profile);
+    return roundRating((finalRating * 0.75) + (profileScore * 0.25));
+}
+
+function summarizeTeamMetrics(team = []) {
+    const skaters = team.filter(p => !p.isGoalie);
+    const goalies = team.filter(p => p.isGoalie);
+
+    const sumField = (arr, getter) => arr.reduce((sum, item) => sum + getter(hydratePlayerRatingProfile(item)), 0);
+    const goalieImpact = goalies.reduce((sum, goalie) => sum + (getPlayerBalanceScore(goalie) * 1.25), 0);
+
+    return {
+        skaterCount: skaters.length,
+        totalBalance: sumField(skaters, p => getPlayerBalanceScore(p)) + goalieImpact,
+        skating: sumField(skaters, p => p.skatingRating),
+        puckSkills: sumField(skaters, p => p.puckSkillsRating),
+        hockeySense: sumField(skaters, p => p.hockeySenseRating),
+        conditioning: sumField(skaters, p => p.conditioningRating),
+        effort: sumField(skaters, p => p.effortRating),
+        goalieImpact,
+        averageFinalRating: team.length ? roundRating(sumField(team, p => p.finalRating ?? p.rating ?? 5) / team.length) : 0
+    };
+}
+
+function computeTeamBalanceObjective(whiteTeam = [], darkTeam = []) {
+    const white = summarizeTeamMetrics(whiteTeam);
+    const dark = summarizeTeamMetrics(darkTeam);
+
+    return (
+        Math.abs(white.totalBalance - dark.totalBalance) * 1.0 +
+        Math.abs(white.skating - dark.skating) * 0.9 +
+        Math.abs(white.hockeySense - dark.hockeySense) * 1.1 +
+        Math.abs(white.effort - dark.effort) * 0.7 +
+        Math.abs(white.puckSkills - dark.puckSkills) * 0.45 +
+        Math.abs(white.conditioning - dark.conditioning) * 0.35 +
+        Math.abs(white.goalieImpact - dark.goalieImpact) * 1.1 +
+        Math.abs(white.skaterCount - dark.skaterCount) * 2.0
+    );
+}
+
 function generateFairTeams() {
-    const playerTeamRating = (player) => roundRating(player?.finalRating ?? player?.rating ?? 5);
+    const sortByBalance = (a, b) => {
+        const diff = getPlayerBalanceScore(b) - getPlayerBalanceScore(a);
+        if (diff !== 0) return diff;
+        const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+        const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+        return nameA.localeCompare(nameB);
+    };
 
-    const goalies = players
-        .filter(p => p.isGoalie)
-        .map(hydratePlayerRatingProfile)
-        .sort((a, b) => {
-            const ratingDiff = playerTeamRating(b) - playerTeamRating(a);
-            if (ratingDiff !== 0) return ratingDiff;
-
-            const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
-            const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
-            return nameA.localeCompare(nameB);
-        });
-
-    const skaters = players
-        .filter(p => !p.isGoalie)
-        .map(hydratePlayerRatingProfile)
-        .sort((a, b) => {
-            const ratingDiff = playerTeamRating(b) - playerTeamRating(a);
-            if (ratingDiff !== 0) return ratingDiff;
-
-            const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
-            const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
-            return nameA.localeCompare(nameB);
-        });
+    const goalies = players.filter(p => p.isGoalie).map(hydratePlayerRatingProfile).sort(sortByBalance);
+    const skaters = players.filter(p => !p.isGoalie).map(hydratePlayerRatingProfile).sort(sortByBalance);
 
     let whiteTeam = [];
     let darkTeam = [];
-    let whiteRating = 0;
-    let darkRating = 0;
 
-    // Split goalies first
     if (goalies.length >= 2) {
         whiteTeam.push({ ...goalies[0], team: 'White' });
         darkTeam.push({ ...goalies[1], team: 'Dark' });
-        whiteRating += playerTeamRating(goalies[0]);
-        darkRating += playerTeamRating(goalies[1]);
+        for (let i = 2; i < goalies.length; i += 1) {
+            const goalie = goalies[i];
+            const addWhite = [...whiteTeam, { ...goalie, team: 'White' }];
+            const addDark = [...darkTeam, { ...goalie, team: 'Dark' }];
+            const whiteScore = computeTeamBalanceObjective(addWhite, darkTeam);
+            const darkScore = computeTeamBalanceObjective(whiteTeam, addDark);
+            if (whiteScore <= darkScore) {
+                whiteTeam = addWhite;
+            } else {
+                darkTeam = addDark;
+            }
+        }
     } else if (goalies.length === 1) {
         whiteTeam.push({ ...goalies[0], team: 'White' });
-        whiteRating += playerTeamRating(goalies[0]);
     }
 
-    // Balance skaters by total team rating first, then by count
-    for (const skater of skaters) {
-        const skaterRating = playerTeamRating(skater);
+    const tierSize = Math.max(2, Math.min(4, Math.ceil(skaters.length / 5) || 2));
+    let snakeLeftToRight = true;
 
-        const whiteSkaterCount = whiteTeam.filter(p => !p.isGoalie).length;
-        const darkSkaterCount = darkTeam.filter(p => !p.isGoalie).length;
+    for (let start = 0; start < skaters.length; start += tierSize) {
+        const tier = skaters.slice(start, start + tierSize);
+        const preferredOrder = snakeLeftToRight ? ['White', 'Dark'] : ['Dark', 'White'];
 
-        let assignToWhite = false;
+        tier.forEach((skater, index) => {
+            const preferredTeam = preferredOrder[index % preferredOrder.length];
+            const tryWhite = [...whiteTeam, { ...skater, team: 'White' }];
+            const tryDark = [...darkTeam, { ...skater, team: 'Dark' }];
+            const whiteObjective = computeTeamBalanceObjective(tryWhite, darkTeam) + (preferredTeam === 'White' ? -0.08 : 0);
+            const darkObjective = computeTeamBalanceObjective(whiteTeam, tryDark) + (preferredTeam === 'Dark' ? -0.08 : 0);
 
-        if (whiteSkaterCount < darkSkaterCount) {
-            assignToWhite = true;
-        } else if (darkSkaterCount < whiteSkaterCount) {
-            assignToWhite = false;
-        } else if (whiteRating < darkRating) {
-            assignToWhite = true;
-        } else if (darkRating < whiteRating) {
-            assignToWhite = false;
-        } else {
-            assignToWhite = whiteTeam.length <= darkTeam.length;
-        }
-
-        if (assignToWhite) {
-            whiteTeam.push({ ...skater, team: 'White' });
-            whiteRating += skaterRating;
-        } else {
-            darkTeam.push({ ...skater, team: 'Dark' });
-            darkRating += skaterRating;
-        }
-    }
-
-    const sortTeamForDisplay = (team) => {
-        return team.sort((a, b) => {
-            if (a.isGoalie && !b.isGoalie) return -1;
-            if (!a.isGoalie && b.isGoalie) return 1;
-
-            const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
-            const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
-            return nameA.localeCompare(nameB);
+            if (whiteObjective <= darkObjective) {
+                whiteTeam = tryWhite;
+            } else {
+                darkTeam = tryDark;
+            }
         });
-    };
 
-    whiteTeam = sortTeamForDisplay(whiteTeam);
-    darkTeam = sortTeamForDisplay(darkTeam);
+        snakeLeftToRight = !snakeLeftToRight;
+    }
+
+    let improved = true;
+    let guard = 0;
+    while (improved && guard < 60) {
+        improved = false;
+        guard += 1;
+        let bestSwap = null;
+        const currentObjective = computeTeamBalanceObjective(whiteTeam, darkTeam);
+
+        for (const whitePlayer of whiteTeam.filter(p => !p.isGoalie)) {
+            for (const darkPlayer of darkTeam.filter(p => !p.isGoalie)) {
+                const nextWhite = whiteTeam
+                    .filter(p => p.id !== whitePlayer.id)
+                    .concat({ ...darkPlayer, team: 'White' });
+                const nextDark = darkTeam
+                    .filter(p => p.id !== darkPlayer.id)
+                    .concat({ ...whitePlayer, team: 'Dark' });
+
+                const nextObjective = computeTeamBalanceObjective(nextWhite, nextDark);
+                if (nextObjective + 0.01 < currentObjective) {
+                    if (!bestSwap || nextObjective < bestSwap.objective) {
+                        bestSwap = {
+                            whiteId: whitePlayer.id,
+                            darkId: darkPlayer.id,
+                            objective: nextObjective,
+                            nextWhite,
+                            nextDark
+                        };
+                    }
+                }
+            }
+        }
+
+        if (bestSwap) {
+            whiteTeam = bestSwap.nextWhite;
+            darkTeam = bestSwap.nextDark;
+            improved = true;
+        }
+    }
+
+    const sortTeamForDisplay = (team) => team.sort((a, b) => {
+        if (a.isGoalie && !b.isGoalie) return -1;
+        if (!a.isGoalie && b.isGoalie) return 1;
+        return `${a.firstName} ${a.lastName}`.toLowerCase().localeCompare(`${b.firstName} ${b.lastName}`.toLowerCase());
+    });
+
+    whiteTeam = sortTeamForDisplay(whiteTeam.map(p => ({ ...p, team: 'White' })));
+    darkTeam = sortTeamForDisplay(darkTeam.map(p => ({ ...p, team: 'Dark' })));
 
     players = [...whiteTeam, ...darkTeam];
 
-    return { whiteTeam, darkTeam, whiteRating, darkRating };
+    const whiteMetrics = summarizeTeamMetrics(whiteTeam);
+    const darkMetrics = summarizeTeamMetrics(darkTeam);
+
+    return {
+        whiteTeam,
+        darkTeam,
+        whiteRating: whiteMetrics.averageFinalRating,
+        darkRating: darkMetrics.averageFinalRating,
+        whiteBalance: roundRating(whiteMetrics.totalBalance),
+        darkBalance: roundRating(darkMetrics.totalBalance)
+    };
 }
 
 function escapeCsvValue(value) {
@@ -2647,6 +2788,7 @@ app.get('/api/status', (req, res) => {
         date: gameDate,
         formattedDate: formatGameDate(gameDate),
         rosterReleased: rosterReleased,
+        noShowPolicy: NO_SHOW_POLICY_TEXT,
         rosterReleaseTime: currentWeekData.rosterReleaseTime,
         currentWeek: week,
         currentYear: year,
@@ -2658,6 +2800,7 @@ app.get('/api/status', (req, res) => {
         announcementEnabled: announcementEnabled,
         announcementText: announcementText,
         announcementImages: announcementImages,
+        paymentEmail: paymentEmail,
         arenaOptions: ARENA_OPTIONS,
         dayTimeOptions: DAY_TIME_OPTIONS,
         gameDayName: signupMessageData.gameDayName,
@@ -2669,7 +2812,9 @@ app.get('/api/status', (req, res) => {
         rosterReleaseAt: signupMessageData.rosterReleaseAtIso,
         rosterReleaseLabel: signupMessageData.rosterReleaseLabel,
         rosterReleaseHeadline: signupMessageData.rosterReleaseHeadline,
-        rosterReleaseLine: signupMessageData.rosterReleaseLine
+        rosterReleaseLine: signupMessageData.rosterReleaseLine,
+        noShowPolicy: NO_SHOW_POLICY_TEXT,
+        cancellationDeadlineLine: 'Cancellation closes at roster release.'
     });
 });
 
@@ -2836,6 +2981,7 @@ app.post('/api/register-init', async (req, res) => {
         puckSkillsRating,
         hockeySenseRating,
         conditioningRating,
+        effortRating,
         levelPlayed,
         peerComparison,
         confidenceLevel,
@@ -2868,6 +3014,7 @@ app.post('/api/register-init', async (req, res) => {
         puckSkillsRating,
         hockeySenseRating,
         conditioningRating,
+        effortRating,
         levelPlayed,
         peerComparison,
         confidenceLevel,
@@ -2900,6 +3047,7 @@ app.post('/api/register-init', async (req, res) => {
             puckSkillsRating: skillProfile.puckSkillsRating,
             hockeySenseRating: skillProfile.hockeySenseRating,
             conditioningRating: skillProfile.conditioningRating,
+            effortRating: skillProfile.effortRating,
             levelPlayed: skillProfile.levelPlayed,
             peerComparison: skillProfile.peerComparison,
             confidenceLevel: skillProfile.confidenceLevel,
@@ -2915,14 +3063,14 @@ app.post('/api/register-init', async (req, res) => {
                 await pool.query(
                     `INSERT INTO waitlist (
                         id, first_name, last_name, phone, payment_method, rating,
-                        skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating,
+                        skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating, effort_rating,
                         level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating, final_rating, is_goalie
                     )
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
                     [
                         waitlistPlayer.id, waitlistPlayer.firstName, waitlistPlayer.lastName,
                         waitlistPlayer.phone, waitlistPlayer.paymentMethod, waitlistPlayer.rating,
-                        waitlistPlayer.skatingRating, waitlistPlayer.puckSkillsRating, waitlistPlayer.hockeySenseRating, waitlistPlayer.conditioningRating,
+                        waitlistPlayer.skatingRating, waitlistPlayer.puckSkillsRating, waitlistPlayer.hockeySenseRating, waitlistPlayer.conditioningRating, waitlistPlayer.effortRating,
                         waitlistPlayer.levelPlayed, waitlistPlayer.peerComparison, waitlistPlayer.confidenceLevel,
                         waitlistPlayer.selfRatingRaw, waitlistPlayer.derivedRating, waitlistPlayer.finalRating, false
                     ]
@@ -2963,6 +3111,7 @@ app.post('/api/register-init', async (req, res) => {
             puckSkillsRating: skillProfile.puckSkillsRating,
             hockeySenseRating: skillProfile.hockeySenseRating,
             conditioningRating: skillProfile.conditioningRating,
+            effortRating: skillProfile.effortRating,
             levelPlayed: skillProfile.levelPlayed,
             peerComparison: skillProfile.peerComparison,
             confidenceLevel: skillProfile.confidenceLevel,
@@ -3001,6 +3150,7 @@ app.post('/api/register-final', async (req, res) => {
         puckSkillsRating: tempData.puckSkillsRating,
         hockeySenseRating: tempData.hockeySenseRating,
         conditioningRating: tempData.conditioningRating,
+        effortRating: tempData.effortRating,
         levelPlayed: tempData.levelPlayed,
         peerComparison: tempData.peerComparison,
         confidenceLevel: tempData.confidenceLevel,
@@ -3022,14 +3172,14 @@ app.post('/api/register-final', async (req, res) => {
             await pool.query(
                 `INSERT INTO players (
                     id, first_name, last_name, phone, payment_method, paid, paid_amount, rating,
-                    skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating,
+                    skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating, effort_rating,
                     level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating,
                     admin_rating, admin_adjustment, final_rating, is_goalie, team, rules_agreed
                 )
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)`,
                 [newPlayer.id, newPlayer.firstName, newPlayer.lastName, newPlayer.phone,
                  newPlayer.paymentMethod, newPlayer.paid, newPlayer.paidAmount, newPlayer.rating,
-                 newPlayer.skatingRating, newPlayer.puckSkillsRating, newPlayer.hockeySenseRating, newPlayer.conditioningRating,
+                 newPlayer.skatingRating, newPlayer.puckSkillsRating, newPlayer.hockeySenseRating, newPlayer.conditioningRating, newPlayer.effortRating,
                  newPlayer.levelPlayed, newPlayer.peerComparison, newPlayer.confidenceLevel, newPlayer.selfRatingRaw,
                  newPlayer.derivedRating, newPlayer.adminRating, newPlayer.adminAdjustment, newPlayer.finalRating, false, null, true]
             );
@@ -3061,10 +3211,6 @@ app.post('/api/cancel-registration', async (req, res) => {
         return res.status(400).json({ error: "Invalid player ID." });
     }
 
-    if (rosterReleased) {
-        return res.status(403).json({ error: "Cannot cancel after roster has been released." });
-    }
-
     const submittedPhone = normalizePhoneDigits(phone);
     if (!submittedPhone) {
         return res.status(400).json({ error: "Phone number is required." });
@@ -3077,17 +3223,56 @@ app.post('/api/cancel-registration', async (req, res) => {
     const findById = (arr) => arr.findIndex(p => String(p.id).trim() === idToRemove);
 
     const playerIndex = findById(players);
+    const waitlistIndex = findById(waitlist);
+    const foundPlayer = playerIndex !== -1 ? players[playerIndex] : (waitlistIndex !== -1 ? waitlist[waitlistIndex] : null);
+    const foundSource = playerIndex !== -1 ? 'players' : (waitlistIndex !== -1 ? 'waitlist' : '');
+
+    if (!foundPlayer) {
+        return res.status(404).json({ error: "Player not found." });
+    }
+
+    if (isProtectedPlayer(foundPlayer)) {
+        return res.status(403).json({ error: "This player cannot be cancelled online. Please contact admin." });
+    }
+
+    const storedPhone = normalizePhoneDigits(foundPlayer.phone);
+    if (submittedPhone !== storedPhone) {
+        return res.status(401).json({ error: "Phone number does not match registration." });
+    }
+
+    if (rosterReleased) {
+        const alreadyLoggedLateAttempt = cancelledRegistrations.some(item =>
+            String(item?.id) === String(foundPlayer.id) &&
+            item?.action === 'late_cancel_no_show_owed'
+        );
+
+        if (!alreadyLoggedLateAttempt) {
+            appendCancellationLog({
+                id: foundPlayer.id,
+                firstName: foundPlayer.firstName,
+                lastName: foundPlayer.lastName,
+                phone: foundPlayer.phone,
+                rating: foundPlayer.rating,
+                isGoalie: foundPlayer.isGoalie,
+                paymentMethod: foundPlayer.paymentMethod,
+                source: foundSource || 'players',
+                action: 'late_cancel_no_show_owed',
+                cancelledBy: 'player',
+                cancelledAt: new Date().toISOString(),
+                notes: NO_SHOW_POLICY_TEXT
+            });
+            await saveData();
+        }
+
+        return res.status(403).json({
+            error: "Cancellation is closed because the roster has been released. No-show owes.",
+            noShowOwes: true,
+            policy: NO_SHOW_POLICY_TEXT
+        });
+    }
+
     if (playerIndex !== -1) {
         const player = players[playerIndex];
-
-        if (isProtectedPlayer(player)) {
-            return res.status(403).json({ error: "This player cannot be cancelled online. Please contact admin." });
-        }
-
-        const storedPhone = normalizePhoneDigits(player.phone);
-        if (submittedPhone !== storedPhone) {
-            return res.status(401).json({ error: "Phone number does not match registration." });
-        }
 
         appendCancellationLog({
             id: player.id,
@@ -3165,18 +3350,8 @@ app.post('/api/cancel-registration', async (req, res) => {
         });
     }
 
-    const waitlistIndex = findById(waitlist);
     if (waitlistIndex !== -1) {
         const waitlistPlayer = waitlist[waitlistIndex];
-
-        if (isProtectedPlayer(waitlistPlayer)) {
-            return res.status(403).json({ error: "This player cannot be cancelled online. Please contact admin." });
-        }
-
-        const storedPhone = normalizePhoneDigits(waitlistPlayer.phone);
-        if (submittedPhone !== storedPhone) {
-            return res.status(401).json({ error: "Phone number does not match registration." });
-        }
 
         appendCancellationLog({
             id: waitlistPlayer.id,
@@ -3315,6 +3490,7 @@ app.post('/api/admin/app-settings', (req, res) => {
         announcementEnabled,
         announcementText,
         announcementImages,
+        paymentEmail,
         selectedDayTime: gameTime,
         selectedArena: gameLocation,
         gameDate,
@@ -3328,7 +3504,7 @@ app.post('/api/admin/app-settings', (req, res) => {
 app.post('/api/admin/update-app-settings', async (req, res) => {
     const { sessionToken, maintenanceMode: newMaintenance, customTitle: newTitle,
             announcementEnabled: newAnnouncementEnabled, announcementText: newAnnouncementText, announcementImages: newAnnouncementImages,
-            selectedDayTime, selectedArena, gameDate: newGameDate } = req.body;
+            paymentEmail: newPaymentEmail, selectedDayTime, selectedArena, gameDate: newGameDate } = req.body;
 
     if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -3339,6 +3515,7 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
         if (newTitle !== undefined) customTitle = String(newTitle || '').trim() || customTitle;
         if (newAnnouncementEnabled !== undefined) announcementEnabled = !!newAnnouncementEnabled;
         if (newAnnouncementText !== undefined) announcementText = String(newAnnouncementText || '').trim();
+        if (newPaymentEmail !== undefined) paymentEmail = String(newPaymentEmail || '').trim();
         if (newAnnouncementImages !== undefined) {
             announcementImages = normalizeAnnouncementImages(newAnnouncementImages);
         }
@@ -3369,6 +3546,7 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
         await saveAppSetting('announcementEnabled', announcementEnabled.toString());
         await saveAppSetting('announcementText', announcementText);
         await saveAppSetting('announcementImages', JSON.stringify(announcementImages));
+        await saveAppSetting('paymentEmail', paymentEmail);
         await saveAppSetting('selectedDayTime', gameTime);
         await saveAppSetting('selectedArena', gameLocation);
         await saveAppSetting('gameDate', gameDate);
@@ -3688,6 +3866,7 @@ app.post('/api/admin/restore-backup', async (req, res) => {
                 if (typeof s.announcementEnabled === 'boolean') announcementEnabled = s.announcementEnabled;
                 if (typeof s.announcementText === 'string') announcementText = s.announcementText;
                 if (Array.isArray(s.announcementImages)) announcementImages = s.announcementImages;
+                if (typeof s.paymentEmail === 'string') paymentEmail = s.paymentEmail.trim() || paymentEmail;
                 if (typeof s.requirePlayerCode === 'boolean') requirePlayerCode = s.requirePlayerCode;
                 if (typeof s.playerSignupCode === 'string') playerSignupCode = s.playerSignupCode;
             }
@@ -4391,7 +4570,7 @@ app.post('/api/admin/release-roster', async (req, res) => {
 
         // Auto-enable payment reminder when roster is released
         announcementEnabled = true;
-        announcementText = 'E-transfer required immediately after roster release.';
+        announcementText = buildRosterReleasePaymentAnnouncement();
         
         currentWeekData = {
             weekNumber: week,
@@ -4475,6 +4654,7 @@ app.post('/api/admin/manual-reset', async (req, res) => {
     requirePlayerCode = true;
     lastExactResetRunAt = '';
     lastExactRosterReleaseRunAt = '';
+    clearAnnouncementState();
 
     try {
         if (pool) {
@@ -4711,7 +4891,9 @@ app.get('/health', async (req, res) => {
     });
 });
 
-app.head('/health', (req, res) => {
+app.head('/health', async (req, res) => {
+    lastHealthPingAt = new Date().toISOString();
+    await runSchedulerTick();
     res.sendStatus(200);
 });
 
@@ -4731,7 +4913,9 @@ app.get('/api/health', async (req, res) => {
     });
 });
 
-app.head('/api/health', (req, res) => {
+app.head('/api/health', async (req, res) => {
+    lastHealthPingAt = new Date().toISOString();
+    await runSchedulerTick();
     res.sendStatus(200);
 });
 
@@ -4741,7 +4925,8 @@ initDatabase().then(async () => {
     checkAutoLock();
     runSchedulerTick();
     
-    cron.schedule('* * * * *', async () => {
+    // Safety net only: the app no longer depends on cron because every request runs catch-up logic.
+    cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '* * * * *', async () => {
         await runSchedulerTick();
     }, {
         timezone: 'America/New_York'
@@ -4767,7 +4952,8 @@ initDatabase().then(async () => {
     checkAutoLock();
     runSchedulerTick();
     
-    cron.schedule('* * * * *', async () => {
+    // Safety net only: the app no longer depends on cron because every request runs catch-up logic.
+    cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '* * * * *', async () => {
         await runSchedulerTick();
     }, {
         timezone: 'America/New_York'

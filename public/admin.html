@@ -88,7 +88,7 @@
 
         input, select {
             width: 100%;
-            padding: 12px;
+            padding: 4px;
             margin: 8px 0;
             background: #3d3d3d;
             border: 1px solid #555;
@@ -126,7 +126,7 @@
         }
 
         th, td {
-            padding: 12px;
+            padding: 4px;
             text-align: left;
             border-bottom: 1px solid #444;
         }
@@ -980,7 +980,7 @@
             background: #3d3d3d;
             border: 1px solid #555;
             color: white;
-            padding: 10px;
+            padding: 4px;
             border-radius: 5px;
             font-size: 1rem;
             flex: 1;
@@ -998,7 +998,7 @@
 
         .delete-result {
             margin-top: 10px;
-            padding: 10px;
+            padding: 4px;
             border-radius: 5px;
             font-size: 0.9rem;
             display: none;
@@ -1059,9 +1059,9 @@
         .schedule-editor { margin-top: 12px; padding-top: 12px; border-top: 1px solid #444; }
         .schedule-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         @media (max-width: 900px) { .schedule-grid { grid-template-columns: 1fr; } }
-        .schedule-card { background: #262626; border: 1px solid #3a3a3a; border-radius: 10px; padding: 12px; }
-        .schedule-title { font-weight: 700; margin-bottom: 8px; }
-        .schedule-label { display:flex; gap:8px; align-items:center; color:#ddd; margin-bottom:10px; }
+        .schedule-card { background: #262626; border: 1px solid #3a3a3a; border-radius: 10px; padding: 4px; }
+        .schedule-title { font-weight: 700; margin-bottom: 4px; }
+        .schedule-label { display:flex; gap:3px; align-items:center; color:#ddd; margin-bottom:10px; }
         .schedule-row { display:flex; gap:10px; flex-wrap:wrap; }
         .schedule-field { flex: 1; min-width: 220px; }
         .schedule-label2 { font-size: 0.85rem; color:#bbb; margin-bottom: 4px; }
@@ -1107,7 +1107,7 @@
             border: 1px solid #555;
             color: white;
             border-radius: 5px;
-            padding: 12px;
+            padding: 4px;
             font-size: 1rem;
             text-align: center;
         }
@@ -1163,7 +1163,7 @@
         .clock-ampm-row,
         .clock-action-row {
             display: flex;
-            gap: 8px;
+            gap: 3px;
             justify-content: center;
             margin-bottom: 10px;
             flex-wrap: wrap;
@@ -1244,7 +1244,7 @@
             text-align: center;
             color: #aaa;
             font-size: 0.82rem;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
         }
 
         @media (max-width: 640px) {
@@ -1310,7 +1310,7 @@
             display: block;
             color: #f0f0f0;
             font-weight: 600;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
         }
 
         .message-box small {
@@ -1362,9 +1362,179 @@
             }
         }
 
-    </style>
+    
+/* ===== Option 1: clean centered admin table ===== */
+.admin-layout-option-1 table th,
+.admin-layout-option-1 table td { text-align:center; vertical-align:middle; }
+.admin-layout-option-1 #playerList td:first-child,
+.admin-layout-option-1 #waitlistList td:nth-child(2) { text-align:center; }
+.admin-layout-option-1 .player-name-cell { text-align:center; }
+.admin-layout-option-1 .rating-wrap,
+.admin-layout-option-1 .paid-wrap,
+.admin-layout-option-1 .waitlist-rating-wrap,
+.admin-layout-option-1 .waitlist-action-wrap { display:flex; align-items:center; justify-content:center; gap:2px; flex-wrap:wrap; }
+.admin-layout-option-1 .paid-wrap { gap:3px; }
+.admin-layout-option-1 .table-note-muted { font-size:0.8rem; color:#bbb; line-height:1.35; text-align:center; }
+
+</style>
+
+<style>
+table {
+    border-collapse: collapse !important;
+}
+th, td {
+    padding: 3px 6px !important;
+    white-space: nowrap;
+}
+.player-name-cell {
+    padding-right: 4px !important;
+}
+.rating-wrap, .paid-wrap {
+    gap: 2px !important;
+}
+input[type="number"] {
+    margin: 0 !important;
+}
+</style>
+
+
+<style>
+/* lock name + rating closer */
+td:nth-child(1) { padding-right: 2px !important; }
+td:nth-child(2) { padding-left: 4px !important; padding-right:4px !important; }
+td:nth-child(3) { padding-left: 2px !important; }
+
+/* tighten overall table */
+table { border-collapse: collapse !important; }
+th, td { padding: 3px 5px !important; }
+
+/* reduce internal gaps */
+.rating-wrap, .paid-wrap { gap: 2px !important; }
+</style>
+
+
+<style>
+/* FINAL POLISH */
+
+/* stack name + phone */
+.player-name-cell {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+}
+.player-name-cell span {
+    font-size: 0.8rem;
+    color: #aaa;
+}
+
+/* shrink phone column */
+td:nth-child(2) {
+    font-size: 0.85rem;
+    color: #bbb;
+    width: 110px;
+}
+
+/* ultra tight table */
+table { border-collapse: collapse !important; }
+th, td { padding: 2px 4px !important; }
+
+/* tighten gaps */
+.rating-wrap, .paid-wrap { gap: 2px !important; }
+
+/* smaller buttons */
+button {
+    padding: 4px 8px !important;
+    font-size: 0.8rem !important;
+}
+</style>
+
+
+<style>
+/* tighten badges */
+.protected-badge,
+.goalie-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: fit-content;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    margin-left: 6px;
+    white-space: nowrap;
+}
+</style>
+
+
+<style>
+/* center name + badges */
+.player-name-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+/* center badges under name */
+.protected-badge,
+.goalie-badge {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+}
+</style>
+
+
+<style>
+.compact-pay{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:8px;
+    overflow:hidden;
+    white-space:nowrap;
+    width:auto;
+    max-width:100%;
+    vertical-align:middle;
+}
+.compact-pay.is-unpaid{
+    background:#c62828;
+}
+.compact-pay.is-paid{
+    background:#2e7d32;
+}
+.compact-pay-btn{
+    border:none;
+    background:transparent;
+    color:#fff;
+    margin:0 !important;
+    cursor:pointer;
+    line-height:1;
+    font-weight:700;
+}
+.compact-pay-minus,
+.compact-pay-plus{
+    padding:4px 5px !important;
+    min-width:20px;
+    font-size:0.78rem !important;
+}
+.compact-pay-main{
+    padding:4px 8px !important;
+    min-width:34px;
+    font-size:0.78rem !important;
+}
+.compact-pay-btn:hover{
+    background:rgba(255,255,255,0.12);
+}
+.paid-wrap{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:0 !important;
+}
+</style>
+
 </head>
-<body>
+<body class="admin-layout-option-1">
 
     <!-- MAINTENANCE BULLETIN - Shows when activated -->
     <div class="maintenance-bulletin" id="maintenanceBulletin">
@@ -1375,14 +1545,14 @@
         <h1>Admin Portal</h1>
         <p style="text-align:center; color:#888;">Phan's Hockey</p>
         <input type="password" id="adminPass" placeholder="Enter Render ADMIN_PASSWORD">
-        <div style="display:flex; align-items:center; gap:8px; margin-top:4px; margin-bottom:8px; color:#bbb; font-size:0.95rem; flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:3px; margin-top:4px; margin-bottom:4px; color:#bbb; font-size:0.95rem; flex-wrap:wrap;">
             <input type="checkbox" id="showAdminPass" style="width:auto; margin:0;">
             <label for="showAdminPass" style="cursor:pointer;">Show password</label>
             <span style="opacity:.45;">•</span>
             <input type="checkbox" id="rememberDevice" style="width:auto; margin:0;" checked>
             <label for="rememberDevice" style="cursor:pointer;">Remember this device for 30 days</label>
         </div>
-        <button onclick="login()" style="width:100%;">Access Dashboard</button>
+        <button onclick="login()" style="width:100%;border-spacing:0;">Access Dashboard</button>
         <p id="errorMsg" style="color:#ff4444; text-align:center; display:none;">Wrong Password</p>
     </div>
 
@@ -1457,6 +1627,12 @@
                 <small>This banner is separate from maintenance mode and will not shut down signup.</small>
             </div>
 
+            <div class="message-box">
+                <label for="paymentEmail">Dynamic Payment E-transfer Email</label>
+                <input type="email" id="paymentEmail" placeholder="Enter payment email">
+                <small>Used automatically when roster is released to build the payment reminder banner. Players can tap the email on signup page to copy it.</small>
+            </div>
+
             <div class="message-grid">
                 <div class="message-box">
                     <label for="announcementImageUpload">Upload Announcement Picture</label>
@@ -1475,6 +1651,7 @@
 
             <div class="message-actions">
                 <button type="button" id="saveAnnouncementBtn" class="control-btn" onclick="saveAnnouncementSettings()">Save Announcement</button>
+                <button type="button" class="control-btn secondary-btn" onclick="clearAnnouncementSettings()">Clear & Turn Off</button>
             </div>
         </div>
 
@@ -1664,63 +1841,6 @@
             </div>
         </div>
 
-        <!-- Released Roster Preview -->
-        <div class="released-roster-preview" id="releasedRosterPreview">
-            <div class="preview-header">
-                <h3>🏒 Released Roster</h3>
-                <p id="previewGameInfo">--</p>
-            </div>
-            <div class="preview-teams">
-                <div class="preview-team white">
-                    <h4>Team White <span id="whiteAvgPreview"></span></h4>
-                    <ul class="preview-list" id="whiteTeamPreview"></ul>
-                </div>
-                <div class="preview-team dark">
-                    <h4>Team Dark <span id="darkAvgPreview"></span></h4>
-                    <ul class="preview-list" id="darkTeamPreview"></ul>
-                </div>
-            </div>
-        </div>
-
-        <!-- Payment Summary -->
-        <div class="payment-summary-box">
-            <h3>💰 Payment Summary (Admin Only)</h3>
-            <div class="payment-stats">
-                <div class="payment-stat">
-                    <div class="payment-stat-value" id="totalCollected">$0.00</div>
-                    <div class="payment-stat-label">Total Collected</div>
-                </div>
-                <div class="payment-stat">
-                    <div class="payment-stat-value" id="paidCountDisplay">0</div>
-                    <div class="payment-stat-label">Paid Players</div>
-                </div>
-                <div class="payment-stat">
-                    <div class="payment-stat-value unpaid" id="unpaidCountDisplay">0</div>
-                    <div class="payment-stat-label">Unpaid Players</div>
-                </div>
-            </div>
-            <button class="export-btn" onclick="exportToExcel()">
-                📥 Download Full Payment Report (CSV)
-            </button>
-            <div class="message-actions" style="margin-top:12px;">
-                <button type="button" class="control-btn" onclick="downloadLatestSavedPaymentReport()" style="background:#6f42c1;">🗂️ Download Last Auto-Saved Report</button>
-                <button type="button" class="secondary-btn control-btn" onclick="loadPaymentReportSnapshots()">↻ Refresh Saved Reports</button>
-            </div>
-            <div class="message-box" style="margin-top:12px;">
-                <label for="paymentReportSnapshotSelect">Saved Payment Report Snapshots</label>
-                <div class="control-row">
-                    <select id="paymentReportSnapshotSelect" style="flex:1;">
-                        <option value="">No saved reports loaded</option>
-                    </select>
-                    <button type="button" class="control-btn" onclick="downloadSelectedPaymentReport()" style="background:#6f42c1;">Download Selected</button>
-                </div>
-                <small id="paymentReportSnapshotStatus">Reports are auto-saved to the database before scheduled and manual weekly reset.</small>
-            </div>
-            <p class="security-notice">
-                ⚠️ Payment and rating data is hidden from public view. Only admins can see this information.
-            </p>
-        </div>
-
         <!-- Pre-defined Goalies Section - AUTO ADD -->
         <div class="goalies-section">
             <h3>🥅 Auto-Add Regular Goalies (Weekly Reset)</h3>
@@ -1859,14 +1979,72 @@
                     <th>Name</th>
                     <th>Phone</th>
                     <th>Rating</th>
-                    <th>Profile</th>
-                    <th>Payment</th>
                     <th>Paid ($) <span id="totalPaidDisplay" class="total-paid-display">($0.00)</span></th>
+                    <th>Payment</th>
                     <th>Action</th>
                 </tr>
             </thead>
             <tbody id="playerList"></tbody>
         </table>
+
+        <!-- Payment Summary -->
+        <div class="payment-summary-box">
+            <h3>💰 Payment Summary (Admin Only)</h3>
+            <div class="payment-stats">
+                <div class="payment-stat">
+                    <div class="payment-stat-value" id="totalCollected">$0.00</div>
+                    <div class="payment-stat-label">Total Collected</div>
+                </div>
+                <div class="payment-stat">
+                    <div class="payment-stat-value" id="paidCountDisplay">0</div>
+                    <div class="payment-stat-label">Paid Players</div>
+                </div>
+                <div class="payment-stat">
+                    <div class="payment-stat-value unpaid" id="unpaidCountDisplay">0</div>
+                    <div class="payment-stat-label">Unpaid Players</div>
+                </div>
+            </div>
+            <button class="export-btn" onclick="exportToExcel()">
+                📥 Download Full Payment Report (CSV)
+            </button>
+            <div class="message-actions" style="margin-top:12px;">
+                <button type="button" class="control-btn" onclick="downloadLatestSavedPaymentReport()" style="background:#6f42c1;">🗂️ Download Last Auto-Saved Report</button>
+                <button type="button" class="secondary-btn control-btn" onclick="loadPaymentReportSnapshots()">↻ Refresh Saved Reports</button>
+            </div>
+            <div class="message-box" style="margin-top:12px;">
+                <label for="paymentReportSnapshotSelect">Saved Payment Report Snapshots</label>
+                <div class="control-row">
+                    <select id="paymentReportSnapshotSelect" style="flex:1;">
+                        <option value="">No saved reports loaded</option>
+                    </select>
+                    <button type="button" class="control-btn" onclick="downloadSelectedPaymentReport()" style="background:#6f42c1;">Download Selected</button>
+                </div>
+                <small id="paymentReportSnapshotStatus">Reports are auto-saved to the database before scheduled and manual weekly reset.</small>
+            </div>
+            <p class="security-notice">
+                ⚠️ Payment and rating data is hidden from public view. Only admins can see this information.
+            </p>
+        </div>
+
+
+        <!-- Released Roster Preview -->
+        <div class="released-roster-preview" id="releasedRosterPreview">
+            <div class="preview-header">
+                <h3>🏒 Released Roster</h3>
+                <p id="previewGameInfo">--</p>
+            </div>
+            <div class="preview-teams">
+                <div class="preview-team white">
+                    <h4>Team White <span id="whiteAvgPreview"></span></h4>
+                    <ul class="preview-list" id="whiteTeamPreview"></ul>
+                </div>
+                <div class="preview-team dark">
+                    <h4>Team Dark <span id="darkAvgPreview"></span></h4>
+                    <ul class="preview-list" id="darkTeamPreview"></ul>
+                </div>
+            </div>
+        </div>
+
 
         <div class="waitlist-section">
             <h3>⏳ Waitlist (<span id="waitlistCount">0</span>)</h3>
@@ -1877,7 +2055,6 @@
                         <th>Name</th>
                         <th>Phone</th>
                         <th>Rating</th>
-                        <th>Profile</th>
                         <th>Action</th>
                     </tr>
                 </thead>
@@ -2664,7 +2841,8 @@
                 const announcementCheckbox = document.getElementById('announcementCheckbox');
                 const announcementStatus = document.getElementById('announcementStatus');
                 const announcementText = document.getElementById('announcementText');
-                                const announcementImagePreview = document.getElementById('announcementImagePreview');
+                const paymentEmail = document.getElementById('paymentEmail');
+                const announcementImagePreview = document.getElementById('announcementImagePreview');
 
                 if (announcementCheckbox) {
                     announcementCheckbox.checked = !!data.announcementEnabled;
@@ -2675,6 +2853,9 @@
                 }
                 if (announcementText) {
                     announcementText.value = data.announcementText || '';
+                }
+                if (paymentEmail) {
+                    paymentEmail.value = data.paymentEmail || '';
                 }
                 if (announcementImagePreview) {
                     const firstImage = Array.isArray(data.announcementImages) && data.announcementImages.length ? data.announcementImages[0] : '';
@@ -3460,7 +3641,7 @@
                 // Render players table with payment controls (ADMIN ONLY)
                 const tbody = document.getElementById('playerList');
                 tbody.innerHTML = '';
-                
+
                 if (data.players.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#666; padding:30px;">No players registered</td></tr>';
                 } else {
@@ -3469,7 +3650,7 @@
                         const goalieBadge = p.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
                         const protectedBadge = (p.firstName.toLowerCase() === 'phan' && p.lastName.toLowerCase() === 'ly') ? 
                             '<span class="protected-badge">PROTECTED</span>' : '';
-                        
+
                         let paidInput = '';
                         if (p.isGoalie) {
                             paidInput = '<span style="color:#4CAF50; font-weight:bold;">FREE</span>';
@@ -3479,45 +3660,33 @@
                             const amount = p.paidAmount !== null && p.paidAmount !== undefined ? p.paidAmount : '';
                             const isPaid = p.paidAmount && parseFloat(p.paidAmount) > 0;
 
+                            const compactAmount = (p.paidAmount !== null && p.paidAmount !== undefined && p.paidAmount !== '')
+                                ? parseFloat(p.paidAmount)
+                                : 15;
                             paidInput = `
-                                <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
-                                    <button onclick="quickPay15(${p.id})" 
-                                        style="padding:4px 8px;font-size:0.75rem;background:${isPaid ? '#555' : '#4CAF50'};border:none;border-radius:3px;color:white;cursor:pointer;"
-                                        ${isPaid ? 'disabled' : ''}>
-                                        $15
+                                <div class="compact-pay ${isPaid ? 'is-paid' : 'is-unpaid'}" data-player-id="${p.id}">
+                                    <button class="compact-pay-btn compact-pay-minus" onclick="event.stopPropagation(); compactPayAdjust(${p.id}, -1)">−</button>
+                                    <button class="compact-pay-btn compact-pay-main" title="Tap to mark paid/unpaid" onclick="compactPayToggle(${p.id})" data-amount="${compactAmount}">
+                                        $${compactAmount}
                                     </button>
-                                    <input type="number" class="paid-input" value="${amount}" 
-                                        id="paid-${p.id}"
-                                        placeholder="0.00" step="0.01" min="0"
-                                        style="width:60px;"
-                                        onchange="updatePaidAmount(${p.id}, this.value)">
-                                    <button onclick="markUnpaid(${p.id})" 
-                                        style="padding:4px 8px;font-size:0.75rem;background:#ff4444;border:none;border-radius:3px;color:white;cursor:pointer;"
-                                        title="Mark as unpaid">
-                                        ✕
-                                    </button>
+                                    <button class="compact-pay-btn compact-pay-plus" onclick="event.stopPropagation(); compactPayAdjust(${p.id}, 1)">+</button>
                                 </div>
                             `;
                         }
-                        
+
                         tr.innerHTML = `
-                            <td>${p.firstName} ${p.lastName} ${goalieBadge} ${protectedBadge}</td>
+                            <td class="player-name-cell">${p.firstName} ${p.lastName} ${goalieBadge} ${protectedBadge}</td>
                             <td>${p.phone}</td>
                             <td>
-                                <div style="display:flex;align-items:center;gap:5px;">
+                                <div class="rating-wrap">
                                     <input type="number" id="rating-${p.id}" value="${Number(p.finalRating ?? p.rating ?? 5).toFixed(1)}" min="1" max="10" step="0.1" 
-                                        style="width:62px;padding:5px;background:#3d3d3d;border:1px solid #555;color:white;border-radius:3px;text-align:center;"
+                                        style="width:48px;padding:3px 4px;background:#3d3d3d;border:1px solid #555;color:white;border-radius:3px;text-align:center;"
                                         onchange="updateRating(${p.id}, this.value)">
-                                    <span>/10</span>
+                                    
                                 </div>
                             </td>
-                            <td style="font-size:0.8rem; color:#bbb; line-height:1.35;">
-                                Self ${Number(p.selfRatingRaw ?? p.finalRating ?? p.rating ?? 5).toFixed(1)}<br>
-                                Derived ${Number(p.derivedRating ?? p.finalRating ?? p.rating ?? 5).toFixed(1)}<br>
-                                Admin ${p.adminRating == null ? '—' : Number(p.adminRating).toFixed(1)}
-                            </td>
-                            <td>${p.isGoalie ? 'N/A' : p.paymentMethod}</td>
                             <td>${paidInput}</td>
+                            <td>${p.isGoalie ? 'N/A' : p.paymentMethod}</td>
                             <td>
                                 <button class="remove-btn" onclick="removePlayer(${p.id})">Remove</button>
                             </td>
@@ -3537,23 +3706,21 @@
                         const goalieBadge = p.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
                         tr.innerHTML = `
                             <td>${index + 1}</td>
-                            <td>${p.firstName} ${p.lastName} ${goalieBadge}</td>
+                            <td class="player-name-cell">${p.firstName} ${p.lastName} ${goalieBadge}</td>
                             <td>${p.phone}</td>
                             <td>
-                                <div style="display:flex;align-items:center;gap:5px;">
+                                <div class="waitlist-rating-wrap">
                                     <input type="number" id="rating-${p.id}" value="${Number(p.finalRating ?? p.rating ?? 5).toFixed(1)}" min="1" max="10" step="0.1" 
-                                        style="width:62px;padding:5px;background:#3d3d3d;border:1px solid #555;color:white;border-radius:3px;text-align:center;"
+                                        style="width:48px;padding:3px 4px;background:#3d3d3d;border:1px solid #555;color:white;border-radius:3px;text-align:center;"
                                         onchange="updateRating(${p.id}, this.value)">
-                                    <span>/10</span>
+                                    
                                 </div>
                             </td>
-                            <td style="font-size:0.8rem; color:#bbb; line-height:1.35;">
-                                Self ${Number(p.selfRatingRaw ?? p.finalRating ?? p.rating ?? 5).toFixed(1)}<br>
-                                Derived ${Number(p.derivedRating ?? p.finalRating ?? p.rating ?? 5).toFixed(1)}
-                            </td>
                             <td>
-                                <button class="promote-btn" data-player-id="${p.id}">Promote</button>
-                                <button class="remove-btn" onclick="removeWaitlist(${p.id})">Remove</button>
+                                <div class="waitlist-action-wrap">
+                                    <button class="promote-btn" data-player-id="${p.id}">Promote</button>
+                                    <button class="remove-btn" onclick="removeWaitlist(${p.id})">Remove</button>
+                                </div>
                             </td>
                         `;
                         waitlistBody.appendChild(tr);
@@ -3574,13 +3741,15 @@
                         const goalieBadge = item.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
                         const typeBadge = item.action === 'removed'
                             ? '<span class="cancelled-badge">ADMIN REMOVED</span>'
-                            : '<span class="cancelled-badge">PLAYER CANCELLED</span>';
+                            : item.action === 'late_cancel_no_show_owed'
+                                ? '<span class="cancelled-badge" style="background:#ff4444;">NO-SHOW OWES</span>'
+                                : '<span class="cancelled-badge">PLAYER CANCELLED</span>';
                         const when = item.cancelledAt ? new Date(item.cancelledAt).toLocaleString() : '--';
                         tr.innerHTML = `
                             <td>${item.firstName || ''} ${item.lastName || ''} ${goalieBadge}</td>
                             <td>${item.source || '--'}</td>
                             <td>${typeBadge}</td>
-                            <td>${item.phone || '--'}</td>
+                            <td>${item.phone || '--'}${item.notes ? `<div style="color:#ffb366; font-size:0.75rem; margin-top:4px;">${item.notes}</div>` : ''}</td>
                             <td>${when}</td>
                         `;
                         cancellationBody.appendChild(tr);
@@ -4132,9 +4301,11 @@
             return withBusyButton(button, 'Saving...', async () => {
                 const checkbox = document.getElementById('announcementCheckbox');
                 const text = document.getElementById('announcementText');
+                const paymentEmailInput = document.getElementById('paymentEmail');
                 const checkboxEnabled = !!(checkbox && checkbox.checked);
                 const enabled = checkboxEnabled;
                 const announcementTextValue = text ? text.value.trim() : '';
+                const paymentEmailValue = paymentEmailInput ? paymentEmailInput.value.trim() : '';
                 const announcementImages = window.announcementImageData ? [window.announcementImageData] : [];
 
                 try {
@@ -4145,6 +4316,7 @@
                             sessionToken,
                             announcementEnabled: checkboxEnabled,
                             announcementText: announcementTextValue,
+                            paymentEmail: paymentEmailValue,
                             announcementImages
                         })
                     });
@@ -4163,6 +4335,37 @@
                     alert(err.message || 'Failed to save announcement');
                 }
             });
+        }
+
+
+        async function clearAnnouncementSettings() {
+            if (!confirm('Clear custom announcement, remove picture, and turn announcement off?')) return;
+            const checkbox = document.getElementById('announcementCheckbox');
+            const text = document.getElementById('announcementText');
+            if (checkbox) checkbox.checked = false;
+            if (text) text.value = '';
+            window.announcementImageData = '';
+            clearAnnouncementImage();
+
+            try {
+                const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({
+                        sessionToken,
+                        announcementEnabled: false,
+                        announcementText: '',
+                        announcementImages: []
+                    })
+                });
+                const result = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(result.error || 'Failed to clear announcement');
+                await loadAppSettings();
+                alert('Announcement cleared and turned off.');
+            } catch (err) {
+                console.error('Clear announcement error:', err);
+                alert(err.message || 'Failed to clear announcement');
+            }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -4340,6 +4543,48 @@ This backup has fewer records than live data.
             </div>
         </div>
     </div>
+
+
+<script>
+function compactPayFind(playerId){
+    return document.querySelector('.compact-pay[data-player-id="' + playerId + '"]');
+}
+function compactPayMain(playerId){
+    const wrap = compactPayFind(playerId);
+    return wrap ? wrap.querySelector('.compact-pay-main') : null;
+}
+function compactPayAdjust(playerId, delta){
+    const main = compactPayMain(playerId);
+    const wrap = compactPayFind(playerId);
+    if(!main || !wrap) return;
+
+    let amount = parseFloat(main.dataset.amount || '15');
+    if(!Number.isFinite(amount) || amount <= 0) amount = 15;
+    amount = Math.max(1, Math.min(99, amount + delta));
+
+    main.dataset.amount = String(amount);
+    main.textContent = '$' + amount;
+
+    if(wrap.classList.contains('is-paid')){
+        updatePaidAmount(playerId, amount);
+        setTimeout(loadData, 150);
+    }
+}
+function compactPayToggle(playerId){
+    const main = compactPayMain(playerId);
+    const wrap = compactPayFind(playerId);
+    if(!main || !wrap) return;
+
+    const amount = parseFloat(main.dataset.amount || '15') || 15;
+
+    if(wrap.classList.contains('is-paid')){
+        updatePaidAmount(playerId, 0);
+    } else {
+        updatePaidAmount(playerId, amount);
+    }
+    setTimeout(loadData, 150);
+}
+</script>
 
 </body>
 </html>

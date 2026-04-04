@@ -228,47 +228,28 @@
         </div>
 
         <ul class="rules-list" id="rulesList">
-            <li>
-                <span class="rule-number">1</span>
-                <span class="rule-text">No Contact, may tie up player along board plays.</span>
-            </li>
-            <li>
-                <span class="rule-number">2</span>
-                <span class="rule-text">No slashing period, lift the bloody stick. If you slash, and hurt the opposing player. You are done for the night and future infraction will end in being banned.</span>
-            </li>
-            <li>
-                <span class="rule-number">3</span>
-                <span class="rule-text">Pass the puck! It's no fun for anyone if you dipsy doodle every shift.</span>
-            </li>
-            <li>
-                <span class="rule-number">4</span>
-                <span class="rule-text">Slap shots, don't take it if you can't control it. If you hit goalies in the head, or hurt anyone, you are banned from taking slapshots.</span>
-            </li>
-            <li>
-                <span class="rule-number">5</span>
-                <span class="rule-text">Shift OFF often, be considerate of your ice time and teammates.</span>
-            </li>
-            <li>
-                <span class="rule-number">6</span>
-                <span class="rule-text">Keep negative comments to yourself.</span>
-            </li>
-            <li>
-                <span class="rule-number">7</span>
-                <span class="rule-text">Skate hard, shift off when you're huffing and puffing.</span>
-            </li>
-            <li>
-                <span class="rule-number">8</span>
-                <span class="rule-text">Don't need to be overly aggressive, tone down the aggression. It's pickup.</span>
-            </li>
-            <li>
-                <span class="rule-number">9</span>
-                <span class="rule-text">Don't be that guy, if you have to ask if you're that guy. You're more likelh that guy! I will call you out if I have to!</span>
-            </li>
-            <li>
-                <span class="rule-number">10</span>
-                <span class="rule-text">Don't forget Traditional Handshake/Fist bump when game ends! Have fun!</span>
-            </li>
-        </ul>
+    <li><span class="rule-number">1</span><span class="rule-text">No contact. Board tie-ups only.</span></li>
+    <li><span class="rule-number">2</span><span class="rule-text">No slashing. Lift sticks. Injury = done + possible ban.</span></li>
+    <li><span class="rule-number">3</span><span class="rule-text">Move the puck. Don’t hog it.</span></li>
+    <li><span class="rule-number">4</span><span class="rule-text">Control slapshots. Head shots = no more slapshots.</span></li>
+    <li><span class="rule-number">5</span><span class="rule-text">Short shifts. Be fair with ice time.</span></li>
+    <li><span class="rule-number">6</span><span class="rule-text">No negativity. Keep it positive.</span></li>
+    <li><span class="rule-number">7</span><span class="rule-text">Skate hard, change often.</span></li>
+    <li><span class="rule-number">8</span><span class="rule-text">No excessive aggression. It’s pickup.</span></li>
+    <li><span class="rule-number">9</span><span class="rule-text">Don’t be “that guy.” You know who you are.</span></li>
+    <li><span class="rule-number">10</span><span class="rule-text">Handshake/fist bump after the game. Have fun.</span></li>
+
+    <!-- NOW RULE 11 -->
+    <li><span class="rule-number">11</span><span class="rule-text">Respect the game and players — or you’re done.</span></li>
+
+    <!-- NOW RULE 12 (IMPORTANT ONE LAST) -->
+    <li>
+        <span class="rule-number">12</span>
+        <span class="rule-text" style="color:#ff4444; font-weight:bold;">
+            ⚠️ Cancellation must be done prior to Roster Release. This allows waitlist players a spot. No show owes.
+        </span>
+    </li>
+</ul>
 
         <div class="error-message" id="errorMessage">
             You must agree to the rules to complete registration.
@@ -279,8 +260,8 @@
                 <input type="checkbox" id="agreeRules">
                 <label for="agreeRules">
                     I have read, understood, and agree to follow all rules. 
-                    I understand that <span class="ban-warning">breaking any rule will result in a permanent ban</span> 
-                    from <span id="rulesLeagueName">Phan's Hockey</span>.
+                    I understand that <span class="ban-warning">breaking any rule can result in removal or a permanent ban</span> 
+                    from <span id="rulesLeagueName">Phan's Hockey</span>, and that late cancel / no-show owes after roster release.
                 </label>
             </div>
         </div>
@@ -435,6 +416,7 @@
                             <div style="background: linear-gradient(135deg, #2a1f0e, #3c2b12); border: 2px solid #ffb347; border-radius: 10px; padding: 16px; margin: 0 0 30px 0;">
                                 <p style="color: #ffd27a; font-weight: bold; margin: 0 0 8px 0;">${rosterReleaseLine}</p>
                                 <p id="rulesCountdown" style="color: #f4e0b2; margin: 0; line-height: 1.5;">Countdown will appear once a roster release time is scheduled.</p>
+                                <p style="color:#ffb3b3; font-weight:bold; margin:10px 0 0 0;">Late cancel / no-show after roster release owes.</p>
                             </div>
                             <button onclick="window.location.href='/'" style="width: 100%; padding: 15px; background: #ff6b00; color: white; border: none; border-radius: 5px; font-size: 1.1rem; cursor: pointer;">
                                 Return to Home
