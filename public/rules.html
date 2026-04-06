@@ -275,6 +275,8 @@
 
     <script>
         const API_URL = window.location.origin;
+        const QUICK_RETURN_STORAGE_KEY = 'phansHockeyQuickPlayersV1';
+        const QUICK_RETURN_MAX = 8;
         
         
         // Schedule info (dynamic by selected game day/time)
@@ -371,6 +373,59 @@
             rulesCountdownInterval = setInterval(tick, 1000);
         }
 
+
+        function normalizePhoneDigits(value) {
+            let digits = String(value || '').replace(/\D/g, '');
+            if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
+            return digits.slice(0, 10);
+        }
+
+        function formatPhoneInputValue(value) {
+            const digits = normalizePhoneDigits(value);
+            if (digits.length === 0) return '';
+            if (digits.length <= 3) return `(${digits}`;
+            if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+            return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+        }
+
+        function safeJsonParse(value, fallback = null) {
+            try {
+                return JSON.parse(value);
+            } catch (err) {
+                return fallback;
+            }
+        }
+
+        function saveQuickPlayerProfile(profile) {
+            const parsed = safeJsonParse(localStorage.getItem(QUICK_RETURN_STORAGE_KEY), []);
+            const existing = Array.isArray(parsed) ? parsed : [];
+            const sanitized = {
+                firstName: profile.firstName || '',
+                lastName: profile.lastName || '',
+                phone: formatPhoneInputValue(profile.phone || ''),
+                ratingMode: profile.ratingMode === 'direct' ? 'direct' : 'profile',
+                directRating: profile.directRating || '',
+                skatingRating: profile.skatingRating || '',
+                puckSkillsRating: profile.puckSkillsRating || '',
+                hockeySenseRating: profile.hockeySenseRating || '',
+                conditioningRating: profile.conditioningRating || '',
+                effortRating: profile.effortRating || '',
+                levelPlayed: profile.levelPlayed || '',
+                peerComparison: profile.peerComparison || '',
+                confidenceLevel: profile.confidenceLevel || '',
+                rating: profile.rating || profile.finalRating || profile.directRating || '',
+                paymentMethod: profile.paymentMethod || 'E-TRANSFER',
+                lastUsedAt: new Date().toISOString()
+            };
+            const key = `${sanitized.firstName}|${sanitized.lastName}|${normalizePhoneDigits(sanitized.phone)}`;
+            const deduped = existing.filter(item => {
+                const itemKey = `${item.firstName || ''}|${item.lastName || ''}|${normalizePhoneDigits(item.phone || '')}`;
+                return itemKey !== key;
+            });
+            deduped.unshift(sanitized);
+            localStorage.setItem(QUICK_RETURN_STORAGE_KEY, JSON.stringify(deduped.slice(0, QUICK_RETURN_MAX)));
+        }
+
         async function completeRegistration() {
             const agreed = document.getElementById('agreeRules').checked;
             
@@ -395,6 +450,7 @@
                 const result = await res.json();
                 
                 if (result.success) {
+                    saveQuickPlayerProfile(registrationData);
                     // Clear temp data
                     sessionStorage.removeItem('tempRegData');
                     // Also clear the saved form data since registration is complete

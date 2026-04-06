@@ -954,6 +954,103 @@
             color: #6b5310;
         }
 
+
+        .quick-return-section {
+            display: none;
+            background: linear-gradient(135deg, #1d2f45, #243a54);
+            border: 2px solid #5fa8ff;
+            border-radius: 14px;
+            padding: 18px;
+            margin: 18px 0;
+        }
+
+        .quick-return-section.active {
+            display: block;
+        }
+
+        .quick-return-title {
+            color: #9dcbff;
+            font-weight: 800;
+            margin-bottom: 8px;
+            text-align: center;
+            letter-spacing: 0.3px;
+        }
+
+        .quick-return-subtitle {
+            color: #c9def7;
+            text-align: center;
+            font-size: 0.92rem;
+            margin-bottom: 14px;
+        }
+
+        .quick-return-primary {
+            background: rgba(0,0,0,0.18);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+
+        .quick-return-primary-name {
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: #fff;
+            text-align: center;
+        }
+
+        .quick-return-primary-meta {
+            color: #d9e8f8;
+            text-align: center;
+            font-size: 0.88rem;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+
+        .quick-return-button {
+            width: 100%;
+            margin-top: 12px;
+            background: #5fa8ff;
+        }
+
+        .quick-return-button:hover {
+            background: #78b7ff;
+        }
+
+        .quick-return-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .quick-return-chip {
+            width: auto;
+            margin: 0;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 999px;
+            font-size: 0.9rem;
+        }
+
+        .quick-return-chip:hover {
+            background: rgba(255,255,255,0.18);
+        }
+
+        .remember-device-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0 4px 0;
+            color: #cfd8e3;
+            font-size: 0.93rem;
+        }
+
+        .remember-device-row input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+        }
+
 </style>
 <base target="_blank">
 </head>
@@ -1075,6 +1172,18 @@
                     <h3>✅ Signup is Open!</h3>
                     <p>No code required - register below</p>
                 </div>
+            </div>
+
+            <div class="quick-return-section" id="quickReturnSection">
+                <div class="quick-return-title">⚡ Quick Return</div>
+                <div class="quick-return-subtitle">Returning players can sign up in 1 tap on this device, or fill the form if they need to change details.</div>
+                <div class="quick-return-primary" id="quickReturnPrimary" style="display:none;">
+                    <div class="quick-return-primary-name" id="quickReturnPrimaryName">--</div>
+                    <div class="quick-return-primary-meta" id="quickReturnPrimaryMeta">--</div>
+                    <button type="button" class="quick-return-button" id="quickReturnPrimaryBtn">1-Tap Signup</button>
+                    <button type="button" class="quick-return-edit-button" id="quickReturnEditBtn">Fill form instead</button>
+                </div>
+                <div class="quick-return-list" id="quickReturnList"></div>
             </div>
 
             <form id="signupForm" style="display:none;">
@@ -1221,6 +1330,11 @@
                     <span style="color: var(--accent);">* Pay once per month for all upcoming Sundays *</span>
                 </div>
 
+                <div class="remember-device-row">
+                    <input type="checkbox" id="rememberPlayerCheckbox" checked>
+                    <label for="rememberPlayerCheckbox">Remember me on this device for quick signup next time</label>
+                </div>
+
                 <button type="submit" id="submitBtn">Continue</button>
                 <div id="signupError" style="display:none; margin-top:12px; background:#3a1a1a; border:1px solid #ff4444; color:#ff4444; padding:12px; border-radius:5px; text-align:center;"></div>
                 
@@ -1285,6 +1399,280 @@
         let currentRosterReleaseAt = null;
 
         let playerToCancel = null;
+        const QUICK_RETURN_STORAGE_KEY = 'phansHockeyQuickPlayersV1';
+        const QUICK_RETURN_MAX = 8;
+
+
+        function safeJsonParse(value, fallback = null) {
+            try {
+                return JSON.parse(value);
+            } catch (err) {
+                return fallback;
+            }
+        }
+
+        function getStoredQuickPlayers() {
+            const parsed = safeJsonParse(localStorage.getItem(QUICK_RETURN_STORAGE_KEY), []);
+            return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+        }
+
+        function buildQuickPlayerLabel(profile) {
+            const payment = profile.paymentMethod || 'E-TRANSFER';
+            const rating = profile.rating || profile.directRating || profile.finalRating || '';
+            return [payment, rating ? `Rating ${rating}` : ''].filter(Boolean).join(' • ');
+        }
+
+        function sanitizeQuickPlayerProfile(profile) {
+            if (!profile) return null;
+            const phoneDigits = normalizePhoneDigits(profile.phone).slice(0, 10);
+            if (!profile.firstName || !profile.lastName || phoneDigits.length !== 10) return null;
+            return {
+                firstName: capitalizeFullName(profile.firstName),
+                lastName: capitalizeFullName(profile.lastName),
+                phone: formatPhoneInputValue(phoneDigits),
+                ratingMode: profile.ratingMode === 'direct' ? 'direct' : 'profile',
+                directRating: profile.directRating || '',
+                skatingRating: profile.skatingRating || '',
+                puckSkillsRating: profile.puckSkillsRating || '',
+                hockeySenseRating: profile.hockeySenseRating || '',
+                conditioningRating: profile.conditioningRating || '',
+                effortRating: profile.effortRating || '',
+                levelPlayed: profile.levelPlayed || '',
+                peerComparison: profile.peerComparison || '',
+                confidenceLevel: profile.confidenceLevel || '',
+                rating: profile.rating || profile.finalRating || profile.directRating || '',
+                paymentMethod: profile.paymentMethod || 'E-TRANSFER',
+                lastUsedAt: profile.lastUsedAt || new Date().toISOString()
+            };
+        }
+
+        function saveQuickPlayerProfile(profile) {
+            if (!document.getElementById('rememberPlayerCheckbox')?.checked) return;
+            const sanitized = sanitizeQuickPlayerProfile(profile);
+            if (!sanitized) return;
+            const existing = getStoredQuickPlayers();
+            const key = `${sanitized.firstName}|${sanitized.lastName}|${normalizePhoneDigits(sanitized.phone)}`;
+            const deduped = existing.filter(item => {
+                const cleaned = sanitizeQuickPlayerProfile(item);
+                if (!cleaned) return false;
+                const itemKey = `${cleaned.firstName}|${cleaned.lastName}|${normalizePhoneDigits(cleaned.phone)}`;
+                return itemKey !== key;
+            });
+            sanitized.lastUsedAt = new Date().toISOString();
+            deduped.unshift(sanitized);
+            localStorage.setItem(QUICK_RETURN_STORAGE_KEY, JSON.stringify(deduped.slice(0, QUICK_RETURN_MAX)));
+            renderQuickReturnProfiles();
+        }
+
+        function fillSignupFormFromProfile(profile) {
+            const sanitized = sanitizeQuickPlayerProfile(profile);
+            if (!sanitized) return;
+            document.getElementById('firstName').value = sanitized.firstName;
+            document.getElementById('lastName').value = sanitized.lastName;
+            document.getElementById('phone').value = sanitized.phone;
+
+            const modeRadio = document.querySelector(`input[name="ratingMode"][value="${sanitized.ratingMode}"]`);
+            if (modeRadio) modeRadio.checked = true;
+
+            document.getElementById('directRating').value = sanitized.directRating || '';
+            document.getElementById('skatingRating').value = sanitized.skatingRating || '';
+            document.getElementById('puckSkillsRating').value = sanitized.puckSkillsRating || '';
+            document.getElementById('hockeySenseRating').value = sanitized.hockeySenseRating || '';
+            document.getElementById('conditioningRating').value = sanitized.conditioningRating || '';
+            document.getElementById('effortRating').value = sanitized.effortRating || '';
+            document.getElementById('levelPlayed').value = sanitized.levelPlayed || '';
+            document.getElementById('rating').value = sanitized.rating || '';
+
+            const paymentRadio = document.querySelector(`input[name="payment"][value="${sanitized.paymentMethod}"]`);
+            if (paymentRadio) paymentRadio.checked = true;
+
+            updateRatingModeUi();
+            handlePaymentChange();
+            updateCalculatedRating();
+            saveFormData();
+            hideSignupError();
+        }
+
+        function renderQuickReturnProfiles() {
+            const section = document.getElementById('quickReturnSection');
+            const subtitle = section ? section.querySelector('.quick-return-subtitle') : null;
+            const primary = document.getElementById('quickReturnPrimary');
+            const primaryName = document.getElementById('quickReturnPrimaryName');
+            const primaryMeta = document.getElementById('quickReturnPrimaryMeta');
+            const primaryBtn = document.getElementById('quickReturnPrimaryBtn');
+            const editBtn = document.getElementById('quickReturnEditBtn');
+            const list = document.getElementById('quickReturnList');
+            if (!section || !list || !primary || !primaryName || !primaryMeta || !primaryBtn) return;
+
+            const profiles = getStoredQuickPlayers()
+                .map(sanitizeQuickPlayerProfile)
+                .filter(Boolean);
+
+            if (subtitle) {
+                subtitle.textContent = (codeRequired && !verifiedCode)
+                    ? 'Saved players are ready. Enter the 4-digit code, then tap your name for 1-tap signup.'
+                    : 'Returning players can sign up in 1 tap on this device, or fill the form if they need to change details.';
+            }
+
+            list.innerHTML = '';
+
+            if (!profiles.length) {
+                section.classList.remove('active');
+                primary.style.display = 'none';
+                return;
+            }
+
+            section.classList.add('active');
+
+            const [first, ...rest] = profiles;
+            primary.style.display = 'block';
+            primaryName.textContent = `${first.firstName} ${first.lastName}`;
+            primaryMeta.textContent = buildQuickPlayerLabel(first) || '1 tap to sign up with your saved info';
+            primaryBtn.textContent = `1-Tap Signup as ${first.firstName}`;
+            primaryBtn.onclick = () => quickReturnOneTapSignup(first, primaryBtn);
+            if (editBtn) editBtn.onclick = () => fillSignupFormFromProfile(first);
+
+            rest.forEach(profile => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'quick-return-chip';
+                button.textContent = `${profile.firstName} ${profile.lastName}`;
+                button.title = '1-tap signup';
+                button.addEventListener('click', () => quickReturnOneTapSignup(profile, button));
+                list.appendChild(button);
+            });
+        }
+
+        function updateQuickReturnVisibility() {
+            const section = document.getElementById('quickReturnSection');
+            if (!section) return;
+            const hasProfiles = getStoredQuickPlayers().length > 0;
+            section.style.display = hasProfiles ? 'block' : 'none';
+            if (hasProfiles) {
+                section.classList.add('active');
+            } else {
+                section.classList.remove('active');
+            }
+        }
+
+
+        function showInlineSuccess(messageHtml) {
+            const registrationArea = document.getElementById('registrationArea');
+            const successBox = document.getElementById('successMessage');
+            if (registrationArea) registrationArea.style.display = 'none';
+            if (successBox) {
+                successBox.style.display = 'block';
+                const notice = successBox.querySelector('p');
+                if (notice && messageHtml) notice.innerHTML = messageHtml;
+            }
+        }
+
+        async function quickReturnOneTapSignup(profile, triggerEl = null) {
+            hideSignupError();
+            const sanitized = sanitizeQuickPlayerProfile(profile);
+            if (!sanitized) return;
+
+            if (maintenanceMode) {
+                showSignupError('Portal is currently down for maintenance. Please check back later.');
+                return;
+            }
+
+            if (rosterReleased) {
+                showSignupError('Roster has already been released. Signup is closed for this skate.');
+                return;
+            }
+
+            if (codeRequired && !verifiedCode) {
+                showSignupError('Enter the 4-digit code first, then you can use 1-tap signup.');
+                document.getElementById('code1')?.focus();
+                return;
+            }
+
+            const formData = {
+                firstName: sanitized.firstName,
+                lastName: sanitized.lastName,
+                phone: formatPhoneInputValue(sanitized.phone),
+                paymentMethod: sanitized.paymentMethod || 'E-Transfer',
+                rating: sanitized.rating || sanitized.finalRating || sanitized.directRating || '',
+                ratingMode: sanitized.ratingMode || 'profile',
+                directRating: sanitized.directRating || null,
+                skatingRating: sanitized.skatingRating || null,
+                puckSkillsRating: sanitized.puckSkillsRating || null,
+                hockeySenseRating: sanitized.hockeySenseRating || null,
+                conditioningRating: sanitized.conditioningRating || null,
+                effortRating: sanitized.effortRating || null,
+                levelPlayed: sanitized.levelPlayed || '',
+                peerComparison: sanitized.peerComparison || '',
+                confidenceLevel: sanitized.confidenceLevel || '',
+                isGoalie: false,
+                signupCode: verifiedCode
+            };
+
+            const originalText = triggerEl ? triggerEl.textContent : '';
+            if (triggerEl) {
+                triggerEl.disabled = true;
+                triggerEl.textContent = 'Signing up...';
+            }
+
+            try {
+                const initRes = await fetch(`${API_URL}/api/register-init`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                const initResult = await initRes.json();
+
+                if (!initRes.ok) {
+                    showSignupError(initResult.error || 'Unable to continue quick signup.');
+                    return;
+                }
+
+                if (initResult.success && initResult.inWaitlist) {
+                    saveQuickPlayerProfile(formData);
+                    document.getElementById('registrationArea').style.display = 'none';
+                    document.getElementById('waitlistMessage').style.display = 'block';
+                    document.getElementById('waitlistPosition').innerText = '#' + initResult.waitlistPosition;
+                    sessionStorage.removeItem('signupFormData');
+                    return;
+                }
+
+                if (initResult.success && initResult.proceedToRules && initResult.tempData) {
+                    const finalRes = await fetch(`${API_URL}/api/register-final`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            tempData: initResult.tempData,
+                            rulesAgreed: true
+                        })
+                    });
+                    const finalResult = await finalRes.json();
+
+                    if (!finalRes.ok || !finalResult.success) {
+                        showSignupError(finalResult.error || 'Unable to finish quick signup.');
+                        return;
+                    }
+
+                    saveQuickPlayerProfile(formData);
+                    sessionStorage.removeItem('tempRegData');
+                    sessionStorage.removeItem('signupFormData');
+                    document.getElementById('codeSection').style.display = 'none';
+                    document.getElementById('signupForm').style.display = 'none';
+                    showInlineSuccess(`You're registered for the game!`);
+                    await checkStatus();
+                    return;
+                }
+
+                showSignupError(initResult.error || 'Unable to continue quick signup.');
+            } catch (err) {
+                console.error('Quick return signup error:', err);
+                showSignupError('Error registering. Please try again.');
+            } finally {
+                if (triggerEl) {
+                    triggerEl.disabled = false;
+                    triggerEl.textContent = originalText;
+                }
+            }
+        }
 
         function capitalizeNamePart(part) {
             return String(part || '')
@@ -2249,6 +2637,8 @@ function updateCalculatedRating() {
                     verifiedCode = code;
                     document.getElementById('codeSection').style.display = 'none';
                     document.getElementById('signupForm').style.display = 'block';
+                    renderQuickReturnProfiles();
+                    updateQuickReturnVisibility();
                 } else {
                     document.getElementById('codeError').style.display = 'block';
                     document.getElementById('code1').value = '';
@@ -2320,6 +2710,7 @@ function updateCalculatedRating() {
                 }
 
                 if (result.success && result.inWaitlist) {
+                    saveQuickPlayerProfile(formData);
                     document.getElementById('registrationArea').style.display = 'none';
                     document.getElementById('waitlistMessage').style.display = 'block';
                     document.getElementById('waitlistPosition').innerText = '#' + result.waitlistPosition;
@@ -2350,8 +2741,19 @@ function updateCalculatedRating() {
 
         document.addEventListener('DOMContentLoaded', function() {
             loadSavedFormData();
+            renderQuickReturnProfiles();
+            updateQuickReturnVisibility();
             updateRatingModeUi();
             updatePIACalculation();
+
+            const rememberCheckbox = document.getElementById('rememberPlayerCheckbox');
+            if (rememberCheckbox) {
+                const savedRemember = localStorage.getItem('phansHockeyRememberPlayerDefault');
+                if (savedRemember === 'false') rememberCheckbox.checked = false;
+                rememberCheckbox.addEventListener('change', function() {
+                    localStorage.setItem('phansHockeyRememberPlayerDefault', this.checked ? 'true' : 'false');
+                });
+            }
             
             const inputs = ['firstName', 'lastName', 'phone', 'directRating', 'skatingRating', 'puckSkillsRating', 'hockeySenseRating', 'conditioningRating', 'effortRating'];
             inputs.forEach(id => {
