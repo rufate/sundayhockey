@@ -5,7 +5,6 @@ const fs = require('fs');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const cron = require('node-cron');
-const AdmZip = require('adm-zip');
 const { Pool } = require('pg');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -210,9 +209,8 @@ function sanitizeFilenamePart(value, fallback = 'Backup') {
 }
 
 function buildDynamicBackupBaseName() {
-    const dayName = getGameDayName();
-    const fullTitle = sanitizeFilenamePart(customTitle || `Phan's ${dayName} Hockey`, `Phan's ${dayName} Hockey`);
-    return `${fullTitle} Backup`;
+    const titleSource = String(customTitle || `Phan's ${getGameDayName()} Hockey`).trim();
+    return sanitizeFilenamePart(titleSource || `Phan's ${getGameDayName()} Hockey`, `Phan's ${getGameDayName()} Hockey`);
 }
 
 
@@ -4252,15 +4250,10 @@ app.post('/api/admin/download-backup', async (req, res) => {
 
         const baseName = `${buildDynamicBackupBaseName()} ${yyyy}-${mm}-${dd} ${hh}-${mi}-${ss} ET`;
         const jsonFilename = `${baseName}.json`;
-        const zipFilename = `${baseName}.zip`;
 
-        const zip = new AdmZip();
-        zip.addFile(jsonFilename, Buffer.from(JSON.stringify(backup, null, 2), 'utf8'));
-        const zipBuffer = zip.toBuffer();
-
-        res.setHeader('Content-Type', 'application/zip');
-        res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
-        return res.status(200).send(zipBuffer);
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${jsonFilename}"`);
+        return res.status(200).send(JSON.stringify(backup, null, 2));
     } catch (err) {
         console.error('Error downloading backup:', err);
         return res.status(500).json({ error: 'Failed to build backup file' });
