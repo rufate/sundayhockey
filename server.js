@@ -4050,16 +4050,150 @@ app.post('/api/admin/download-backup', async (req, res) => {
             }
         };
 
-        const gameDaySlug = String(getGameDayName() || 'backup').trim().toLowerCase() === 'sunday'
-            ? 'sunday'
-            : (String(getGameDayName() || 'backup').trim().toLowerCase() === 'friday' ? 'friday' : String(getGameDayName() || 'backup').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'));
-        const filename = `phans-hockey-${gameDaySlug}-backup-${yyyy}${mm}${dd}-${hh}${mi}${ss}-ET.json`;
+        const filename = `phans-hockey-backup-${yyyy}${mm}${dd}-${hh}${mi}${ss}-ET.json`;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         return res.status(200).send(JSON.stringify(backup, null, 2));
     } catch (err) {
         console.error('Error downloading backup:', err);
         return res.status(500).json({ error: 'Failed to build backup file' });
+    }
+});
+
+
+
+app.get('/api/admin/restore-latest-backup-preview', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const latest = getBestLocalSnapshot();
+        if (!latest || !latest.data) {
+            return res.status(404).json({ error: "No server snapshot found to preview." });
+        }
+
+        const backupData = latest.data;
+        const previewPlayers = Array.isArray(backupData.players) ? backupData.players.filter(item => item && typeof item === 'object') : [];
+        const previewWaitlist = Array.isArray(backupData.waitlist) ? backupData.waitlist.filter(item => item && typeof item === 'object') : [];
+
+        const summary = backupData.summary && typeof backupData.summary === 'object' ? backupData.summary : {};
+        const appSettings = backupData.appSettings && typeof backupData.appSettings === 'object' ? backupData.appSettings : {};
+
+        return res.json({
+            success: true,
+            snapshotFile: latest.file,
+            snapshotSavedAt: backupData.savedAt || null,
+            snapshotPlayers: previewPlayers.length,
+            snapshotWaitlist: previewWaitlist.length,
+            livePlayers: Array.isArray(players) ? players.length : 0,
+            liveWaitlist: Array.isArray(waitlist) ? waitlist.length : 0,
+            rosterReleasedInSnapshot: typeof summary.rosterReleased === 'boolean' ? summary.rosterReleased : null,
+            gameLocation: typeof summary.gameLocation === 'string' ? summary.gameLocation : (typeof appSettings.selectedArena === 'string' ? appSettings.selectedArena : null),
+            gameTime: typeof summary.gameTime === 'string' ? summary.gameTime : (typeof appSettings.selectedDayTime === 'string' ? appSettings.selectedDayTime : null),
+            gameDate: typeof summary.gameDate === 'string' ? summary.gameDate : null
+        });
+    } catch (err) {
+        console.error('Error previewing latest server snapshot:', err);
+        return res.status(500).json({ error: 'Failed to preview latest server snapshot' });
+    }
+});
+
+
+app.post('/api/admin/restore-latest-backup', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const latest = getBestLocalSnapshot();
+        if (!latest || !latest.data) {
+            return res.status(404).json({ error: "No server snapshot found to restore." });
+        }
+
+        const backupData = latest.data;
+        const restoredPlayers = Array.isArray(backupData.players) ? backupData.players.filter(item => item && typeof item === 'object') : null;
+        const restoredWaitlist = Array.isArray(backupData.waitlist) ? backupData.waitlist.filter(item => item && typeof item === 'object') : null;
+
+        if (!restoredPlayers || !restoredWaitlist) {
+            return res.status(400).json({ error: "Latest server snapshot is missing players or waitlist." });
+        }
+
+        const beforeCounts = {
+            players: Array.isArray(players) ? players.length : 0,
+            waitlist: Array.isArray(waitlist) ? waitlist.length : 0
+        };
+
+        players = JSON.parse(JSON.stringify(restoredPlayers));
+        waitlist = JSON.parse(JSON.stringify(restoredWaitlist));
+
+        if (backupData.currentWeekData && typeof backupData.currentWeekData === 'object') {
+            currentWeekData = JSON.parse(JSON.stringify(backupData.currentWeekData));
+        }
+
+        if (backupData.summary && typeof backupData.summary === 'object') {
+            if (typeof backupData.summary.gameLocation === 'string') gameLocation = backupData.summary.gameLocation;
+            if (typeof backupData.summary.gameTime === 'string') gameTime = backupData.summary.gameTime;
+            if (typeof backupData.summary.gameDate === 'string') gameDate = backupData.summary.gameDate;
+            if (typeof backupData.summary.rosterReleased === 'boolean') rosterReleased = backupData.summary.rosterReleased;
+            if (typeof backupData.summary.requirePlayerCode === 'boolean') requirePlayerCode = backupData.summary.requirePlayerCode;
+            if (typeof backupData.summary.playerSignupCode === 'string' && backupData.summary.playerSignupCode.trim()) {
+                playerSignupCode = backupData.summary.playerSignupCode.trim();
+            }
+        }
+
+        if (backupData.appSettings && typeof backupData.appSettings === 'object') {
+            const s = backupData.appSettings;
+            if (typeof s.maintenanceMode === 'boolean') maintenanceMode = s.maintenanceMode;
+            if (typeof s.customTitle === 'string') customTitle = s.customTitle;
+            if (typeof s.announcementEnabled === 'boolean') announcementEnabled = s.announcementEnabled;
+            if (typeof s.announcementText === 'string') announcementText = s.announcementText;
+            if (Array.isArray(s.announcementImages)) announcementImages = s.announcementImages;
+            if (typeof s.paymentEmail === 'string') paymentEmail = s.paymentEmail.trim() || paymentEmail;
+            if (typeof s.requirePlayerCode === 'boolean') requirePlayerCode = s.requirePlayerCode;
+            if (typeof s.playerSignupCode === 'string' && s.playerSignupCode.trim()) playerSignupCode = s.playerSignupCode.trim();
+        }
+
+        playerSpots = Math.max(0, 20 - players.filter(p => !(p && p.isGoalie)).length);
+        await saveData();
+
+        try {
+            if (typeof addAdminAuditEntry === 'function') {
+                addAdminAuditEntry('restore-latest-backup-replace', req, {
+                    beforePlayers: beforeCounts.players,
+                    beforeWaitlist: beforeCounts.waitlist,
+                    afterPlayers: players.length,
+                    afterWaitlist: waitlist.length,
+                    snapshotFile: latest.file,
+                    snapshotSavedAt: backupData.savedAt || null
+                });
+            }
+            if (typeof appendDataAudit === 'function') {
+                await appendDataAudit('restore-latest-backup', 'success', {
+                    beforePlayers: beforeCounts.players,
+                    beforeWaitlist: beforeCounts.waitlist,
+                    afterPlayers: players.length,
+                    afterWaitlist: waitlist.length,
+                    snapshotFile: latest.file,
+                    snapshotSavedAt: backupData.savedAt || null
+                });
+            }
+        } catch (auditErr) {
+            console.error('Error auditing latest snapshot restore:', auditErr.message);
+        }
+
+        return res.json({
+            success: true,
+            mode: 'replace',
+            restoredPlayers: players.length,
+            restoredWaitlist: waitlist.length,
+            snapshotFile: latest.file,
+            snapshotSavedAt: backupData.savedAt || null,
+            message: 'Latest server snapshot restored successfully.'
+        });
+    } catch (err) {
+        console.error('Error restoring latest server snapshot:', err);
+        return res.status(500).json({ error: 'Failed to restore latest server snapshot' });
     }
 });
 

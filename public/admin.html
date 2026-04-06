@@ -1561,6 +1561,8 @@ button {
             <h1 style="margin:0;">Admin Dashboard</h1>
             <div style="display:flex; gap:10px; flex-wrap:wrap;">
                 <button class="control-btn" onclick="downloadBackup()" style="background:#2e7d32;">⬇ Download Backup</button>
+                <button class="control-btn" onclick="previewLatestServerBackup()" style="background:#5c6bc0;">👁 Preview Latest</button>
+                <button class="control-btn" onclick="restoreLatestServerBackup()" style="background:#3949ab;">♻ Restore Latest</button>
                 <button class="control-btn" onclick="document.getElementById('restoreBackupFile').click()" style="background:#8e24aa;">⤴ Restore Backup</button>
                 <input type="file" id="restoreBackupFile" accept=".json,application/json" style="display:none;" onchange="restoreBackupFromFile(event)">
                 <button class="control-btn" onclick="logoutAllDevices()" style="background:#6d4c41;">Logout All Devices</button>
@@ -4334,13 +4336,7 @@ button {
                 const blob = await res.blob();
                 const contentDisposition = res.headers.get('content-disposition') || '';
                 const match = contentDisposition.match(/filename="?([^";]+)"?/i);
-                const fallbackDay = (() => {
-                    const gameTimeValue = String((window.currentGameTime || document.getElementById('titleDayTime')?.value || '')).toLowerCase();
-                    if (gameTimeValue.includes('sunday')) return 'sunday';
-                    if (gameTimeValue.includes('friday')) return 'friday';
-                    return 'backup';
-                })();
-                const filename = match ? match[1] : `phans-hockey-${fallbackDay}-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+                const filename = match ? match[1] : `phans-hockey-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
 
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -4439,6 +4435,133 @@ button {
             if (sessionToken) loadSystemStatus();
         }, 60000);
     
+
+
+        async function previewLatestServerBackup() {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/restore-latest-backup-preview`, {
+                    method: 'GET',
+                    headers: getAdminHeaders()
+                });
+
+                let data = {};
+                try {
+                    data = await res.json();
+                } catch (e) {}
+
+                if (!res.ok) {
+                    throw new Error((data && data.error) || 'Preview failed');
+                }
+
+                const snapshotPlayers = Number(data.snapshotPlayers || 0);
+                const snapshotWaitlist = Number(data.snapshotWaitlist || 0);
+                const livePlayers = Number(data.livePlayers || 0);
+                const liveWaitlist = Number(data.liveWaitlist || 0);
+                const diffPlayers = snapshotPlayers - livePlayers;
+                const diffWaitlist = snapshotWaitlist - liveWaitlist;
+
+                const lines = [
+                    'Latest server snapshot preview',
+                    '',
+                    `Source: ${data.snapshotFile || 'server snapshot'}`,
+                    `Saved: ${data.snapshotSavedAt || 'unknown'}`,
+                    '',
+                    `Snapshot players: ${snapshotPlayers}`,
+                    `Live players now: ${livePlayers}`,
+                    `Player change if restored: ${diffPlayers >= 0 ? '+' : ''}${diffPlayers}`,
+                    '',
+                    `Snapshot waitlist: ${snapshotWaitlist}`,
+                    `Live waitlist now: ${liveWaitlist}`,
+                    `Waitlist change if restored: ${diffWaitlist >= 0 ? '+' : ''}${diffWaitlist}`
+                ];
+
+                if (data.gameTime || data.gameDate || data.gameLocation) {
+                    lines.push('', 'Snapshot game info:');
+                    if (data.gameTime) lines.push(`Time: ${data.gameTime}`);
+                    if (data.gameDate) lines.push(`Date: ${data.gameDate}`);
+                    if (data.gameLocation) lines.push(`Location: ${data.gameLocation}`);
+                }
+
+                if (data.rosterReleasedInSnapshot !== null && data.rosterReleasedInSnapshot !== undefined) {
+                    lines.push('', `Roster released in snapshot: ${data.rosterReleasedInSnapshot ? 'Yes' : 'No'}`);
+                }
+
+                alert(lines.join('\n'));
+            } catch (err) {
+                console.error('Preview latest snapshot error:', err);
+                alert(err.message || 'Failed to preview latest server snapshot');
+            }
+        }
+
+
+        async function restoreLatestServerBackup() {
+            try {
+                const previewRes = await fetch(`${API_URL}/api/admin/restore-latest-backup-preview`, {
+                    method: 'GET',
+                    headers: getAdminHeaders()
+                });
+
+                let preview = {};
+                try {
+                    preview = await previewRes.json();
+                } catch (e) {}
+
+                if (!previewRes.ok) {
+                    throw new Error((preview && preview.error) || 'Could not preview latest snapshot');
+                }
+
+                const snapshotPlayers = Number(preview.snapshotPlayers || 0);
+                const snapshotWaitlist = Number(preview.snapshotWaitlist || 0);
+                const livePlayers = Number(preview.livePlayers || 0);
+                const liveWaitlist = Number(preview.liveWaitlist || 0);
+
+                const ok = confirm(
+                    'Restore the latest server snapshot?\n\n' +
+                    `Snapshot saved: ${preview.snapshotSavedAt || 'unknown'}\n` +
+                    `Snapshot players: ${snapshotPlayers} (live now: ${livePlayers})\n` +
+                    `Snapshot waitlist: ${snapshotWaitlist} (live now: ${liveWaitlist})\n\n` +
+                    'Press OK to continue.'
+                );
+                if (!ok) return;
+
+                const res = await fetch(`${API_URL}/api/admin/restore-latest-backup`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken })
+                });
+
+                let data = {};
+                try {
+                    data = await res.json();
+                } catch (e) {}
+
+                if (!res.ok) {
+                    throw new Error((data && data.error) || 'Auto restore failed');
+                }
+
+                alert(
+                    `✅ Latest server snapshot restored\n\n` +
+                    `Source: ${data.snapshotFile || 'server snapshot'}\n` +
+                    `Saved: ${data.snapshotSavedAt || 'unknown'}\n` +
+                    `Mode: ${(data.mode || 'replace').toUpperCase()}\n` +
+                    `Players now: ${data.restoredPlayers}\n` +
+                    `Waitlist now: ${data.restoredWaitlist}`
+                );
+
+                loadData();
+                loadSettings();
+                loadAppSettings();
+                loadPaymentReportSnapshots();
+                setTimeout(loadHistoryList, 500);
+                setTimeout(loadSystemStatus, 700);
+            } catch (err) {
+                console.error('Restore latest snapshot error:', err);
+                alert(err.message || 'Failed to restore latest server snapshot');
+            }
+        }
+
+
+
         async function restoreBackupFromFile(event) {
             const file = event.target.files && event.target.files[0];
             if (!file) return;
