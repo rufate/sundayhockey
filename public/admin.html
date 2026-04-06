@@ -1586,6 +1586,14 @@ button {
                 <button class="control-btn" onclick="loadSystemStatus()" style="background:#009688;">Refresh Monitor</button>
             </div>
         </div>
+
+        <div class="control-box" style="border-color:#7e57c2;">
+            <h3>🛡️ Data Integrity Widget</h3>
+            <div id="dataIntegrityWidget" style="color:#cfcfcf; line-height:1.7;">Loading data integrity...</div>
+            <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+                <button class="control-btn" onclick="loadSystemStatus()" style="background:#7e57c2;">Refresh Data Integrity</button>
+            </div>
+        </div>
         
         <div class="success-message" id="releaseSuccess">
             ✅ Roster Released Successfully! Players can now see the teams.
@@ -2616,6 +2624,50 @@ button {
             }
         }
 
+        function formatRelativeMs(ms) {
+            if (ms == null || !Number.isFinite(ms)) return 'Not set';
+            if (ms < 1000) return `${ms} ms`;
+            const seconds = Math.round(ms / 1000);
+            if (seconds < 60) return `${seconds}s`;
+            const minutes = Math.round(seconds / 60);
+            if (minutes < 60) return `${minutes} min`;
+            const hours = Math.round(minutes / 60);
+            return `${hours} hr`;
+        }
+
+        function renderDataIntegrityWidget(data) {
+            const el = document.getElementById('dataIntegrityWidget');
+            if (!el) return;
+
+            const integrity = data?.dataIntegrity || {};
+            const latestSnapshot = data?.consistency?.latestSnapshotMeta || {};
+            const latestSave = integrity.latestSave || null;
+            const latestSelfHeal = integrity.latestSelfHeal || null;
+            const latestRequestSnapshot = integrity.latestRequestSnapshot || null;
+
+            const card = (title, body, tone = '#cfcfcf') => `
+                <div style="background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:12px; min-width:220px; flex:1;">
+                    <div style="font-weight:700; color:${tone}; margin-bottom:6px;">${title}</div>
+                    <div style="color:#d7d7d7; line-height:1.55;">${body}</div>
+                </div>
+            `;
+
+            const saveTone = latestSave?.status === 'error' ? '#ff8a80' : '#81c784';
+            const healTone = latestSelfHeal?.status === 'error' ? '#ff8a80' : (latestSelfHeal?.details?.missingPlayers || latestSelfHeal?.details?.missingWaitlist ? '#ffd180' : '#81c784');
+
+            el.innerHTML = `
+                <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                    ${card('Latest Save', `Status: <strong>${latestSave?.status || 'n/a'}</strong><br>Time: ${formatDateTime(latestSave?.at)}<br>Reason: ${latestSave?.details?.reason || 'n/a'}`, saveTone)}
+                    ${card('Latest Self-Heal', `Status: <strong>${latestSelfHeal?.status || 'n/a'}</strong><br>Time: ${formatDateTime(latestSelfHeal?.at)}<br>Recovered: ${(latestSelfHeal?.details?.missingPlayers || 0)} players / ${(latestSelfHeal?.details?.missingWaitlist || 0)} waitlist`, healTone)}
+                    ${card('Local Snapshot', `Latest file: ${latestSnapshot?.file ? latestSnapshot.file.split('/').pop() : 'n/a'}<br>Saved: ${formatDateTime(latestSnapshot?.savedAt)}<br>Counts: ${latestSnapshot?.players ?? 0} players / ${latestSnapshot?.waitlist ?? 0} waitlist`, '#90caf9')}
+                </div>
+                <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:12px;">
+                    ${card('Request Optimizations', `Visit snapshot: <strong>${integrity.requestSnapshotEnabled ? 'ON' : 'OFF'}</strong><br>Visit throttle: ${formatRelativeMs(integrity.requestSnapshotThrottleMs)}<br>Request self-heal: <strong>${integrity.requestSelfHealEnabled ? 'ON' : 'OFF'}</strong> (${formatRelativeMs(integrity.requestSelfHealThrottleMs)})`, '#ce93d8')}
+                    ${card('Counts Check', `Memory: ${data?.consistency?.memoryPlayers ?? 0} players / ${data?.consistency?.memoryWaitlist ?? 0} waitlist<br>Backup: ${data?.consistency?.backupPlayers ?? 0} players / ${data?.consistency?.backupWaitlist ?? 0} waitlist<br>Audit retention: ${integrity.auditRetentionDays ?? 'n/a'} days / ${integrity.auditMaxRows ?? 'n/a'} rows<br>Recent save errors: ${integrity.recentSaveErrors ?? 0} • Self-heal runs: ${integrity.recentSelfHealRuns ?? 0}`, '#80cbc4')}
+                </div>
+            `;
+        }
+
         async function loadSystemStatus() {
             const el = document.getElementById('systemMonitorStatus');
             if (!el || !sessionToken) return;
@@ -2623,6 +2675,7 @@ button {
                 const res = await adminFetch(`${API_URL}/api/admin/system-status`);
                 if (!res.ok) {
                     el.textContent = 'Unable to load system status.';
+                    const widget = document.getElementById('dataIntegrityWidget'); if (widget) widget.textContent = 'Unable to load data integrity.';
                     return;
                 }
                 const data = await res.json();
@@ -2646,6 +2699,7 @@ button {
                     <strong>Memory:</strong> RSS ${data.process?.rssMb ?? 0} MB • Heap ${data.process?.heapUsedMb ?? 0}/${data.process?.heapTotalMb ?? 0} MB
                     ${warningHtml}
                 `;
+                renderDataIntegrityWidget(data);
             } catch (err) {
                 console.error(err);
                 el.textContent = 'Unable to load system status.';
@@ -4280,7 +4334,13 @@ button {
                 const blob = await res.blob();
                 const contentDisposition = res.headers.get('content-disposition') || '';
                 const match = contentDisposition.match(/filename="?([^";]+)"?/i);
-                const filename = match ? match[1] : `phans-hockey-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+                const fallbackDay = (() => {
+                    const gameTimeValue = String((window.currentGameTime || document.getElementById('titleDayTime')?.value || '')).toLowerCase();
+                    if (gameTimeValue.includes('sunday')) return 'sunday';
+                    if (gameTimeValue.includes('friday')) return 'friday';
+                    return 'backup';
+                })();
+                const filename = match ? match[1] : `phans-hockey-${fallbackDay}-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
 
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');

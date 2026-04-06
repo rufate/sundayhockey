@@ -90,6 +90,8 @@ async function schedulerCatchupMiddleware(req, res, next) {
 
     try {
         await runSchedulerTick();
+        maybeRunRequestSelfHeal(req);
+        maybeSnapshotOnRequest(req);
     } catch (err) {
         console.error('Request scheduler catch-up error:', err);
     }
@@ -1455,8 +1457,20 @@ async function initDatabase() {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS data_audit (
+                id SERIAL PRIMARY KEY,
+                event_type VARCHAR(100) NOT NULL,
+                status VARCHAR(30) NOT NULL,
+                details JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
         
         await loadDataFromDB();
+        await loadRecentDataAudit();
+        await pruneDataAuditIfNeeded(true);
     } catch (err) {
         console.error('Database initialization error:', err);
         loadDataFromFile();
@@ -1603,51 +1617,398 @@ async function saveSetting(key, value) {
     }
 }
 
-async function saveData() {
-    persistDataToFile('saveData');
+const DATA_FILE = './data.json';
+const SETTINGS_BACKUP_FILE = './app-settings.backup.json';
+const SNAPSHOT_DIR = './data-backups';
+const SNAPSHOT_RETENTION = Number(process.env.LOCAL_SNAPSHOT_RETENTION || 200);
+const REQUEST_SNAPSHOT_ENABLED = String(process.env.REQUEST_SNAPSHOT_ENABLED || 'false').toLowerCase() === 'true';
+const REQUEST_SNAPSHOT_MIN_INTERVAL_MS = Number(process.env.REQUEST_SNAPSHOT_MIN_INTERVAL_MS || 60000);
+const REQUEST_SELF_HEAL_ENABLED = String(process.env.REQUEST_SELF_HEAL_ENABLED || 'false').toLowerCase() === 'true';
+const REQUEST_SELF_HEAL_MIN_INTERVAL_MS = Number(process.env.REQUEST_SELF_HEAL_MIN_INTERVAL_MS || 300000);
+const DATA_DATA_AUDIT_RECENT_LIMIT = Number(process.env.DATA_DATA_AUDIT_RECENT_LIMIT || 25);
+const DATA_AUDIT_RETENTION_DAYS = Number(process.env.DATA_AUDIT_RETENTION_DAYS || 14);
+const DATA_AUDIT_MAX_ROWS = Number(process.env.DATA_AUDIT_MAX_ROWS || 5000);
+const DATA_AUDIT_PRUNE_INTERVAL_MS = Number(process.env.DATA_AUDIT_PRUNE_INTERVAL_MS || 21600000);
+let lastRequestSnapshotAt = 0;
+let lastRequestSelfHealAt = 0;
+let lastAuditPruneAt = 0;
+let latestLocalSnapshotMeta = { exists: false, savedAt: null, file: null, players: 0, waitlist: 0, source: 'memory' };
+let saveQueue = Promise.resolve();
+let recentDataAudit = [];
+
+
+function ensureDirSync(dirPath) {
     try {
-        if (!pool) return;
-        await saveSetting('playerSpots', playerSpots);
-        await saveSetting('gameLocation', gameLocation);
-        await saveSetting('gameTime', gameTime);
-        await saveSetting('gameDate', gameDate);
-        await saveSetting('playerSignupCode', playerSignupCode);
-        await saveSetting('requirePlayerCode', requirePlayerCode);
-        await saveSetting('manualOverride', manualOverride);
-        await saveSetting('manualOverrideState', manualOverrideState);
-        await saveSetting('lastResetWeek', lastResetWeek);
-        await saveSetting('rosterReleased', rosterReleased);
-        await saveSetting('currentWeekData', currentWeekData);
-        await saveSetting('cancelledRegistrations', cancelledRegistrations);
-        await saveSetting('customSignupCode', customSignupCode);
-        await saveSetting('signupLockStartAt', signupLockStartAt);
-        await saveSetting('signupLockEndAt', signupLockEndAt);
-        await saveSetting('rosterReleaseAt', rosterReleaseAt);
-        await saveSetting('resetWeekAt', resetWeekAt);
-        await saveSetting('lastExactResetRunAt', lastExactResetRunAt);
-        await saveSetting('lastExactRosterReleaseRunAt', lastExactRosterReleaseRunAt);
-        await saveSetting('lastExactResetMinuteKey', lastExactResetMinuteKey);
-        await saveSetting('lastExactRosterReleaseMinuteKey', lastExactRosterReleaseMinuteKey);
-        await saveSetting('signupLockSchedule', signupLockSchedule);
-        await saveSetting('rosterReleaseSchedule', rosterReleaseSchedule);
-        await saveSetting('resetWeekSchedule', resetWeekSchedule);
-        await saveAppSetting('maintenanceMode', maintenanceMode);
-        await saveAppSetting('customTitle', customTitle);
-        await saveAppSetting('announcementEnabled', announcementEnabled.toString());
-        await saveAppSetting('announcementText', announcementText);
-        await saveAppSetting('announcementImages', JSON.stringify(announcementImages));
-        await saveAppSetting('paymentEmail', paymentEmail);
-        await saveAppSetting('selectedDayTime', gameTime);
-        await saveAppSetting('selectedArena', gameLocation);
-        await saveAppSetting('gameDate', gameDate);
-        writeSettingsBackup('saveData');
+        fs.mkdirSync(dirPath, { recursive: true });
     } catch (err) {
-        console.error('Error saving data:', err);
+        console.error('Error ensuring directory exists:', dirPath, err.message);
     }
 }
 
-const DATA_FILE = './data.json';
-const SETTINGS_BACKUP_FILE = './app-settings.backup.json';
+function atomicWriteTextFile(filePath, text) {
+    const dir = path.dirname(filePath);
+    ensureDirSync(dir);
+    const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+    fs.writeFileSync(tempPath, text);
+    fs.renameSync(tempPath, filePath);
+}
+
+function safeIsoStamp(date = new Date()) {
+    return new Date(date).toISOString().replace(/[:.]/g, '-');
+}
+
+function updateLatestSnapshotMeta(snapshot, filePath, source = 'memory') {
+    latestLocalSnapshotMeta = {
+        exists: true,
+        savedAt: snapshot?.savedAt || new Date().toISOString(),
+        file: filePath,
+        players: Array.isArray(snapshot?.players) ? snapshot.players.length : 0,
+        waitlist: Array.isArray(snapshot?.waitlist) ? snapshot.waitlist.length : 0,
+        source
+    };
+}
+
+function trimSnapshotBackups() {
+    try {
+        ensureDirSync(SNAPSHOT_DIR);
+        const files = fs.readdirSync(SNAPSHOT_DIR)
+            .filter(name => /^snapshot-.*\.json$/i.test(name))
+            .map(name => ({ name, full: path.join(SNAPSHOT_DIR, name), mtime: fs.statSync(path.join(SNAPSHOT_DIR, name)).mtimeMs }))
+            .sort((a, b) => b.mtime - a.mtime);
+        files.slice(SNAPSHOT_RETENTION).forEach(file => {
+            try { fs.unlinkSync(file.full); } catch (err) {}
+        });
+    } catch (err) {
+        console.error('Error trimming snapshots:', err.message);
+    }
+}
+
+function persistDataToFile(reason = 'saveData', snapshot = null) {
+    try {
+        const payload = snapshot || buildFullDataSnapshot();
+        const text = JSON.stringify(payload, null, 2);
+        atomicWriteTextFile(DATA_FILE, text);
+
+        ensureDirSync(SNAPSHOT_DIR);
+        const snapshotFile = path.join(SNAPSHOT_DIR, `snapshot-${safeIsoStamp(payload.savedAt || new Date())}-${String(reason || 'save').replace(/[^a-z0-9_-]+/gi, '-').slice(0,40)}.json`);
+        atomicWriteTextFile(snapshotFile, text);
+        trimSnapshotBackups();
+        updateLatestSnapshotMeta(payload, snapshotFile, reason);
+        writeSettingsBackup(reason);
+        return { ok: true, file: snapshotFile, savedAt: payload.savedAt };
+    } catch (err) {
+        console.error('Error writing local data snapshot:', err.message);
+        return { ok: false, error: err.message };
+    }
+}
+
+function readJsonFileSafe(filePath) {
+    try {
+        if (!filePath || !fs.existsSync(filePath)) return null;
+        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch (err) {
+        return null;
+    }
+}
+
+
+function getBestLocalSnapshot() {
+    const candidates = [];
+    if (fs.existsSync(DATA_FILE)) {
+        candidates.push({ file: DATA_FILE, stat: fs.statSync(DATA_FILE) });
+    }
+    if (fs.existsSync(SNAPSHOT_DIR)) {
+        for (const name of fs.readdirSync(SNAPSHOT_DIR)) {
+            if (!/^snapshot-.*\.json$/i.test(name)) continue;
+            const full = path.join(SNAPSHOT_DIR, name);
+            try {
+                candidates.push({ file: full, stat: fs.statSync(full) });
+            } catch (err) {}
+        }
+    }
+
+    let best = null;
+    for (const candidate of candidates) {
+        const data = readJsonFileSafe(candidate.file);
+        if (!data) continue;
+        const savedAtMs = Date.parse(data.savedAt || '') || candidate.stat.mtimeMs || 0;
+        const score = ((Array.isArray(data.players) ? data.players.length : 0) * 1000000) +
+            ((Array.isArray(data.waitlist) ? data.waitlist.length : 0) * 1000) +
+            savedAtMs;
+        if (!best || score > best.score) {
+            best = { file: candidate.file, data, savedAtMs, score };
+        }
+    }
+
+    if (best) updateLatestSnapshotMeta(best.data, best.file, 'best-local-snapshot');
+    return best;
+}
+
+async function appendDataAudit(eventType, status = 'info', details = {}) {
+    const entry = {
+        at: new Date().toISOString(),
+        eventType,
+        status,
+        details
+    };
+    recentDataAudit.push(entry);
+    if (recentDataAudit.length > DATA_AUDIT_RECENT_LIMIT) recentDataAudit = recentDataAudit.slice(-DATA_AUDIT_RECENT_LIMIT);
+
+    if (!pool) return;
+    try {
+        await pool.query(
+            'INSERT INTO data_audit (event_type, status, details) VALUES ($1, $2, $3)',
+            [eventType, status, JSON.stringify(details)]
+        );
+        pruneDataAuditIfNeeded().catch(err => console.error('Data audit prune error:', err.message));
+    } catch (err) {
+        console.error('Error writing data audit:', err.message);
+    }
+}
+
+async function loadRecentDataAudit() {
+    if (!pool) return;
+    try {
+        const result = await pool.query('SELECT event_type, status, details, created_at FROM data_audit ORDER BY id DESC LIMIT $1', [DATA_AUDIT_RECENT_LIMIT]);
+        recentDataAudit = result.rows.reverse().map(row => ({
+            at: row.created_at,
+            eventType: row.event_type,
+            status: row.status,
+            details: row.details || {}
+        }));
+    } catch (err) {
+        console.error('Error loading data audit:', err.message);
+    }
+}
+async function pruneDataAuditIfNeeded(force = false) {
+    if (!pool) return;
+    const now = Date.now();
+    if (!force && now - lastAuditPruneAt < DATA_AUDIT_PRUNE_INTERVAL_MS) return;
+    lastAuditPruneAt = now;
+    try {
+        if (DATA_AUDIT_RETENTION_DAYS > 0) {
+            await pool.query(
+                "DELETE FROM data_audit WHERE created_at < NOW() - ($1::text || ' days')::interval",
+                [String(DATA_AUDIT_RETENTION_DAYS)]
+            );
+        }
+        if (DATA_AUDIT_MAX_ROWS > 0) {
+            await pool.query(
+                `DELETE FROM data_audit
+                 WHERE id IN (
+                     SELECT id FROM data_audit
+                     ORDER BY id DESC
+                     OFFSET $1
+                 )`,
+                [DATA_AUDIT_MAX_ROWS]
+            );
+        }
+    } catch (err) {
+        console.error('Error pruning data audit:', err.message);
+    }
+}
+
+
+function toNumericOrNull(value) {
+    const num = value == null || value === '' ? null : Number(value);
+    return Number.isFinite(num) ? num : null;
+}
+
+async function replaceDatabaseStateFromMemory(reason = 'saveData') {
+    if (!pool) return { ok: true, mode: 'file' };
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const settingsEntries = [
+            ['playerSpots', playerSpots],
+            ['gameLocation', gameLocation],
+            ['gameTime', gameTime],
+            ['gameDate', gameDate],
+            ['playerSignupCode', playerSignupCode],
+            ['requirePlayerCode', requirePlayerCode],
+            ['manualOverride', manualOverride],
+            ['manualOverrideState', manualOverrideState],
+            ['lastResetWeek', lastResetWeek],
+            ['rosterReleased', rosterReleased],
+            ['currentWeekData', currentWeekData],
+            ['cancelledRegistrations', cancelledRegistrations],
+            ['customSignupCode', customSignupCode],
+            ['signupLockStartAt', signupLockStartAt],
+            ['signupLockEndAt', signupLockEndAt],
+            ['rosterReleaseAt', rosterReleaseAt],
+            ['resetWeekAt', resetWeekAt],
+            ['lastExactResetRunAt', lastExactResetRunAt],
+            ['lastExactRosterReleaseRunAt', lastExactRosterReleaseRunAt],
+            ['lastExactResetMinuteKey', lastExactResetMinuteKey],
+            ['lastExactRosterReleaseMinuteKey', lastExactRosterReleaseMinuteKey],
+            ['signupLockSchedule', signupLockSchedule],
+            ['rosterReleaseSchedule', rosterReleaseSchedule],
+            ['resetWeekSchedule', resetWeekSchedule]
+        ];
+        for (const [key, value] of settingsEntries) {
+            await client.query(
+                'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+                [key, JSON.stringify(value)]
+            );
+        }
+
+        const appSettingsEntries = [
+            ['maintenanceMode', String(maintenanceMode)],
+            ['customTitle', customTitle],
+            ['announcementEnabled', announcementEnabled.toString()],
+            ['announcementText', announcementText],
+            ['announcementImages', JSON.stringify(announcementImages)],
+            ['paymentEmail', paymentEmail],
+            ['selectedDayTime', gameTime],
+            ['selectedArena', gameLocation],
+            ['gameDate', gameDate]
+        ];
+        for (const [key, value] of appSettingsEntries) {
+            await client.query(
+                'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+                [key, value == null ? '' : String(value)]
+            );
+        }
+
+        await client.query('DELETE FROM players');
+        for (const player of players) {
+            await client.query(
+                `INSERT INTO players (
+                    id, first_name, last_name, phone, payment_method, paid, paid_amount, rating,
+                    skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating, effort_rating,
+                    level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating,
+                    admin_rating, admin_adjustment, final_rating, is_goalie, team, rules_agreed
+                ) VALUES (
+                    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24
+                )`,
+                [
+                    player.id, player.firstName, player.lastName, player.phone, player.paymentMethod || null, !!player.paid,
+                    toNumericOrNull(player.paidAmount), toNumericOrNull(player.rating),
+                    toNumericOrNull(player.skatingRating), toNumericOrNull(player.puckSkillsRating), toNumericOrNull(player.hockeySenseRating), toNumericOrNull(player.conditioningRating), toNumericOrNull(player.effortRating),
+                    player.levelPlayed || null, player.peerComparison || null, player.confidenceLevel || null, toNumericOrNull(player.selfRatingRaw), toNumericOrNull(player.derivedRating),
+                    toNumericOrNull(player.adminRating), toNumericOrNull(player.adminAdjustment), toNumericOrNull(player.finalRating), !!player.isGoalie, player.team || null, !!player.rulesAgreed
+                ]
+            );
+        }
+
+        await client.query('DELETE FROM waitlist');
+        for (const player of waitlist) {
+            await client.query(
+                `INSERT INTO waitlist (
+                    id, first_name, last_name, phone, payment_method, rating,
+                    skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating, effort_rating,
+                    level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating, final_rating, is_goalie
+                ) VALUES (
+                    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18
+                )`,
+                [
+                    player.id, player.firstName, player.lastName, player.phone, player.paymentMethod || null, toNumericOrNull(player.rating),
+                    toNumericOrNull(player.skatingRating), toNumericOrNull(player.puckSkillsRating), toNumericOrNull(player.hockeySenseRating), toNumericOrNull(player.conditioningRating), toNumericOrNull(player.effortRating),
+                    player.levelPlayed || null, player.peerComparison || null, player.confidenceLevel || null, toNumericOrNull(player.selfRatingRaw), toNumericOrNull(player.derivedRating), toNumericOrNull(player.finalRating), !!player.isGoalie
+                ]
+            );
+        }
+
+        await client.query('COMMIT');
+        return { ok: true, mode: 'postgres', players: players.length, waitlist: waitlist.length, reason };
+    } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+async function saveData(reason = 'saveData') {
+    const snapshot = buildFullDataSnapshot();
+    saveQueue = saveQueue.then(async () => {
+        let dbResult = null;
+        try {
+            dbResult = await replaceDatabaseStateFromMemory(reason);
+            writeSettingsBackup(reason);
+            const localResult = persistDataToFile(reason, snapshot);
+            await appendDataAudit('save', 'success', { reason, database: dbResult, localSnapshot: localResult });
+            return { ok: true, database: dbResult, localSnapshot: localResult };
+        } catch (err) {
+            const localResult = persistDataToFile(`db-failed-${reason}`, snapshot);
+            await appendDataAudit('save', 'error', { reason, error: err.message, localSnapshot: localResult });
+            console.error('Error saving data:', err);
+            return { ok: false, error: err.message, localSnapshot: localResult };
+        }
+    }).catch(err => {
+        console.error('Queued saveData error:', err.message);
+        return { ok: false, error: err.message };
+    });
+    return saveQueue;
+}
+
+async function runDatabaseSelfHeal(reason = 'self-heal') {
+    if (!pool) return { ok: false, skipped: true, reason: 'file-mode' };
+    const best = getBestLocalSnapshot();
+    if (!best || !best.data) return { ok: false, skipped: true, reason: 'no-local-snapshot' };
+
+    try {
+        const dbPlayers = await pool.query('SELECT id, phone FROM players');
+        const dbWaitlist = await pool.query('SELECT id, phone FROM waitlist');
+        const playerKeys = new Set(dbPlayers.rows.map(r => `${r.id}|${normalizePhoneDigits(r.phone)}`));
+        const waitlistKeys = new Set(dbWaitlist.rows.map(r => `${r.id}|${normalizePhoneDigits(r.phone)}`));
+
+        const missingPlayers = (Array.isArray(best.data.players) ? best.data.players : []).filter(player => !playerKeys.has(`${player.id}|${normalizePhoneDigits(player.phone)}`));
+        const missingWaitlist = (Array.isArray(best.data.waitlist) ? best.data.waitlist : []).filter(player => !waitlistKeys.has(`${player.id}|${normalizePhoneDigits(player.phone)}`));
+
+        if (!missingPlayers.length && !missingWaitlist.length) {
+            return { ok: true, healed: false, missingPlayers: 0, missingWaitlist: 0, sourceFile: best.file };
+        }
+
+        const memoryPlayerKeys = new Set(players.map(player => `${player.id}|${normalizePhoneDigits(player.phone)}`));
+        const memoryWaitlistKeys = new Set(waitlist.map(player => `${player.id}|${normalizePhoneDigits(player.phone)}`));
+
+        for (const player of missingPlayers) {
+            if (!memoryPlayerKeys.has(`${player.id}|${normalizePhoneDigits(player.phone)}`)) players.push(hydratePlayerRatingProfile(player));
+        }
+        for (const player of missingWaitlist) {
+            if (!memoryWaitlistKeys.has(`${player.id}|${normalizePhoneDigits(player.phone)}`)) waitlist.push(hydratePlayerRatingProfile(player));
+        }
+        playerSpots = Math.max(0, 20 - players.filter(p => !p.isGoalie).length);
+        const saveResult = await saveData(`self-heal-${reason}`);
+        await appendDataAudit('self_heal', saveResult.ok ? 'success' : 'error', {
+            reason, sourceFile: best.file, missingPlayers: missingPlayers.length, missingWaitlist: missingWaitlist.length, saveResult
+        });
+        return { ok: saveResult.ok, healed: true, missingPlayers: missingPlayers.length, missingWaitlist: missingWaitlist.length, sourceFile: best.file };
+    } catch (err) {
+        await appendDataAudit('self_heal', 'error', { reason, error: err.message });
+        console.error('Database self-heal error:', err.message);
+        return { ok: false, healed: false, error: err.message };
+    }
+}
+
+function maybeSnapshotOnRequest(req) {
+    if (!REQUEST_SNAPSHOT_ENABLED) return;
+    const method = String(req?.method || '').toUpperCase();
+    if (!['GET', 'HEAD'].includes(method)) return;
+    const now = Date.now();
+    if (now - lastRequestSnapshotAt < REQUEST_SNAPSHOT_MIN_INTERVAL_MS) return;
+    lastRequestSnapshotAt = now;
+    const snapshot = buildFullDataSnapshot();
+    const result = persistDataToFile('request-visit', snapshot);
+    appendDataAudit('request_snapshot', result.ok ? 'success' : 'error', {
+        path: req.path || req.originalUrl || '',
+        method: req.method,
+        localSnapshot: result
+    }).catch(() => {});
+}
+
+function maybeRunRequestSelfHeal(req) {
+    if (!REQUEST_SELF_HEAL_ENABLED || !pool) return;
+    const method = String(req?.method || '').toUpperCase();
+    if (!['GET', 'HEAD'].includes(method)) return;
+    const now = Date.now();
+    if (now - lastRequestSelfHealAt < REQUEST_SELF_HEAL_MIN_INTERVAL_MS) return;
+    lastRequestSelfHealAt = now;
+    runDatabaseSelfHeal('request').catch(err => console.error('Request self-heal error:', err));
+}
 
 
 function buildFullDataSnapshot() {
@@ -1688,23 +2049,13 @@ function buildFullDataSnapshot() {
     };
 }
 
-function persistDataToFile(reason = 'saveData') {
-    try {
-        const snapshot = buildFullDataSnapshot();
-        fs.writeFileSync(DATA_FILE, JSON.stringify(snapshot, null, 2));
-        writeSettingsBackup(reason);
-        return true;
-    } catch (err) {
-        console.error('Error writing local data snapshot:', err.message);
-        return false;
-    }
-}
-
 async function reconcileFromFileBackup() {
-    if (!pool || !fs.existsSync(DATA_FILE)) return;
+    if (!pool) return;
 
     try {
-        const backup = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        const best = getBestLocalSnapshot();
+        if (!best || !best.data) return;
+        const backup = best.data;
         const backupPlayers = Array.isArray(backup.players) ? backup.players : [];
         const backupWaitlist = Array.isArray(backup.waitlist) ? backup.waitlist : [];
 
@@ -1715,31 +2066,8 @@ async function reconcileFromFileBackup() {
                 normalizePhoneDigits(p.phone) === normalizePhoneDigits(player.phone)
             );
             if (exists) continue;
-
-            players.push(player);
-            try {
-                await pool.query(
-                    `INSERT INTO players (id, first_name, last_name, phone, payment_method, paid, paid_amount, rating, is_goalie, team, rules_agreed)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                     ON CONFLICT (id) DO NOTHING`,
-                    [
-                        player.id,
-                        player.firstName,
-                        player.lastName,
-                        player.phone,
-                        player.paymentMethod || null,
-                        !!player.paid,
-                        player.paidAmount ?? null,
-                        parseInt(player.rating) || 5,
-                        !!player.isGoalie,
-                        player.team || null,
-                        !!player.rulesAgreed
-                    ]
-                );
-                mergedPlayers += 1;
-            } catch (err) {
-                console.error('Error reconciling backup player to DB:', err.message);
-            }
+            players.push(hydratePlayerRatingProfile(player));
+            mergedPlayers += 1;
         }
 
         let mergedWaitlist = 0;
@@ -1749,33 +2077,14 @@ async function reconcileFromFileBackup() {
                 normalizePhoneDigits(p.phone) === normalizePhoneDigits(player.phone)
             );
             if (exists) continue;
-
-            waitlist.push(player);
-            try {
-                await pool.query(
-                    `INSERT INTO waitlist (id, first_name, last_name, phone, payment_method, rating, is_goalie)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7)
-                     ON CONFLICT (id) DO NOTHING`,
-                    [
-                        player.id,
-                        player.firstName,
-                        player.lastName,
-                        player.phone,
-                        player.paymentMethod || null,
-                        parseInt(player.rating) || 5,
-                        !!player.isGoalie
-                    ]
-                );
-                mergedWaitlist += 1;
-            } catch (err) {
-                console.error('Error reconciling backup waitlist player to DB:', err.message);
-            }
+            waitlist.push(hydratePlayerRatingProfile(player));
+            mergedWaitlist += 1;
         }
 
         if (mergedPlayers || mergedWaitlist) {
             playerSpots = Math.max(0, 20 - players.filter(p => !p.isGoalie).length);
-            console.log(`Reconciled local backup into DB: ${mergedPlayers} players, ${mergedWaitlist} waitlist.`);
-            await saveData();
+            console.log(`Reconciled best local snapshot into DB: ${mergedPlayers} players, ${mergedWaitlist} waitlist.`);
+            await saveData('reconcile-best-local-snapshot');
         }
     } catch (err) {
         console.error('Error reconciling local backup:', err.message);
@@ -1863,8 +2172,9 @@ function generateRandomCode() {
 
 function loadDataFromFile() {
     try {
-        if (fs.existsSync(DATA_FILE)) {
-            const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        const bestSnapshot = getBestLocalSnapshot();
+        if (bestSnapshot && bestSnapshot.data) {
+            const data = bestSnapshot.data;
             playerSpots = data.playerSpots ?? 20;
             players = Array.isArray(data.players) ? data.players.map(hydratePlayerRatingProfile) : [];
             waitlist = Array.isArray(data.waitlist) ? data.waitlist.map(hydratePlayerRatingProfile) : [];
@@ -3740,7 +4050,10 @@ app.post('/api/admin/download-backup', async (req, res) => {
             }
         };
 
-        const filename = `phans-hockey-backup-${yyyy}${mm}${dd}-${hh}${mi}${ss}-ET.json`;
+        const gameDaySlug = String(getGameDayName() || 'backup').trim().toLowerCase() === 'sunday'
+            ? 'sunday'
+            : (String(getGameDayName() || 'backup').trim().toLowerCase() === 'friday' ? 'friday' : String(getGameDayName() || 'backup').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+        const filename = `phans-hockey-${gameDaySlug}-backup-${yyyy}${mm}${dd}-${hh}${mi}${ss}-ET.json`;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         return res.status(200).send(JSON.stringify(backup, null, 2));
@@ -4744,12 +5057,14 @@ app.get('/api/admin/payment-reports/:id/download', async (req, res) => {
 
 function readLocalBackupSummary() {
     try {
-        if (!fs.existsSync(DATA_FILE)) {
+        const best = getBestLocalSnapshot();
+        if (!best || !best.data) {
             return { exists: false, players: 0, waitlist: 0, savedAt: null };
         }
-        const raw = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        const raw = best.data;
         return {
             exists: true,
+            file: best.file,
             players: Array.isArray(raw.players) ? raw.players.length : 0,
             waitlist: Array.isArray(raw.waitlist) ? raw.waitlist.length : 0,
             savedAt: raw.savedAt || null
@@ -4837,8 +5152,10 @@ app.get('/api/admin/system-status', async (req, res) => {
             backupPlayers: backup.players,
             backupWaitlist: backup.waitlist,
             backupSavedAt: backup.savedAt,
-            backupExists: backup.exists
+            backupExists: backup.exists,
+            latestSnapshotMeta: latestLocalSnapshotMeta
         },
+        dataAudit: recentDataAudit,
         process: {
             rssMb: Math.round(mem.rss / 1024 / 1024),
             heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
@@ -4919,9 +5236,33 @@ app.head('/api/health', async (req, res) => {
     res.sendStatus(200);
 });
 
+
+async function flushAndExit(code = 0, signal = 'exit') {
+    try {
+        await saveData(`shutdown-${String(signal).toLowerCase()}`);
+        await appendDataAudit('shutdown_flush', 'success', { signal, code });
+    } catch (err) {
+        console.error('Shutdown flush error:', err.message);
+    } finally {
+        process.exit(code);
+    }
+}
+
+process.on('SIGINT', () => { flushAndExit(0, 'SIGINT'); });
+process.on('SIGTERM', () => { flushAndExit(0, 'SIGTERM'); });
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught exception:', err);
+    flushAndExit(1, 'uncaughtException');
+});
+process.on('unhandledRejection', (err) => {
+    console.error('Unhandled rejection:', err);
+    flushAndExit(1, 'unhandledRejection');
+});
+
 // Initialize and start
 initDatabase().then(async () => {
     await reconcileFromFileBackup();
+    await runDatabaseSelfHeal('startup');
     checkAutoLock();
     runSchedulerTick();
     
