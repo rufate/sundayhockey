@@ -1436,6 +1436,45 @@
             .regular-skaters-grid { grid-template-columns: 1fr; }
         }
 
+        .regular-summary-section {
+            background: linear-gradient(135deg, #173524, #234532);
+            border: 2px solid #53c27c;
+            border-radius: 10px;
+            padding: 16px;
+            margin-top: 25px;
+        }
+
+        .regular-summary-section h3 {
+            margin: 0 0 8px 0;
+            color: #53c27c;
+            font-size: 1.05rem;
+        }
+
+        .regular-summary-note {
+            color: #b9d9c4;
+            font-size: 0.9rem;
+            margin: 0 0 14px 0;
+        }
+
+        .regular-summary-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .regular-toggle-btn {
+            background: #607d8b !important;
+            color: white;
+            padding: 5px 8px !important;
+            font-size: 0.75rem !important;
+            width: auto;
+            margin: 0;
+        }
+
+        .regular-toggle-btn.active {
+            background: #2e7d32 !important;
+            box-shadow: 0 0 0 1px rgba(83, 194, 124, 0.45) inset;
+        }
+
     
 /* ===== Option 1: clean centered admin table ===== */
 .admin-layout-option-1 table th,
@@ -1450,6 +1489,8 @@
 .admin-layout-option-1 .paid-wrap { gap:3px; }
 .admin-layout-option-1 .table-note-muted { font-size:0.8rem; color:#bbb; line-height:1.35; text-align:center; }
 
+
+.regular-summary-section{display:none !important;}
 </style>
 
 <style>
@@ -1607,6 +1648,18 @@ button {
 }
 </style>
 
+
+<style id="safe-ui-hide-unused-admin-panels">
+.add-player-form,
+.regular-summary-section,
+.regular-skaters-section,
+.goalies-section,
+.backup-goalies-section,
+.add-goalie-fly-section {
+    display: none !important;
+}
+</style>
+
 </head>
 <body class="admin-layout-option-1">
 
@@ -1740,51 +1793,7 @@ button {
         </div>
 
 
-        <div class="regular-skaters-section">
-            <h3>👥 Regular Skaters Auto-Add</h3>
-            <p style="color:#b9d9c4; font-size:0.9rem; margin-top:0;">
-                These players are auto-added during the weekly reset. Use <strong>everyday</strong> for players who always play, or assign them to a specific day like Friday or Sunday.
-            </p>
-
-            <div class="regular-skaters-toolbar">
-                <div class="field">
-                    <label for="regularSkaterDayBucket">Bucket</label>
-                    <select id="regularSkaterDayBucket">
-                        <option value="everyday">Everyday</option>
-                        <option value="friday">Friday</option>
-                        <option value="sunday">Sunday</option>
-                        <option value="wednesday">Wednesday</option>
-                        <option value="saturday">Saturday</option>
-                        <option value="monday">Monday</option>
-                        <option value="tuesday">Tuesday</option>
-                        <option value="thursday">Thursday</option>
-                    </select>
-                </div>
-                <div class="field">
-                    <button type="button" class="control-btn" style="background:#53c27c; width:100%;" onclick="saveRegularSkatersSettings()">💾 Save Regular Skaters</button>
-                </div>
-            </div>
-
-            <div class="regular-skaters-grid">
-                <input type="text" id="regularFirstName" placeholder="First Name">
-                <input type="text" id="regularLastName" placeholder="Last Name">
-                <input type="tel" id="regularPhone" placeholder="Phone Number">
-                <input type="number" id="regularRating" placeholder="Rating (1-10)" min="1" max="10" step="0.1">
-                <input type="text" id="regularPaymentMethod" placeholder="Payment Method" value="N/A">
-                <div class="checkbox-container" style="margin:0; background:rgba(0,0,0,0.18); border-radius:8px; padding:12px;">
-                    <input type="checkbox" id="regularProtected">
-                    <label for="regularProtected">Protected</label>
-                </div>
-                <div class="checkbox-container" style="margin:0; background:rgba(0,0,0,0.18); border-radius:8px; padding:12px;">
-                    <input type="checkbox" id="regularFree">
-                    <label for="regularFree">Free Player</label>
-                </div>
-                <button type="button" class="control-btn" style="background:#2e7d32; width:100%;" onclick="addRegularSkaterFromForm()">➕ Add Regular Skater</button>
-            </div>
-
-            <div class="regular-skaters-list" id="regularSkatersList"></div>
-        </div>
-
+        <div id="legacyRegularSkatersSection" style="display:none;"></div>
 
         <!-- TITLE EDITOR -->
         <div class="title-editor-section">
@@ -2211,6 +2220,12 @@ button {
                 </thead>
                 <tbody id="cancellationList"></tbody>
             </table>
+        </div>
+
+        <div class="regular-summary-section">
+            <h3>⭐ Regular Players</h3>
+            <p class="regular-summary-note">Use the one-click Regular button in the player list above. Active regulars are highlighted green.</p>
+            <div class="regular-summary-list" id="regularSkatersList"></div>
         </div>
     </div>
 
@@ -2878,14 +2893,18 @@ button {
             try {
                 const pass = document.getElementById('adminPass').value;
                 const rememberMe = document.getElementById('rememberDevice').checked;
-                const res = await adminFetch(`${API_URL}/api/admin/login`, {
+                const errorMsg = document.getElementById('errorMsg');
+                errorMsg.style.display = 'none';
+
+                const res = await fetch(`${API_URL}/api/admin/login`, {
                     method: 'POST',
-                    headers: getAdminHeaders(),
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ password: pass, rememberMe })
                 });
                 const data = await res.json().catch(() => ({}));
-                if (data.success) {
-                    sessionToken = data.sessionToken;
+
+                if (res.ok && data.success) {
+                    sessionToken = data.sessionToken || "";
                     setStoredSessionToken(sessionToken, !!data.remember);
                     showDashboard();
                     loadData();
@@ -2895,13 +2914,12 @@ button {
                     loadSessionInfo();
                     loadAuditLog();
                     loadSystemStatus();
-                    loadSystemStatus();
                     setTimeout(loadHistoryList, 500);
-                } else {
-                    const errorMsg = document.getElementById('errorMsg');
-                    errorMsg.textContent = data.error || 'Wrong Password';
-                    errorMsg.style.display = 'block';
+                    return;
                 }
+
+                errorMsg.textContent = data.error || 'Wrong Password';
+                errorMsg.style.display = 'block';
             } catch (err) {
                 console.error("Login error:", err);
                 alert('Login failed.');
@@ -3398,100 +3416,103 @@ button {
             return defaults;
         }
 
+        function normalizePhoneDigitsClient(value) {
+            let digits = String(value || '').replace(/\D/g, '');
+            if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
+            return digits.slice(0, 10);
+        }
+
+        function getRegularEntriesFlat() {
+            const map = normalizeRegularDayBucketMap(currentRegularSkatersByDay);
+            const order = ['everyday','friday','sunday','wednesday','saturday','monday','tuesday','thursday'];
+            const entries = [];
+            const seen = new Set();
+
+            order.forEach(day => {
+                (map[day] || []).forEach(player => {
+                    const key = normalizePhoneDigitsClient(player.phone) || `${String(player.firstName || '').trim().toLowerCase()}|${String(player.lastName || '').trim().toLowerCase()}|${day}`;
+                    if (seen.has(key)) return;
+                    seen.add(key);
+                    entries.push({ ...player, bucket: day });
+                });
+            });
+
+            return entries;
+        }
+
+        function getPlayerRegularInfo(player) {
+            const playerPhone = normalizePhoneDigitsClient(player && player.phone);
+            const first = String(player && player.firstName || '').trim().toLowerCase();
+            const last = String(player && player.lastName || '').trim().toLowerCase();
+            const map = normalizeRegularDayBucketMap(currentRegularSkatersByDay);
+            const order = ['everyday','friday','sunday','wednesday','saturday','monday','tuesday','thursday'];
+
+            for (const day of order) {
+                const match = (map[day] || []).find(existing => {
+                    const existingPhone = normalizePhoneDigitsClient(existing.phone);
+                    if (playerPhone && existingPhone && existingPhone === playerPhone) return true;
+                    return String(existing.firstName || '').trim().toLowerCase() === first &&
+                           String(existing.lastName || '').trim().toLowerCase() === last;
+                });
+                if (match) return { active: true, bucket: day, player: match };
+            }
+
+            return { active: false, bucket: null, player: null };
+        }
+
         function renderRegularSkatersList() {
             const wrap = document.getElementById('regularSkatersList');
             if (!wrap) return;
-            const map = normalizeRegularDayBucketMap(currentRegularSkatersByDay);
-            const order = ['everyday','friday','sunday','wednesday','saturday','monday','tuesday','thursday'];
-            const labels = {
-                everyday: 'Everyday', friday: 'Friday', sunday: 'Sunday', wednesday: 'Wednesday',
-                saturday: 'Saturday', monday: 'Monday', tuesday: 'Tuesday', thursday: 'Thursday'
-            };
 
-            let html = '';
-            order.forEach(day => {
-                const list = map[day] || [];
-                html += `<div class="message-box"><label>${labels[day]} (${list.length})</label>`;
-                if (!list.length) {
-                    html += '<div class="regular-skater-empty">No regular skaters saved in this bucket.</div>';
-                } else {
-                    list.forEach((player, index) => {
-                        const tags = [
-                            `Rating ${player.rating ?? '--'}`,
-                            player.paymentMethod ? `Pay: ${player.paymentMethod}` : 'Pay: N/A',
-                            player.isFree ? 'FREE' : 'UNPAID',
-                            player.protected ? 'Protected' : 'Not protected'
-                        ].join(' • ');
-                        html += `
-                            <div class="regular-skater-card">
-                                <div>
-                                    <strong>${player.firstName} ${player.lastName}</strong>
-                                    <div class="regular-skater-meta">${player.phone || ''}<br>${tags}</div>
-                                </div>
-                                <button type="button" class="remove-btn" onclick="removeRegularSkater('${day}', ${index})">Remove</button>
-                            </div>
-                        `;
-                    });
+            const entries = getRegularEntriesFlat();
+            if (!entries.length) {
+                wrap.innerHTML = '<div class="regular-skater-empty">No regular players set.</div>';
+                return;
+            }
+
+            wrap.innerHTML = entries.map(player => {
+                const tags = [
+                    `Rating ${player.rating ?? '--'}`,
+                    player.paymentMethod ? `Pay: ${player.paymentMethod}` : 'Pay: N/A',
+                    player.isFree ? 'FREE' : 'UNPAID',
+                    player.protected ? 'Protected' : 'Not protected'
+                ].join(' • ');
+                const bucketLabel = player.bucket && player.bucket !== 'everyday'
+                    ? `<div class="regular-skater-meta" style="margin-bottom:4px; color:#8ee0ad;">${player.bucket}</div>`
+                    : '';
+                const phoneKey = String(player.phone || '').replace(/'/g, "\'");
+                return `
+                    <div class="regular-skater-card">
+                        <div>
+                            <strong>${player.firstName} ${player.lastName}</strong>
+                            ${bucketLabel}
+                            <div class="regular-skater-meta">${player.phone || ''}<br>${tags}</div>
+                        </div>
+                        <button type="button" class="remove-btn" onclick="removeRegularPlayer('${phoneKey}')">Remove</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function removeRegularPlayer(phone) {
+            if (!confirm('Remove this player from the regular list?')) return;
+            try {
+                const res = await fetch(`${API_URL}/api/admin/remove-regular-player`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken, phone })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to remove regular player');
                 }
-                html += '</div>';
-            });
-            wrap.innerHTML = html;
-        }
-
-        function addRegularSkaterFromForm() {
-            const day = (document.getElementById('regularSkaterDayBucket').value || 'everyday').toLowerCase();
-            const firstName = document.getElementById('regularFirstName').value.trim();
-            const lastName = document.getElementById('regularLastName').value.trim();
-            const phone = document.getElementById('regularPhone').value.trim();
-            const rating = parseFloat(document.getElementById('regularRating').value || '0');
-            const paymentMethod = document.getElementById('regularPaymentMethod').value.trim() || 'N/A';
-            const isFree = document.getElementById('regularFree').checked;
-            const isProtected = document.getElementById('regularProtected').checked;
-
-            if (!firstName || !lastName) {
-                alert('Enter first and last name.');
-                return;
+                currentRegularSkatersByDay = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
+                renderRegularSkatersList();
+                await loadData();
+            } catch (err) {
+                console.error('Error removing regular player:', err);
+                alert(`❌ ${err.message || 'Failed to remove regular player.'}`);
             }
-            const digits = phone.replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
-            if (digits.length !== 10) {
-                alert('Phone number must be 10 digits.');
-                return;
-            }
-            if (!Number.isFinite(rating) || rating < 1 || rating > 10) {
-                alert('Rating must be between 1 and 10.');
-                return;
-            }
-
-            currentRegularSkatersByDay = normalizeRegularDayBucketMap(currentRegularSkatersByDay);
-            currentRegularSkatersByDay[day] = currentRegularSkatersByDay[day] || [];
-            currentRegularSkatersByDay[day].push({
-                firstName,
-                lastName,
-                phone,
-                rating,
-                isGoalie: false,
-                isFree,
-                paymentMethod,
-                protected: isProtected
-            });
-
-            document.getElementById('regularFirstName').value = '';
-            document.getElementById('regularLastName').value = '';
-            document.getElementById('regularPhone').value = '';
-            document.getElementById('regularRating').value = '';
-            document.getElementById('regularPaymentMethod').value = 'N/A';
-            document.getElementById('regularFree').checked = false;
-            document.getElementById('regularProtected').checked = false;
-
-            renderRegularSkatersList();
-        }
-
-        function removeRegularSkater(day, index) {
-            currentRegularSkatersByDay = normalizeRegularDayBucketMap(currentRegularSkatersByDay);
-            const list = currentRegularSkatersByDay[day] || [];
-            if (index < 0 || index >= list.length) return;
-            list.splice(index, 1);
-            renderRegularSkatersList();
         }
 
         async function loadRegularSkatersSettings() {
@@ -3523,7 +3544,6 @@ button {
                 }
                 currentRegularSkatersByDay = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
                 renderRegularSkatersList();
-                alert('✅ Regular skaters saved. They will auto-add on weekly reset.');
             } catch (err) {
                 console.error('Error saving regular skaters:', err);
                 alert(`❌ ${err.message || 'Failed to save regular skaters.'}`);
@@ -3914,45 +3934,27 @@ button {
         }
 
 
-        function askRegularBucket(defaultBucket = 'everyday') {
-            const raw = prompt('Promote this player to which regular bucket?\nType: everyday, friday, sunday, monday, tuesday, wednesday, thursday, saturday', defaultBucket);
-            if (raw === null) return null;
-            const bucket = String(raw || '').trim().toLowerCase();
-            const allowed = ['everyday','sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-            if (!allowed.includes(bucket)) {
-                alert('Please enter one of: ' + allowed.join(', '));
-                return null;
-            }
-            return bucket;
-        }
-
-        async function promotePlayerToRegular(playerId, suggestedBucket = 'everyday') {
-            const bucket = askRegularBucket(suggestedBucket);
-            if (!bucket) return;
-
+        async function togglePlayerRegular(playerId) {
             try {
-                const res = await fetch(`${API_URL}/api/admin/promote-player-to-regular`, {
+                const res = await fetch(`${API_URL}/api/admin/toggle-player-regular`, {
                     method: 'POST',
                     headers: getAdminHeaders(),
-                    body: JSON.stringify({ sessionToken, playerId, bucket })
+                    body: JSON.stringify({ sessionToken, playerId })
                 });
-                const data = await res.json();
+                const data = await res.json().catch(() => ({}));
 
-                if (!res.ok) {
-                    throw new Error(data.error || 'Failed to promote player to regular');
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to update regular player');
                 }
 
-                if (data.alreadyExists) {
-                    alert(`Already a regular in ${bucket}.`);
-                } else {
-                    alert(`✅ Added to ${bucket} regulars.`);
-                }
+                currentRegularSkatersByDay = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
+                renderRegularSkatersList();
+                await loadData();
             } catch (err) {
-                console.error('Promote-to-regular error:', err);
-                alert(`❌ ${err.message || 'Failed to promote player to regular.'}`);
+                console.error('Toggle regular error:', err);
+                alert(`❌ ${err.message || 'Failed to update regular player.'}`);
             }
         }
-
 
         async function loadData() {
             try {
@@ -3972,6 +3974,9 @@ button {
                 }
                 
                 const data = await res.json();
+
+                currentRegularSkatersByDay = normalizeRegularDayBucketMap(data.regularSkatersByDay || currentRegularSkatersByDay || {});
+                renderRegularSkatersList();
 
                 playersCount = data.players.length;
                 maxGoalies = data.maxGoalies || 2;
@@ -4014,6 +4019,9 @@ button {
                         const goalieBadge = p.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
                         const protectedBadge = (p.firstName.toLowerCase() === 'phan' && p.lastName.toLowerCase() === 'ly') ? 
                             '<span class="protected-badge">PROTECTED</span>' : '';
+                        const regularInfo = getPlayerRegularInfo(p);
+                        const regularLabel = regularInfo.active ? 'Regular ✓' : 'Regular';
+                        const regularClass = regularInfo.active ? 'regular-toggle-btn active' : 'regular-toggle-btn';
 
                         let paidInput = '';
                         if (p.isGoalie) {
@@ -4052,7 +4060,7 @@ button {
                             <td>${paidInput}</td>
                             <td>${p.isGoalie ? 'N/A' : p.paymentMethod}</td>
                             <td>
-                                <button class="control-btn" style="background:#7e57c2; padding:5px 8px; font-size:0.75rem; width:auto; margin:0;" onclick="promotePlayerToRegular(${p.id}, 'everyday')">Promote</button>
+                                <button class="control-btn ${regularClass}" onclick="togglePlayerRegular(${p.id})">${regularLabel}</button>
                             </td>
                             <td>
                                 <button class="remove-btn" onclick="removePlayer(${p.id})">Remove</button>
@@ -4647,7 +4655,7 @@ button {
                 const blob = await res.blob();
                 const contentDisposition = res.headers.get('content-disposition') || '';
                 const match = contentDisposition.match(/filename="?([^";]+)"?/i);
-                const filename = match ? match[1] : `Phan's Hockey ${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+                const filename = match ? match[1] : `phans-hockey-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
 
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
