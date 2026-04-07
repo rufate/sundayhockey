@@ -1606,6 +1606,25 @@ async function initDatabase() {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
+
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS data_snapshots (
+                id SERIAL PRIMARY KEY,
+                snapshot_name VARCHAR(255),
+                snapshot_json JSONB NOT NULL,
+                snapshot_reason VARCHAR(100),
+                snapshot_version INTEGER DEFAULT 1,
+                players_count INTEGER DEFAULT 0,
+                waitlist_count INTEGER DEFAULT 0,
+                snapshot_saved_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        await pool.query(`ALTER TABLE data_snapshots ADD COLUMN IF NOT EXISTS snapshot_reason VARCHAR(100)`);
+        await pool.query(`ALTER TABLE data_snapshots ADD COLUMN IF NOT EXISTS snapshot_version INTEGER DEFAULT 1`);
+        await pool.query(`ALTER TABLE data_snapshots ADD COLUMN IF NOT EXISTS players_count INTEGER DEFAULT 0`);
+        await pool.query(`ALTER TABLE data_snapshots ADD COLUMN IF NOT EXISTS waitlist_count INTEGER DEFAULT 0`);
+        await pool.query(`ALTER TABLE data_snapshots ADD COLUMN IF NOT EXISTS snapshot_saved_at TIMESTAMP`);
         
         await loadDataFromDB();
         await loadRecentDataAudit();
@@ -1768,7 +1787,9 @@ async function saveSetting(key, value) {
 const DATA_FILE = './data.json';
 const SETTINGS_BACKUP_FILE = './app-settings.backup.json';
 const SNAPSHOT_DIR = './data-backups';
-const SNAPSHOT_RETENTION = Number(process.env.LOCAL_SNAPSHOT_RETENTION || 200);
+const SNAPSHOT_RETENTION = Number(process.env.LOCAL_SNAPSHOT_RETENTION || 100);
+const DB_SNAPSHOT_RETENTION = Number(process.env.DB_SNAPSHOT_RETENTION || 100);
+const DB_SNAPSHOT_FORCE_ON_EVERY_SAVE = String(process.env.DB_SNAPSHOT_FORCE_ON_EVERY_SAVE || 'false').toLowerCase() === 'true';
 const REQUEST_SNAPSHOT_ENABLED = String(process.env.REQUEST_SNAPSHOT_ENABLED || 'false').toLowerCase() === 'true';
 const REQUEST_SNAPSHOT_MIN_INTERVAL_MS = Number(process.env.REQUEST_SNAPSHOT_MIN_INTERVAL_MS || 60000);
 const REQUEST_SELF_HEAL_ENABLED = String(process.env.REQUEST_SELF_HEAL_ENABLED || 'false').toLowerCase() === 'true';
@@ -1783,6 +1804,19 @@ let lastAuditPruneAt = 0;
 let latestLocalSnapshotMeta = { exists: false, savedAt: null, file: null, players: 0, waitlist: 0, source: 'memory' };
 let saveQueue = Promise.resolve();
 let recentDataAudit = [];
+
+const DURABLE_SNAPSHOT_REASONS = new Set([
+    'player-signup',
+    'player-cancel',
+    'manual-create-snapshot',
+    'pre-restore-safety'
+]);
+
+function shouldCreateDurableSnapshot(reason = '') {
+    const normalized = String(reason || '').trim().toLowerCase();
+    if (!normalized) return !!DB_SNAPSHOT_FORCE_ON_EVERY_SAVE;
+    return DURABLE_SNAPSHOT_REASONS.has(normalized) || DB_SNAPSHOT_FORCE_ON_EVERY_SAVE;
+}
 
 
 function ensureDirSync(dirPath) {
@@ -1812,7 +1846,403 @@ function updateLatestSnapshotMeta(snapshot, filePath, source = 'memory') {
         file: filePath,
         players: Array.isArray(snapshot?.players) ? snapshot.players.length : 0,
         waitlist: Array.isArray(snapshot?.waitlist) ? snapshot.waitlist.length : 0,
-        source
+        source,
+        sourceType: source === 'database' ? 'database' : 'local'
+    };
+}
+
+function getSnapshotCounts(snapshot) {
+    return {
+        players: Array.isArray(snapshot?.players) ? snapshot.players.length : 0,
+        waitlist: Array.isArray(snapshot?.waitlist) ? snapshot.waitlist.length : 0
+    };
+}
+
+function buildSnapshotMetadata(snapshot, reason = 'saveData') {
+    const counts = getSnapshotCounts(snapshot);
+    return {
+        version: 2,
+        reason: String(reason || 'saveData'),
+        playersCount: counts.players,
+        waitlistCount: counts.waitlist,
+        rosterReleased: !!snapshot?.rosterReleased,
+        gameDate: snapshot?.gameDate || null,
+        gameTime: snapshot?.gameTime || null,
+        gameLocation: snapshot?.gameLocation || null,
+        savedAt: snapshot?.savedAt || new Date().toISOString()
+    };
+}
+
+async function pruneDatabaseSnapshotsIfNeeded(clientOrPool = pool) {
+    if (!clientOrPool || DB_SNAPSHOT_RETENTION <= 0) return;
+    await clientOrPool.query(
+        `DELETE FROM data_snapshots
+         WHERE id IN (
+             SELECT id FROM data_snapshots
+             ORDER BY id DESC
+             OFFSET $1
+         )`,
+        [DB_SNAPSHOT_RETENTION]
+    );
+}
+
+async function insertDatabaseSnapshot(snapshot, reason = 'saveData', clientOrPool = pool) {
+    if (!clientOrPool || !shouldCreateDurableSnapshot(reason)) {
+        return { ok: !pool, skipped: true, reason: 'db-snapshot-disabled' };
+    }
+
+    const metadata = buildSnapshotMetadata(snapshot, reason);
+    const result = await clientOrPool.query(
+        `INSERT INTO data_snapshots (
+            snapshot_name,
+            snapshot_json,
+            snapshot_reason,
+            snapshot_version,
+            players_count,
+            waitlist_count,
+            snapshot_saved_at
+        ) VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7)
+        RETURNING id, created_at`,
+        [
+            `snapshot-${safeIsoStamp(metadata.savedAt)}-${String(reason || 'save').replace(/[^a-z0-9_-]+/gi, '-').slice(0, 40)}`,
+            JSON.stringify(snapshot),
+            metadata.reason,
+            metadata.version,
+            metadata.playersCount,
+            metadata.waitlistCount,
+            metadata.savedAt
+        ]
+    );
+    await pruneDatabaseSnapshotsIfNeeded(clientOrPool);
+    const row = result.rows && result.rows[0] ? result.rows[0] : {};
+    return { ok: true, id: row.id || null, createdAt: row.created_at || null, metadata };
+}
+
+async function getLatestDatabaseSnapshot() {
+    if (!pool) return null;
+    try {
+        const result = await pool.query(
+            `SELECT id, snapshot_name, snapshot_json, snapshot_reason, snapshot_saved_at, created_at, players_count, waitlist_count
+             FROM data_snapshots
+             ORDER BY COALESCE(snapshot_saved_at, created_at) DESC, id DESC
+             LIMIT 1`
+        );
+        const row = result.rows && result.rows[0];
+        if (!row) return null;
+        const data = row.snapshot_json && typeof row.snapshot_json === 'object' ? row.snapshot_json : null;
+        if (!data) return null;
+        updateLatestSnapshotMeta(data, `db:data_snapshots:${row.id}`, 'database');
+        return {
+            file: `db:data_snapshots:${row.id}`,
+            data,
+            savedAtMs: Date.parse(row.snapshot_saved_at || row.created_at || data.savedAt || '') || Date.now(),
+            score: ((Number(row.players_count) || 0) * 1000000) + ((Number(row.waitlist_count) || 0) * 1000) + (Date.parse(row.snapshot_saved_at || row.created_at || data.savedAt || '') || 0),
+            source: 'database',
+            snapshotId: row.id,
+            snapshotSavedAt: row.snapshot_saved_at || row.created_at || data.savedAt || null,
+            snapshotReason: row.snapshot_reason || null
+        };
+    } catch (err) {
+        console.error('Error loading latest database snapshot:', err.message);
+        return null;
+    }
+}
+
+async function getBestAvailableSnapshot() {
+    const dbSnapshot = await getLatestDatabaseSnapshot();
+    if (dbSnapshot && dbSnapshot.data) return dbSnapshot;
+    const localSnapshot = getBestLocalSnapshot();
+    if (localSnapshot && localSnapshot.data) {
+        return { ...localSnapshot, source: 'local', snapshotSavedAt: localSnapshot.data?.savedAt || null, snapshotReason: 'local-file' };
+    }
+    return null;
+}
+
+function buildSnapshotFingerprint(snapshotRecord = {}) {
+    try {
+        const raw = [
+            snapshotRecord.source || '',
+            snapshotRecord.file || '',
+            snapshotRecord.snapshotId || '',
+            snapshotRecord.snapshotSavedAt || '',
+            snapshotRecord.snapshotReason || '',
+            Array.isArray(snapshotRecord.data?.players) ? snapshotRecord.data.players.length : 0,
+            Array.isArray(snapshotRecord.data?.waitlist) ? snapshotRecord.data.waitlist.length : 0
+        ].join('|');
+        return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 16);
+    } catch (err) {
+        return '';
+    }
+}
+
+function buildSnapshotListItem(record = {}) {
+    const data = record.data && typeof record.data === 'object' ? record.data : {};
+    const summary = data.summary && typeof data.summary === 'object' ? data.summary : {};
+    const appSettings = data.appSettings && typeof data.appSettings === 'object' ? data.appSettings : {};
+    const playersCount = Array.isArray(data.players) ? data.players.filter(item => item && typeof item === 'object').length : Number(record.playersCount || 0);
+    const waitlistCount = Array.isArray(data.waitlist) ? data.waitlist.filter(item => item && typeof item === 'object').length : Number(record.waitlistCount || 0);
+    return {
+        snapshotKey: record.snapshotId != null ? `db:${record.snapshotId}` : `file:${record.file || ''}`,
+        snapshotId: record.snapshotId != null ? String(record.snapshotId) : null,
+        source: record.source || 'local',
+        file: record.file || null,
+        fingerprint: buildSnapshotFingerprint(record),
+        savedAt: record.snapshotSavedAt || data.savedAt || null,
+        reason: record.snapshotReason || data.snapshotReason || null,
+        players: playersCount,
+        waitlist: waitlistCount,
+        rosterReleased: typeof summary.rosterReleased === 'boolean' ? summary.rosterReleased : null,
+        gameLocation: typeof summary.gameLocation === 'string' ? summary.gameLocation : (typeof appSettings.selectedArena === 'string' ? appSettings.selectedArena : null),
+        gameTime: typeof summary.gameTime === 'string' ? summary.gameTime : (typeof appSettings.selectedDayTime === 'string' ? appSettings.selectedDayTime : null),
+        gameDate: typeof summary.gameDate === 'string' ? summary.gameDate : null,
+        version: Number(data.snapshotVersion || 2),
+        data
+    };
+}
+
+async function listAvailableSnapshots(limit = 100) {
+    const snapshots = [];
+    if (pool) {
+        try {
+            const result = await pool.query(
+                `SELECT id, snapshot_name, snapshot_json, snapshot_reason, snapshot_saved_at, created_at, players_count, waitlist_count
+                 FROM data_snapshots
+                 ORDER BY COALESCE(snapshot_saved_at, created_at) DESC, id DESC
+                 LIMIT $1`,
+                [Math.max(1, Math.min(Number(limit) || 100, 300))]
+            );
+            for (const row of result.rows || []) {
+                const data = row.snapshot_json && typeof row.snapshot_json === 'object' ? row.snapshot_json : null;
+                if (!data) continue;
+                snapshots.push(buildSnapshotListItem({
+                    source: 'database',
+                    snapshotId: row.id,
+                    file: `db:data_snapshots:${row.id}`,
+                    snapshotSavedAt: row.snapshot_saved_at || row.created_at || data.savedAt || null,
+                    snapshotReason: row.snapshot_reason || null,
+                    playersCount: row.players_count,
+                    waitlistCount: row.waitlist_count,
+                    data
+                }));
+            }
+        } catch (err) {
+            console.error('Error listing database snapshots:', err.message);
+        }
+    }
+
+    try {
+        const localFiles = [];
+        if (fs.existsSync(SNAPSHOT_DIR)) {
+            for (const name of fs.readdirSync(SNAPSHOT_DIR)) {
+                if (!/^snapshot-.*\.json$/i.test(name)) continue;
+                localFiles.push(path.join(SNAPSHOT_DIR, name));
+            }
+        }
+        for (const full of localFiles) {
+            const data = readJsonFileSafe(full);
+            if (!data || typeof data !== 'object') continue;
+            const stat = fs.existsSync(full) ? fs.statSync(full) : null;
+            snapshots.push(buildSnapshotListItem({
+                source: 'local',
+                file: full,
+                snapshotSavedAt: data.savedAt || (stat ? stat.mtime.toISOString() : null),
+                snapshotReason: data.snapshotReason || 'local-file',
+                data
+            }));
+        }
+    } catch (err) {
+        console.error('Error listing local snapshots:', err.message);
+    }
+
+    const seen = new Set();
+    const deduped = [];
+    for (const item of snapshots) {
+        const key = `${item.source}|${item.snapshotId || ''}|${item.file || ''}|${item.savedAt || ''}|${item.fingerprint || ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(item);
+    }
+
+    deduped.sort((a, b) => {
+        const aTime = Date.parse(a.savedAt || '') || 0;
+        const bTime = Date.parse(b.savedAt || '') || 0;
+        if (bTime !== aTime) return bTime - aTime;
+        return String(b.snapshotKey || '').localeCompare(String(a.snapshotKey || ''));
+    });
+
+    return deduped.slice(0, Math.max(1, Math.min(Number(limit) || 100, 300)));
+}
+
+async function getSnapshotByLookup(snapshotKey, fingerprint = '') {
+    const list = await listAvailableSnapshots(300);
+    const match = list.find(item => String(item.snapshotKey) === String(snapshotKey));
+    if (!match) return null;
+    if (fingerprint && String(match.fingerprint) !== String(fingerprint)) {
+        return { stale: true, latest: match };
+    }
+    return match;
+}
+
+function buildSnapshotPreviewPayload(item) {
+    if (!item || !item.data) return null;
+    const previewPlayers = Array.isArray(item.data.players) ? item.data.players.filter(obj => obj && typeof obj === 'object') : [];
+    const previewWaitlist = Array.isArray(item.data.waitlist) ? item.data.waitlist.filter(obj => obj && typeof obj === 'object') : [];
+    return {
+        success: true,
+        snapshotKey: item.snapshotKey,
+        snapshotId: item.snapshotId,
+        fingerprint: item.fingerprint,
+        snapshotFile: item.file,
+        snapshotSource: item.source || 'local',
+        snapshotSavedAt: item.savedAt || null,
+        snapshotReason: item.reason || null,
+        snapshotPlayers: previewPlayers.length,
+        snapshotWaitlist: previewWaitlist.length,
+        livePlayers: Array.isArray(players) ? players.length : 0,
+        liveWaitlist: Array.isArray(waitlist) ? waitlist.length : 0,
+        rosterReleasedInSnapshot: item.rosterReleased,
+        gameLocation: item.gameLocation || null,
+        gameTime: item.gameTime || null,
+        gameDate: item.gameDate || null,
+        version: item.version || 2
+    };
+}
+
+
+async function createManualSnapshot(reason = 'manual-create-snapshot', req = null, extras = {}) {
+    const snapshot = buildFullDataSnapshot();
+    const normalizedReason = String(reason || 'manual-create-snapshot').trim() || 'manual-create-snapshot';
+    let database = { ok: !pool, skipped: !pool, reason: 'no-database' };
+    if (pool && shouldCreateDurableSnapshot(normalizedReason)) {
+        database = await insertDatabaseSnapshot(snapshot, normalizedReason, pool);
+    }
+    const localSnapshot = persistDataToFile(normalizedReason, snapshot);
+    try {
+        if (req && typeof addAdminAuditEntry === 'function') {
+            addAdminAuditEntry(normalizedReason, req, {
+                snapshotSavedAt: snapshot.savedAt,
+                databaseSnapshot: database,
+                localSnapshot,
+                ...extras
+            });
+        }
+        if (typeof appendDataAudit === 'function') {
+            await appendDataAudit(normalizedReason, 'success', {
+                snapshotSavedAt: snapshot.savedAt,
+                databaseSnapshot: database,
+                localSnapshot,
+                ...extras
+            });
+        }
+    } catch (auditErr) {
+        console.error('Error auditing manual snapshot creation:', auditErr.message);
+    }
+    return {
+        success: true,
+        snapshotSavedAt: snapshot.savedAt,
+        databaseSnapshot: database,
+        localSnapshot
+    };
+}
+
+async function restoreSnapshotItem(item, req, auditAction = 'restore-snapshot-replace') {
+    const backupData = item.data;
+    const restoredPlayers = Array.isArray(backupData.players) ? backupData.players.filter(obj => obj && typeof obj === 'object') : null;
+    const restoredWaitlist = Array.isArray(backupData.waitlist) ? backupData.waitlist.filter(obj => obj && typeof obj === 'object') : null;
+    if (!restoredPlayers || !restoredWaitlist) {
+        return { ok: false, status: 400, body: { error: 'Selected snapshot is missing players or waitlist.' } };
+    }
+
+    const beforeCounts = {
+        players: Array.isArray(players) ? players.length : 0,
+        waitlist: Array.isArray(waitlist) ? waitlist.length : 0
+    };
+
+    const safetySnapshot = await createManualSnapshot('pre-restore-safety', req, {
+        restoringSnapshotKey: item.snapshotKey,
+        restoringFingerprint: item.fingerprint
+    });
+
+    players = JSON.parse(JSON.stringify(restoredPlayers));
+    waitlist = JSON.parse(JSON.stringify(restoredWaitlist));
+
+    if (backupData.currentWeekData && typeof backupData.currentWeekData === 'object') {
+        currentWeekData = JSON.parse(JSON.stringify(backupData.currentWeekData));
+    }
+
+    if (backupData.summary && typeof backupData.summary === 'object') {
+        if (typeof backupData.summary.gameLocation === 'string') gameLocation = backupData.summary.gameLocation;
+        if (typeof backupData.summary.gameTime === 'string') gameTime = backupData.summary.gameTime;
+        if (typeof backupData.summary.gameDate === 'string') gameDate = backupData.summary.gameDate;
+        if (typeof backupData.summary.rosterReleased === 'boolean') rosterReleased = backupData.summary.rosterReleased;
+        if (typeof backupData.summary.requirePlayerCode === 'boolean') requirePlayerCode = backupData.summary.requirePlayerCode;
+        if (typeof backupData.summary.playerSignupCode === 'string' && backupData.summary.playerSignupCode.trim()) {
+            playerSignupCode = backupData.summary.playerSignupCode.trim();
+        }
+    }
+
+    if (backupData.appSettings && typeof backupData.appSettings === 'object') {
+        const s = backupData.appSettings;
+        if (typeof s.maintenanceMode === 'boolean') maintenanceMode = s.maintenanceMode;
+        if (typeof s.customTitle === 'string') customTitle = s.customTitle;
+        if (typeof s.announcementEnabled === 'boolean') announcementEnabled = s.announcementEnabled;
+        if (typeof s.announcementText === 'string') announcementText = s.announcementText;
+        if (Array.isArray(s.announcementImages)) announcementImages = s.announcementImages;
+        if (typeof s.paymentEmail === 'string') paymentEmail = s.paymentEmail.trim() || paymentEmail;
+        if (typeof s.requirePlayerCode === 'boolean') requirePlayerCode = s.requirePlayerCode;
+        if (typeof s.playerSignupCode === 'string' && s.playerSignupCode.trim()) playerSignupCode = s.playerSignupCode.trim();
+    }
+
+    playerSpots = Math.max(0, 20 - players.filter(p => !(p && p.isGoalie)).length);
+    await saveData('restore-selected-snapshot');
+
+    try {
+        if (typeof addAdminAuditEntry === 'function') {
+            addAdminAuditEntry(auditAction, req, {
+                beforePlayers: beforeCounts.players,
+                beforeWaitlist: beforeCounts.waitlist,
+                afterPlayers: players.length,
+                afterWaitlist: waitlist.length,
+                snapshotFile: item.file,
+                snapshotSource: item.source || 'local',
+                snapshotSavedAt: item.savedAt || null,
+                snapshotKey: item.snapshotKey,
+                fingerprint: item.fingerprint
+            });
+        }
+        if (typeof appendDataAudit === 'function') {
+            await appendDataAudit(auditAction, 'success', {
+                beforePlayers: beforeCounts.players,
+                beforeWaitlist: beforeCounts.waitlist,
+                afterPlayers: players.length,
+                afterWaitlist: waitlist.length,
+                snapshotFile: item.file,
+                snapshotSource: item.source || 'local',
+                snapshotSavedAt: item.savedAt || null,
+                snapshotKey: item.snapshotKey,
+                fingerprint: item.fingerprint
+            });
+        }
+    } catch (auditErr) {
+        console.error('Error auditing selected snapshot restore:', auditErr.message);
+    }
+
+    return {
+        ok: true,
+        body: {
+            success: true,
+            mode: 'replace',
+            restoredPlayers: players.length,
+            restoredWaitlist: waitlist.length,
+            snapshotKey: item.snapshotKey,
+            snapshotFile: item.file,
+            snapshotSource: item.source || 'local',
+            snapshotSavedAt: item.savedAt || null,
+            snapshotReason: item.reason || null,
+            fingerprint: item.fingerprint,
+            message: 'Snapshot restored successfully.',
+            safetySnapshot
+        }
     };
 }
 
@@ -1837,13 +2267,16 @@ function persistDataToFile(reason = 'saveData', snapshot = null) {
         const text = JSON.stringify(payload, null, 2);
         atomicWriteTextFile(DATA_FILE, text);
 
-        ensureDirSync(SNAPSHOT_DIR);
-        const snapshotFile = path.join(SNAPSHOT_DIR, `snapshot-${safeIsoStamp(payload.savedAt || new Date())}-${String(reason || 'save').replace(/[^a-z0-9_-]+/gi, '-').slice(0,40)}.json`);
-        atomicWriteTextFile(snapshotFile, text);
-        trimSnapshotBackups();
-        updateLatestSnapshotMeta(payload, snapshotFile, reason);
+        let snapshotFile = null;
+        if (shouldCreateDurableSnapshot(reason)) {
+            ensureDirSync(SNAPSHOT_DIR);
+            snapshotFile = path.join(SNAPSHOT_DIR, `snapshot-${safeIsoStamp(payload.savedAt || new Date())}-${String(reason || 'save').replace(/[^a-z0-9_-]+/gi, '-').slice(0,40)}.json`);
+            atomicWriteTextFile(snapshotFile, text);
+            trimSnapshotBackups();
+            updateLatestSnapshotMeta(payload, snapshotFile, reason);
+        }
         writeSettingsBackup(reason);
-        return { ok: true, file: snapshotFile, savedAt: payload.savedAt };
+        return { ok: true, file: snapshotFile, savedAt: payload.savedAt, durableSnapshotCreated: !!snapshotFile };
     } catch (err) {
         console.error('Error writing local data snapshot:', err.message);
         return { ok: false, error: err.message };
@@ -1862,9 +2295,6 @@ function readJsonFileSafe(filePath) {
 
 function getBestLocalSnapshot() {
     const candidates = [];
-    if (fs.existsSync(DATA_FILE)) {
-        candidates.push({ file: DATA_FILE, stat: fs.statSync(DATA_FILE) });
-    }
     if (fs.existsSync(SNAPSHOT_DIR)) {
         for (const name of fs.readdirSync(SNAPSHOT_DIR)) {
             if (!/^snapshot-.*\.json$/i.test(name)) continue;
@@ -1962,8 +2392,9 @@ function toNumericOrNull(value) {
     return Number.isFinite(num) ? num : null;
 }
 
-async function replaceDatabaseStateFromMemory(reason = 'saveData') {
+async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = null) {
     if (!pool) return { ok: true, mode: 'file' };
+    const payload = snapshot || buildFullDataSnapshot();
 
     const client = await pool.connect();
     try {
@@ -2060,8 +2491,9 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData') {
             );
         }
 
+        const dbSnapshotResult = await insertDatabaseSnapshot(payload, reason, client);
         await client.query('COMMIT');
-        return { ok: true, mode: 'postgres', players: players.length, waitlist: waitlist.length, reason };
+        return { ok: true, mode: 'postgres', players: players.length, waitlist: waitlist.length, reason, dbSnapshot: dbSnapshotResult };
     } catch (err) {
         await client.query('ROLLBACK').catch(() => {});
         throw err;
@@ -2075,7 +2507,7 @@ async function saveData(reason = 'saveData') {
     saveQueue = saveQueue.then(async () => {
         let dbResult = null;
         try {
-            dbResult = await replaceDatabaseStateFromMemory(reason);
+            dbResult = await replaceDatabaseStateFromMemory(reason, snapshot);
             writeSettingsBackup(reason);
             const localResult = persistDataToFile(reason, snapshot);
             await appendDataAudit('save', 'success', { reason, database: dbResult, localSnapshot: localResult });
@@ -2107,8 +2539,8 @@ async function saveData(reason = 'saveData') {
 
 async function runDatabaseSelfHeal(reason = 'self-heal') {
     if (!pool) return { ok: false, skipped: true, reason: 'file-mode' };
-    const best = getBestLocalSnapshot();
-    if (!best || !best.data) return { ok: false, skipped: true, reason: 'no-local-snapshot' };
+    const best = await getBestAvailableSnapshot();
+    if (!best || !best.data) return { ok: false, skipped: true, reason: 'no-available-snapshot' };
 
     try {
         const dbPlayers = await pool.query('SELECT id, phone FROM players');
@@ -2173,7 +2605,9 @@ function maybeRunRequestSelfHeal(req) {
 
 
 function buildFullDataSnapshot() {
+    const savedAt = new Date().toISOString();
     return {
+        snapshotVersion: 2,
         playerSpots,
         players,
         waitlist,
@@ -2207,7 +2641,27 @@ function buildFullDataSnapshot() {
         announcementText,
         announcementImages,
         paymentEmail,
-        savedAt: new Date().toISOString()
+        summary: {
+            gameLocation,
+            gameTime,
+            gameDate,
+            rosterReleased,
+            requirePlayerCode,
+            playerSignupCode
+        },
+        appSettings: {
+            maintenanceMode,
+            customTitle,
+            announcementEnabled,
+            announcementText,
+            announcementImages,
+            paymentEmail,
+            selectedDayTime: gameTime,
+            selectedArena: gameLocation,
+            requirePlayerCode,
+            playerSignupCode
+        },
+        savedAt
     };
 }
 
@@ -2215,7 +2669,7 @@ async function reconcileFromFileBackup() {
     if (!pool) return;
 
     try {
-        const best = getBestLocalSnapshot();
+        const best = await getBestAvailableSnapshot();
         if (!best || !best.data) return;
         const backup = best.data;
         const backupPlayers = Array.isArray(backup.players) ? backup.players : [];
@@ -3639,7 +4093,7 @@ app.post('/api/register-final', async (req, res) => {
 
     players.push(newPlayer);
     playerSpots = Math.max(0, playerSpots - 1);
-    await saveData();
+    await saveData('player-signup');
 
     if (pool) {
         try {
@@ -4467,37 +4921,118 @@ app.post('/api/admin/download-backup', async (req, res) => {
 
 
 
+
+app.post('/api/admin/snapshots/create', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const note = String(req.body?.note || '').trim();
+        const result = await createManualSnapshot('manual-create-snapshot', req, {
+            note,
+            triggeredBy: 'admin-panel'
+        });
+        return res.json({
+            success: true,
+            message: 'Manual snapshot created successfully.',
+            ...result
+        });
+    } catch (err) {
+        console.error('Error creating manual snapshot:', err);
+        return res.status(500).json({ error: 'Failed to create manual snapshot' });
+    }
+});
+
+app.get('/api/admin/snapshots', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const limit = Math.max(10, Math.min(Number(req.query.limit) || 100, 300));
+        const snapshots = await listAvailableSnapshots(limit);
+        return res.json({
+            success: true,
+            snapshots: snapshots.map(item => ({
+                snapshotKey: item.snapshotKey,
+                snapshotId: item.snapshotId,
+                fingerprint: item.fingerprint,
+                snapshotFile: item.file,
+                snapshotSource: item.source || 'local',
+                snapshotSavedAt: item.savedAt || null,
+                snapshotReason: item.reason || null,
+                snapshotPlayers: item.players || 0,
+                snapshotWaitlist: item.waitlist || 0,
+                rosterReleasedInSnapshot: item.rosterReleased,
+                gameLocation: item.gameLocation || null,
+                gameTime: item.gameTime || null,
+                gameDate: item.gameDate || null,
+                version: item.version || 2
+            })),
+            livePlayers: Array.isArray(players) ? players.length : 0,
+            liveWaitlist: Array.isArray(waitlist) ? waitlist.length : 0
+        });
+    } catch (err) {
+        console.error('Error listing snapshots:', err);
+        return res.status(500).json({ error: 'Failed to list snapshots' });
+    }
+});
+
+app.get('/api/admin/snapshots/preview', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const snapshotKey = String(req.query.snapshotKey || '').trim();
+        if (!snapshotKey) return res.status(400).json({ error: 'snapshotKey is required' });
+        const match = await getSnapshotByLookup(snapshotKey, String(req.query.fingerprint || '').trim());
+        if (!match) return res.status(404).json({ error: 'Snapshot not found' });
+        if (match.stale) {
+            return res.status(409).json({ error: 'Snapshot changed. Refresh the list and try again.', latest: buildSnapshotPreviewPayload(match.latest) });
+        }
+        return res.json(buildSnapshotPreviewPayload(match));
+    } catch (err) {
+        console.error('Error previewing snapshot:', err);
+        return res.status(500).json({ error: 'Failed to preview snapshot' });
+    }
+});
+
+app.post('/api/admin/snapshots/restore', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+        const snapshotKey = String(req.body?.snapshotKey || '').trim();
+        const fingerprint = String(req.body?.fingerprint || '').trim();
+        if (!snapshotKey) return res.status(400).json({ error: 'snapshotKey is required' });
+        const match = await getSnapshotByLookup(snapshotKey, fingerprint);
+        if (!match) return res.status(404).json({ error: 'Snapshot not found' });
+        if (match.stale) {
+            return res.status(409).json({ error: 'Snapshot changed since preview. Refresh the list and try again.', latest: buildSnapshotPreviewPayload(match.latest) });
+        }
+        const result = await restoreSnapshotItem(match, req, 'restore-selected-snapshot');
+        return res.status(result.status || 200).json(result.body);
+    } catch (err) {
+        console.error('Error restoring selected snapshot:', err);
+        return res.status(500).json({ error: 'Failed to restore selected snapshot' });
+    }
+});
+
 app.get('/api/admin/restore-latest-backup-preview', async (req, res) => {
     if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized" });
     }
 
     try {
-        const latest = getBestLocalSnapshot();
+        const latest = await getBestAvailableSnapshot();
         if (!latest || !latest.data) {
             return res.status(404).json({ error: "No server snapshot found to preview." });
         }
 
-        const backupData = latest.data;
-        const previewPlayers = Array.isArray(backupData.players) ? backupData.players.filter(item => item && typeof item === 'object') : [];
-        const previewWaitlist = Array.isArray(backupData.waitlist) ? backupData.waitlist.filter(item => item && typeof item === 'object') : [];
-
-        const summary = backupData.summary && typeof backupData.summary === 'object' ? backupData.summary : {};
-        const appSettings = backupData.appSettings && typeof backupData.appSettings === 'object' ? backupData.appSettings : {};
-
-        return res.json({
-            success: true,
-            snapshotFile: latest.file,
-            snapshotSavedAt: backupData.savedAt || null,
-            snapshotPlayers: previewPlayers.length,
-            snapshotWaitlist: previewWaitlist.length,
-            livePlayers: Array.isArray(players) ? players.length : 0,
-            liveWaitlist: Array.isArray(waitlist) ? waitlist.length : 0,
-            rosterReleasedInSnapshot: typeof summary.rosterReleased === 'boolean' ? summary.rosterReleased : null,
-            gameLocation: typeof summary.gameLocation === 'string' ? summary.gameLocation : (typeof appSettings.selectedArena === 'string' ? appSettings.selectedArena : null),
-            gameTime: typeof summary.gameTime === 'string' ? summary.gameTime : (typeof appSettings.selectedDayTime === 'string' ? appSettings.selectedDayTime : null),
-            gameDate: typeof summary.gameDate === 'string' ? summary.gameDate : null
-        });
+        return res.json(buildSnapshotPreviewPayload(buildSnapshotListItem(latest)));
     } catch (err) {
         console.error('Error previewing latest server snapshot:', err);
         return res.status(500).json({ error: 'Failed to preview latest server snapshot' });
@@ -4511,91 +5046,17 @@ app.post('/api/admin/restore-latest-backup', async (req, res) => {
     }
 
     try {
-        const latest = getBestLocalSnapshot();
+        const latest = await getBestAvailableSnapshot();
         if (!latest || !latest.data) {
             return res.status(404).json({ error: "No server snapshot found to restore." });
         }
-
-        const backupData = latest.data;
-        const restoredPlayers = Array.isArray(backupData.players) ? backupData.players.filter(item => item && typeof item === 'object') : null;
-        const restoredWaitlist = Array.isArray(backupData.waitlist) ? backupData.waitlist.filter(item => item && typeof item === 'object') : null;
-
-        if (!restoredPlayers || !restoredWaitlist) {
-            return res.status(400).json({ error: "Latest server snapshot is missing players or waitlist." });
+        const latestItem = buildSnapshotListItem(latest);
+        const providedFingerprint = String(req.body?.fingerprint || '').trim();
+        if (providedFingerprint && providedFingerprint !== latestItem.fingerprint) {
+            return res.status(409).json({ error: 'Latest snapshot changed since preview. Preview again before restoring.', latest: buildSnapshotPreviewPayload(latestItem) });
         }
-
-        const beforeCounts = {
-            players: Array.isArray(players) ? players.length : 0,
-            waitlist: Array.isArray(waitlist) ? waitlist.length : 0
-        };
-
-        players = JSON.parse(JSON.stringify(restoredPlayers));
-        waitlist = JSON.parse(JSON.stringify(restoredWaitlist));
-
-        if (backupData.currentWeekData && typeof backupData.currentWeekData === 'object') {
-            currentWeekData = JSON.parse(JSON.stringify(backupData.currentWeekData));
-        }
-
-        if (backupData.summary && typeof backupData.summary === 'object') {
-            if (typeof backupData.summary.gameLocation === 'string') gameLocation = backupData.summary.gameLocation;
-            if (typeof backupData.summary.gameTime === 'string') gameTime = backupData.summary.gameTime;
-            if (typeof backupData.summary.gameDate === 'string') gameDate = backupData.summary.gameDate;
-            if (typeof backupData.summary.rosterReleased === 'boolean') rosterReleased = backupData.summary.rosterReleased;
-            if (typeof backupData.summary.requirePlayerCode === 'boolean') requirePlayerCode = backupData.summary.requirePlayerCode;
-            if (typeof backupData.summary.playerSignupCode === 'string' && backupData.summary.playerSignupCode.trim()) {
-                playerSignupCode = backupData.summary.playerSignupCode.trim();
-            }
-        }
-
-        if (backupData.appSettings && typeof backupData.appSettings === 'object') {
-            const s = backupData.appSettings;
-            if (typeof s.maintenanceMode === 'boolean') maintenanceMode = s.maintenanceMode;
-            if (typeof s.customTitle === 'string') customTitle = s.customTitle;
-            if (typeof s.announcementEnabled === 'boolean') announcementEnabled = s.announcementEnabled;
-            if (typeof s.announcementText === 'string') announcementText = s.announcementText;
-            if (Array.isArray(s.announcementImages)) announcementImages = s.announcementImages;
-            if (typeof s.paymentEmail === 'string') paymentEmail = s.paymentEmail.trim() || paymentEmail;
-            if (typeof s.requirePlayerCode === 'boolean') requirePlayerCode = s.requirePlayerCode;
-            if (typeof s.playerSignupCode === 'string' && s.playerSignupCode.trim()) playerSignupCode = s.playerSignupCode.trim();
-        }
-
-        playerSpots = Math.max(0, 20 - players.filter(p => !(p && p.isGoalie)).length);
-        await saveData();
-
-        try {
-            if (typeof addAdminAuditEntry === 'function') {
-                addAdminAuditEntry('restore-latest-backup-replace', req, {
-                    beforePlayers: beforeCounts.players,
-                    beforeWaitlist: beforeCounts.waitlist,
-                    afterPlayers: players.length,
-                    afterWaitlist: waitlist.length,
-                    snapshotFile: latest.file,
-                    snapshotSavedAt: backupData.savedAt || null
-                });
-            }
-            if (typeof appendDataAudit === 'function') {
-                await appendDataAudit('restore-latest-backup', 'success', {
-                    beforePlayers: beforeCounts.players,
-                    beforeWaitlist: beforeCounts.waitlist,
-                    afterPlayers: players.length,
-                    afterWaitlist: waitlist.length,
-                    snapshotFile: latest.file,
-                    snapshotSavedAt: backupData.savedAt || null
-                });
-            }
-        } catch (auditErr) {
-            console.error('Error auditing latest snapshot restore:', auditErr.message);
-        }
-
-        return res.json({
-            success: true,
-            mode: 'replace',
-            restoredPlayers: players.length,
-            restoredWaitlist: waitlist.length,
-            snapshotFile: latest.file,
-            snapshotSavedAt: backupData.savedAt || null,
-            message: 'Latest server snapshot restored successfully.'
-        });
+        const result = await restoreSnapshotItem(latestItem, req, 'restore-latest-backup-replace');
+        return res.status(result.status || 200).json(result.body);
     } catch (err) {
         console.error('Error restoring latest server snapshot:', err);
         return res.status(500).json({ error: 'Failed to restore latest server snapshot' });

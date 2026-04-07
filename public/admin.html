@@ -1669,6 +1669,66 @@ button {
 .add-player-form .goalie-helper { color:#8fd18f; font-size:0.82rem; }
 </style>
 
+
+<style>
+.snapshot-pro-section {
+    background: linear-gradient(135deg, #15253d, #213651);
+    border: 2px solid #64b5f6;
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 25px;
+}
+.snapshot-pro-section h3 { margin:0 0 8px 0; color:#90caf9; font-size:1.15rem; }
+.snapshot-pro-subtitle { color:#c7def7; font-size:0.9rem; margin-bottom:16px; }
+.snapshot-toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+.snapshot-toolbar input, .snapshot-toolbar select { margin:0; }
+.snapshot-toolbar .grow { flex:1; min-width:220px; }
+.snapshot-stats { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:12px; margin-bottom:14px; }
+.snapshot-stat-card { background:rgba(0,0,0,0.22); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:14px; }
+.snapshot-stat-label { color:#b5c9e1; font-size:0.8rem; }
+.snapshot-stat-value { color:#fff; font-size:1.45rem; font-weight:800; margin-top:3px; }
+.snapshot-list { display:grid; gap:10px; max-height:540px; overflow:auto; padding-right:2px; }
+.snapshot-card { background:rgba(0,0,0,0.24); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:14px; }
+.snapshot-card.selected { border-color:#64b5f6; box-shadow:0 0 0 1px rgba(100,181,246,0.35) inset; }
+.snapshot-card-top { display:flex; gap:10px; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; }
+.snapshot-badges { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.snapshot-badge { display:inline-flex; align-items:center; gap:4px; border-radius:999px; padding:4px 10px; font-size:0.78rem; font-weight:700; }
+.snapshot-badge.db { background:#1b5e20; color:#fff; }
+.snapshot-badge.local { background:#6a1b9a; color:#fff; }
+.snapshot-badge.latest { background:#1565c0; color:#fff; }
+.snapshot-badge.release-yes { background:#2e7d32; color:#fff; }
+.snapshot-badge.release-no { background:#6d4c41; color:#fff; }
+.snapshot-meta-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:8px 16px; margin-top:12px; }
+.snapshot-meta-item { color:#c8d7e6; font-size:0.86rem; line-height:1.35; }
+.snapshot-meta-item strong { color:#fff; }
+.snapshot-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+.snapshot-preview-panel { margin-top:16px; background:rgba(0,0,0,0.24); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:16px; }
+.snapshot-preview-title { color:#fff; font-weight:800; margin-bottom:10px; }
+.snapshot-preview-grid { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:10px; }
+.snapshot-preview-box { background:rgba(255,255,255,0.05); border-radius:10px; padding:12px; }
+.snapshot-preview-box .k { color:#b5c9e1; font-size:0.8rem; }
+.snapshot-preview-box .v { color:#fff; font-size:1.15rem; font-weight:800; margin-top:4px; }
+.snapshot-preview-notes { margin-top:12px; color:#d7e5f3; font-size:0.88rem; line-height:1.45; }
+.snapshot-picker-toolbar { margin-top:-4px; }
+.snapshot-picker-toolbar select { font-weight:700; }
+.snapshot-compact-card { margin-top:12px; background:rgba(0,0,0,0.24); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:14px; }
+.snapshot-compact-head { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap; }
+.snapshot-compact-title { color:#fff; font-weight:800; font-size:1.02rem; }
+.snapshot-compact-sub { color:#9eb6cf; font-size:0.82rem; margin-top:4px; }
+.snapshot-compact-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 16px; margin-top:12px; }
+.snapshot-compact-item { color:#c8d7e6; font-size:0.86rem; line-height:1.35; }
+.snapshot-compact-item strong { color:#fff; }
+.snapshot-compact-fingerprint { color:#9eb6cf; font-size:0.8rem; }
+.snapshot-empty { text-align:center; color:#b5c9e1; border:1px dashed rgba(255,255,255,0.16); border-radius:12px; padding:24px; }
+.snapshot-mini { color:#9eb6cf; font-size:0.8rem; }
+@media (max-width: 900px) {
+  .snapshot-stats, .snapshot-preview-grid, .snapshot-meta-grid { grid-template-columns:1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .snapshot-stats, .snapshot-preview-grid, .snapshot-meta-grid { grid-template-columns:1fr; }
+}
+</style>
+
 </head>
 <body class="admin-layout-option-1">
 
@@ -1706,33 +1766,58 @@ button {
             </div>
         </div>
 
-        <div class="control-box" style="border-color:#3f51b5;">
-            <h3>🔐 Admin Security</h3>
-            <div id="securitySessionInfo" style="color:#cfcfcf; line-height:1.7;">Loading session info...</div>
-            <div style="margin-top:12px; color:#a8a8a8; font-size:.92rem;">Remembered logins last 30 days. Non-remembered logins expire after 12 hours by default.</div>
-        </div>
 
-        <div class="control-box" style="border-color:#607d8b;">
-            <h3>📝 Recent Admin Activity</h3>
-            <div id="adminAuditLog" style="color:#cfcfcf; line-height:1.7;">Loading activity...</div>
-        </div>
 
-        <div class="control-box" style="border-color:#009688;">
-            <h3>🩺 System Monitor</h3>
-            <div id="systemMonitorStatus" style="color:#cfcfcf; line-height:1.7;">Loading system status...</div>
-            <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
-                <button class="control-btn" onclick="loadSystemStatus()" style="background:#009688;">Refresh Monitor</button>
-            </div>
-        </div>
 
-        <div class="control-box" style="border-color:#7e57c2;">
-            <h3>🛡️ Data Integrity Widget</h3>
-            <div id="dataIntegrityWidget" style="color:#cfcfcf; line-height:1.7;">Loading data integrity...</div>
-            <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
-                <button class="control-btn" onclick="loadSystemStatus()" style="background:#7e57c2;">Refresh Data Integrity</button>
-            </div>
-        </div>
         
+
+        <div class="snapshot-pro-section">
+            <h3>🧠 Snapshot Center</h3>
+            <div class="snapshot-pro-subtitle">Browse durable snapshots, preview the exact record you want, restore by fingerprint, create a manual safety point anytime, and keep cleanup compact with the newest 100 snapshots retained per source.</div>
+            <div class="snapshot-stats">
+                <div class="snapshot-stat-card"><div class="snapshot-stat-label">Snapshots Loaded</div><div class="snapshot-stat-value" id="snapshotStatCount">--</div></div>
+                <div class="snapshot-stat-card"><div class="snapshot-stat-label">Database Snapshots</div><div class="snapshot-stat-value" id="snapshotStatDb">--</div></div>
+                <div class="snapshot-stat-card"><div class="snapshot-stat-label">Local Snapshots</div><div class="snapshot-stat-value" id="snapshotStatLocal">--</div></div>
+                <div class="snapshot-stat-card"><div class="snapshot-stat-label">Selected Snapshot</div><div class="snapshot-stat-value" id="snapshotStatSelected">None</div></div>
+            </div>
+            <div class="snapshot-toolbar">
+                <input class="grow" type="text" id="snapshotSearch" placeholder="Search reason, source, file, date, game info..." oninput="renderSnapshotList()">
+                <select id="snapshotSourceFilter" onchange="renderSnapshotList()">
+                    <option value="all">All sources</option>
+                    <option value="database">Database only</option>
+                    <option value="local">Local only</option>
+                </select>
+            </div>
+            <div class="snapshot-toolbar snapshot-picker-toolbar">
+                <select id="snapshotPicker" class="grow" onchange="handleSnapshotPickerChange()">
+                    <option value="">Loading snapshots...</option>
+                </select>
+                <button class="control-btn" onclick="loadSnapshotCatalog()" style="background:#1e88e5;">↻ Refresh</button>
+                <button class="control-btn" onclick="createManualSnapshot()" style="background:#8e24aa;">＋ Create Snapshot</button>
+                <button class="control-btn" onclick="previewSelectedSnapshot()" style="background:#546e7a;">👁 Preview</button>
+                <button class="control-btn" onclick="restoreSelectedSnapshot()" style="background:#2e7d32;">♻ Restore</button>
+            </div>
+            <div id="snapshotCompactCard" class="snapshot-compact-card" style="display:none;"></div>
+            <div id="snapshotList" class="snapshot-list" style="display:none;"><div class="snapshot-empty">Loading snapshots...</div></div>
+            <div id="snapshotPreviewPanel" class="snapshot-preview-panel" style="display:none;">
+                <div class="snapshot-preview-title" id="snapshotPreviewTitle">Snapshot Preview</div>
+                <div class="snapshot-preview-grid">
+                    <div class="snapshot-preview-box"><div class="k">Snapshot players</div><div class="v" id="previewPlayers">--</div></div>
+                    <div class="snapshot-preview-box"><div class="k">Snapshot waitlist</div><div class="v" id="previewWaitlist">--</div></div>
+                    <div class="snapshot-preview-box"><div class="k">Roster released</div><div class="v" id="previewReleased">--</div></div>
+                    <div class="snapshot-preview-box"><div class="k">Live players now</div><div class="v" id="previewLivePlayers">--</div></div>
+                    <div class="snapshot-preview-box"><div class="k">Live waitlist now</div><div class="v" id="previewLiveWaitlist">--</div></div>
+                    <div class="snapshot-preview-box"><div class="k">Fingerprint</div><div class="v snapshot-mini" id="previewFingerprint">--</div></div>
+                </div>
+                <div class="snapshot-preview-notes" id="snapshotPreviewNotes"></div>
+                <div class="snapshot-actions">
+                    <button class="control-btn" onclick="previewSelectedSnapshot()" style="background:#546e7a;">Refresh Preview</button>
+                    <button class="control-btn" onclick="restoreSelectedSnapshot()" style="background:#2e7d32;">Restore Selected Snapshot</button>
+                </div>
+            </div>
+        </div>
+
+
         <div class="success-message" id="releaseSuccess">
             ✅ Roster Released Successfully! Players can now see the teams.
         </div>
@@ -2725,6 +2810,11 @@ button {
         let playersCount = 0;
         let currentTotalPaid = 0;
         let backupGoaliesData = [];
+        let snapshotCatalog = [];
+        let filteredSnapshotCatalog = [];
+        let selectedSnapshotKey = null;
+        let selectedSnapshotFingerprint = "";
+        let latestSnapshotKey = null;
 
         // Pre-defined goalie data
         const PREDEFINED_GOALIES = [
@@ -2896,6 +2986,7 @@ button {
                     loadAuditLog();
                     loadSystemStatus();
                     loadSystemStatus();
+                    loadSnapshotCatalog();
                     setTimeout(loadHistoryList, 500);
                 } else {
                     clearStoredSessionToken();
@@ -2943,6 +3034,7 @@ button {
                     loadSessionInfo();
                     loadAuditLog();
                     loadSystemStatus();
+                    loadSnapshotCatalog();
                     setTimeout(loadHistoryList, 500);
                     return;
                 }
@@ -4812,10 +4904,322 @@ button {
 
         initializeEnhancedDateTimeControls();
         checkSession();
+        setTimeout(() => { if (sessionToken) loadSnapshotCatalog(); }, 1200);
         setInterval(() => {
             if (sessionToken) loadSystemStatus();
         }, 60000);
     
+
+
+
+        function formatSnapshotDateTime(value) {
+            if (!value) return 'Unknown';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return String(value);
+            return date.toLocaleString('en-US', {
+                timeZone: 'America/New_York',
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            }) + ' ET';
+        }
+
+        function escapeHtml(value) {
+            return String(value == null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function snapshotMatchesFilter(item, term, source) {
+            if (source !== 'all' && item.snapshotSource !== source) return false;
+            if (!term) return true;
+            const haystack = [
+                item.snapshotReason,
+                item.snapshotSource,
+                item.snapshotFile,
+                item.snapshotSavedAt,
+                item.gameLocation,
+                item.gameTime,
+                item.gameDate,
+                item.fingerprint
+            ].join(' ').toLowerCase();
+            return haystack.includes(term);
+        }
+
+        function updateSnapshotStats() {
+            const total = snapshotCatalog.length;
+            const dbCount = snapshotCatalog.filter(item => item.snapshotSource === 'database').length;
+            const localCount = snapshotCatalog.filter(item => item.snapshotSource === 'local').length;
+            const selected = snapshotCatalog.find(item => item.snapshotKey === selectedSnapshotKey);
+            document.getElementById('snapshotStatCount').innerText = total;
+            document.getElementById('snapshotStatDb').innerText = dbCount;
+            document.getElementById('snapshotStatLocal').innerText = localCount;
+            document.getElementById('snapshotStatSelected').innerText = selected ? formatSnapshotDateTime(selected.snapshotSavedAt) : 'None';
+        }
+
+        function buildSnapshotPickerLabel(item, index) {
+            const sourceLabel = item.snapshotSource === 'database' ? 'DB' : 'LOCAL';
+            const latestLabel = index === 0 ? ' • latest' : '';
+            const statusLabel = item.rosterReleasedInSnapshot === true
+                ? ' • released'
+                : (item.rosterReleasedInSnapshot === false ? ' • pending' : '');
+            const counts = ` • P${Number(item.snapshotPlayers || 0)} / W${Number(item.snapshotWaitlist || 0)}`;
+            return `${formatSnapshotDateTime(item.snapshotSavedAt)} • ${sourceLabel}${counts}${statusLabel}${latestLabel}`;
+        }
+
+        function renderSnapshotCompactCard(item, index) {
+            const cardEl = document.getElementById('snapshotCompactCard');
+            if (!cardEl) return;
+            if (!item) {
+                cardEl.style.display = 'none';
+                cardEl.innerHTML = '';
+                return;
+            }
+            const badges = [
+                `<span class="snapshot-badge ${item.snapshotSource === 'database' ? 'db' : 'local'}">${item.snapshotSource === 'database' ? 'DB' : 'LOCAL'}</span>`,
+                index === 0 ? '<span class="snapshot-badge latest">LATEST IN VIEW</span>' : '',
+                item.rosterReleasedInSnapshot === true ? '<span class="snapshot-badge release-yes">ROSTER RELEASED</span>' : '',
+                item.rosterReleasedInSnapshot === false ? '<span class="snapshot-badge release-no">ROSTER PENDING</span>' : ''
+            ].join('');
+            cardEl.style.display = 'block';
+            cardEl.innerHTML = `
+                <div class="snapshot-compact-head">
+                    <div>
+                        <div class="snapshot-compact-title">${escapeHtml(formatSnapshotDateTime(item.snapshotSavedAt))}</div>
+                        <div class="snapshot-compact-sub">${escapeHtml(item.snapshotReason || 'No reason saved')} • ${escapeHtml(item.snapshotFile || item.snapshotKey || '')}</div>
+                    </div>
+                    <div class="snapshot-compact-fingerprint">${escapeHtml(item.fingerprint || '').slice(0, 16)}</div>
+                </div>
+                <div class="snapshot-badges">${badges}</div>
+                <div class="snapshot-compact-grid">
+                    <div class="snapshot-compact-item"><strong>Players:</strong> ${Number(item.snapshotPlayers || 0)}</div>
+                    <div class="snapshot-compact-item"><strong>Waitlist:</strong> ${Number(item.snapshotWaitlist || 0)}</div>
+                    <div class="snapshot-compact-item"><strong>Game:</strong> ${escapeHtml(item.gameTime || '—')}</div>
+                    <div class="snapshot-compact-item"><strong>Arena:</strong> ${escapeHtml(item.gameLocation || '—')}</div>
+                </div>
+            `;
+        }
+
+        function syncSnapshotPicker() {
+            const pickerEl = document.getElementById('snapshotPicker');
+            if (!pickerEl) return;
+            if (!filteredSnapshotCatalog.length) {
+                pickerEl.innerHTML = '<option value="">No snapshots matched the current filter</option>';
+                pickerEl.value = '';
+                renderSnapshotCompactCard(null, -1);
+                return;
+            }
+            pickerEl.innerHTML = filteredSnapshotCatalog.map((item, index) => {
+                const selected = item.snapshotKey === selectedSnapshotKey ? 'selected' : '';
+                return `<option value="${escapeHtml(item.snapshotKey)}" ${selected}>${escapeHtml(buildSnapshotPickerLabel(item, index))}</option>`;
+            }).join('');
+            if (!filteredSnapshotCatalog.some(item => item.snapshotKey === selectedSnapshotKey)) {
+                selectedSnapshotKey = filteredSnapshotCatalog[0].snapshotKey;
+                selectedSnapshotFingerprint = filteredSnapshotCatalog[0].fingerprint || '';
+                pickerEl.value = selectedSnapshotKey;
+            }
+            const selectedIndex = filteredSnapshotCatalog.findIndex(item => item.snapshotKey === selectedSnapshotKey);
+            renderSnapshotCompactCard(filteredSnapshotCatalog[selectedIndex] || filteredSnapshotCatalog[0], selectedIndex >= 0 ? selectedIndex : 0);
+        }
+
+        function renderSnapshotList() {
+            const listEl = document.getElementById('snapshotList');
+            if (!listEl) return;
+            const term = (document.getElementById('snapshotSearch')?.value || '').trim().toLowerCase();
+            const source = document.getElementById('snapshotSourceFilter')?.value || 'all';
+            filteredSnapshotCatalog = snapshotCatalog.filter(item => snapshotMatchesFilter(item, term, source));
+            updateSnapshotStats();
+            syncSnapshotPicker();
+            listEl.innerHTML = '';
+        }
+
+        function handleSnapshotPickerChange() {
+            const pickerEl = document.getElementById('snapshotPicker');
+            const snapshotKey = pickerEl?.value || '';
+            if (!snapshotKey) return;
+            const selected = filteredSnapshotCatalog.find(item => item.snapshotKey === snapshotKey)
+                || snapshotCatalog.find(item => item.snapshotKey === snapshotKey);
+            selectedSnapshotKey = snapshotKey;
+            selectedSnapshotFingerprint = selected?.fingerprint || '';
+            updateSnapshotStats();
+            const selectedIndex = filteredSnapshotCatalog.findIndex(item => item.snapshotKey === snapshotKey);
+            renderSnapshotCompactCard(selected, selectedIndex >= 0 ? selectedIndex : 0);
+        }
+
+        function selectSnapshot(snapshotKey, fingerprint = '') {
+            selectedSnapshotKey = snapshotKey;
+            selectedSnapshotFingerprint = fingerprint || '';
+            syncSnapshotPicker();
+            updateSnapshotStats();
+        }
+
+        async function loadSnapshotCatalog(autoPreview = true) {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/snapshots?limit=150`, {
+                    method: 'GET',
+                    headers: getAdminHeaders()
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || 'Failed to load snapshots');
+                snapshotCatalog = Array.isArray(data.snapshots) ? data.snapshots : [];
+                latestSnapshotKey = snapshotCatalog[0]?.snapshotKey || null;
+                if (!selectedSnapshotKey && latestSnapshotKey) {
+                    selectedSnapshotKey = latestSnapshotKey;
+                    selectedSnapshotFingerprint = snapshotCatalog[0]?.fingerprint || '';
+                } else {
+                    const selected = snapshotCatalog.find(item => item.snapshotKey === selectedSnapshotKey);
+                    if (selected) selectedSnapshotFingerprint = selected.fingerprint || selectedSnapshotFingerprint;
+                }
+                renderSnapshotList();
+                if (autoPreview && selectedSnapshotKey) await previewSelectedSnapshot();
+            } catch (err) {
+                console.error('Load snapshot catalog error:', err);
+                document.getElementById('snapshotList').innerHTML = `<div class="snapshot-empty">${escapeHtml(err.message || 'Failed to load snapshots')}</div>`;
+            }
+        }
+
+        async function createManualSnapshot() {
+            try {
+                const note = prompt('Optional note for this manual snapshot:', '');
+                if (note === null) return;
+                const res = await fetch(`${API_URL}/api/admin/snapshots/create`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken, note })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || 'Failed to create manual snapshot');
+                alert(
+                    `✅ Manual snapshot created
+
+` +
+                    `Saved: ${formatSnapshotDateTime(data.snapshotSavedAt)}
+` +
+                    `DB snapshot: ${data.databaseSnapshot?.id ? '#' + data.databaseSnapshot.id : (data.databaseSnapshot?.skipped ? 'Skipped' : 'Created')}
+` +
+                    `Local snapshot: ${data.localSnapshot?.file ? 'Created' : 'Skipped'}`
+                );
+                await loadSnapshotCatalog(false);
+            } catch (err) {
+                console.error('Create manual snapshot error:', err);
+                alert(err.message || 'Failed to create manual snapshot');
+            }
+        }
+
+        async function previewSnapshotByKey(snapshotKey, fingerprint = '') {
+            selectedSnapshotKey = snapshotKey;
+            selectedSnapshotFingerprint = fingerprint || selectedSnapshotFingerprint || '';
+            syncSnapshotPicker();
+            updateSnapshotStats();
+            return previewSelectedSnapshot();
+        }
+
+        async function previewSelectedSnapshot() {
+            if (!selectedSnapshotKey) {
+                alert('Select a snapshot first.');
+                return;
+            }
+            try {
+                const params = new URLSearchParams({ snapshotKey: selectedSnapshotKey });
+                if (selectedSnapshotFingerprint) params.set('fingerprint', selectedSnapshotFingerprint);
+                const res = await fetch(`${API_URL}/api/admin/snapshots/preview?${params.toString()}`, {
+                    method: 'GET',
+                    headers: getAdminHeaders()
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || 'Failed to preview snapshot');
+                selectedSnapshotFingerprint = data.fingerprint || selectedSnapshotFingerprint;
+                const panel = document.getElementById('snapshotPreviewPanel');
+                panel.style.display = 'block';
+                document.getElementById('snapshotPreviewTitle').innerText = `Snapshot Preview • ${formatSnapshotDateTime(data.snapshotSavedAt)}`;
+                document.getElementById('previewPlayers').innerText = Number(data.snapshotPlayers || 0);
+                document.getElementById('previewWaitlist').innerText = Number(data.snapshotWaitlist || 0);
+                document.getElementById('previewReleased').innerText = data.rosterReleasedInSnapshot === true ? 'Yes' : (data.rosterReleasedInSnapshot === false ? 'No' : '—');
+                document.getElementById('previewLivePlayers').innerText = Number(data.livePlayers || 0);
+                document.getElementById('previewLiveWaitlist').innerText = Number(data.liveWaitlist || 0);
+                document.getElementById('previewFingerprint').innerText = data.fingerprint || '—';
+                const notes = [];
+                notes.push(`<strong>Source:</strong> ${escapeHtml(data.snapshotSource || 'unknown')}`);
+                notes.push(`<strong>Reason:</strong> ${escapeHtml(data.snapshotReason || 'Not recorded')}`);
+                notes.push(`<strong>File:</strong> ${escapeHtml(data.snapshotFile || data.snapshotKey || '')}`);
+                if (data.gameDate || data.gameTime || data.gameLocation) {
+                    notes.push(`<strong>Game info:</strong> ${escapeHtml([data.gameDate, data.gameTime, data.gameLocation].filter(Boolean).join(' • ') || '—')}`);
+                }
+                const playerDiff = Number(data.snapshotPlayers || 0) - Number(data.livePlayers || 0);
+                const waitlistDiff = Number(data.snapshotWaitlist || 0) - Number(data.liveWaitlist || 0);
+                notes.push(`<strong>Delta if restored:</strong> Players ${playerDiff >= 0 ? '+' : ''}${playerDiff}, Waitlist ${waitlistDiff >= 0 ? '+' : ''}${waitlistDiff}`);
+                document.getElementById('snapshotPreviewNotes').innerHTML = notes.join('<br>');
+            } catch (err) {
+                console.error('Preview selected snapshot error:', err);
+                alert(err.message || 'Failed to preview selected snapshot');
+            }
+        }
+
+        async function restoreSnapshotByKey(snapshotKey, fingerprint = '') {
+            selectedSnapshotKey = snapshotKey;
+            selectedSnapshotFingerprint = fingerprint || selectedSnapshotFingerprint || '';
+            syncSnapshotPicker();
+            updateSnapshotStats();
+            return restoreSelectedSnapshot();
+        }
+
+        async function restoreSelectedSnapshot() {
+            if (!selectedSnapshotKey) {
+                alert('Select a snapshot first.');
+                return;
+            }
+            try {
+                const previewRes = await fetch(`${API_URL}/api/admin/snapshots/preview?` + new URLSearchParams({ snapshotKey: selectedSnapshotKey, ...(selectedSnapshotFingerprint ? { fingerprint: selectedSnapshotFingerprint } : {}) }).toString(), {
+                    method: 'GET',
+                    headers: getAdminHeaders()
+                });
+                const preview = await previewRes.json().catch(() => ({}));
+                if (!previewRes.ok) throw new Error(preview.error || 'Could not preview selected snapshot');
+                selectedSnapshotFingerprint = preview.fingerprint || selectedSnapshotFingerprint;
+                const ok = confirm(
+                    'Restore this exact snapshot?\n\n' +
+                    `Saved: ${formatSnapshotDateTime(preview.snapshotSavedAt)}\n` +
+                    `Source: ${preview.snapshotSource || 'unknown'}\n` +
+                    `Fingerprint: ${preview.fingerprint || 'n/a'}\n` +
+                    `Snapshot players: ${Number(preview.snapshotPlayers || 0)} (live now: ${Number(preview.livePlayers || 0)})\n` +
+                    `Snapshot waitlist: ${Number(preview.snapshotWaitlist || 0)} (live now: ${Number(preview.liveWaitlist || 0)})\n\n` +
+                    'Press OK to restore this exact fingerprint.'
+                );
+                if (!ok) return;
+                const res = await fetch(`${API_URL}/api/admin/snapshots/restore`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken, snapshotKey: selectedSnapshotKey, fingerprint: selectedSnapshotFingerprint })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || 'Selected snapshot restore failed');
+                alert(
+                    `✅ Snapshot restored\n\n` +
+                    `Saved: ${formatSnapshotDateTime(data.snapshotSavedAt)}\n` +
+                    `Source: ${data.snapshotSource || 'unknown'}\n` +
+                    `Fingerprint: ${data.fingerprint || 'n/a'}\n` +
+                    `Players now: ${data.restoredPlayers}\n` +
+                    `Waitlist now: ${data.restoredWaitlist}`
+                );
+                await loadSnapshotCatalog(false);
+                loadData();
+                loadSettings();
+                loadAppSettings();
+                loadPaymentReportSnapshots();
+                setTimeout(loadHistoryList, 500);
+                setTimeout(loadSystemStatus, 700);
+            } catch (err) {
+                console.error('Restore selected snapshot error:', err);
+                alert(err.message || 'Failed to restore selected snapshot');
+            }
+        }
 
 
         async function previewLatestServerBackup() {
@@ -4842,9 +5246,9 @@ button {
                 const diffWaitlist = snapshotWaitlist - liveWaitlist;
 
                 const lines = [
-                    'Latest server snapshot preview',
+                    'Latest durable snapshot preview',
                     '',
-                    `Source: ${data.snapshotFile || 'server snapshot'}`,
+                    `Source: ${data.snapshotFile || 'durable snapshot'}`,
                     `Saved: ${data.snapshotSavedAt || 'unknown'}`,
                     '',
                     `Snapshot players: ${snapshotPlayers}`,
@@ -4897,7 +5301,7 @@ button {
                 const liveWaitlist = Number(preview.liveWaitlist || 0);
 
                 const ok = confirm(
-                    'Restore the latest server snapshot?\n\n' +
+                    'Restore the latest durable snapshot?\n\n' +
                     `Snapshot saved: ${preview.snapshotSavedAt || 'unknown'}\n` +
                     `Snapshot players: ${snapshotPlayers} (live now: ${livePlayers})\n` +
                     `Snapshot waitlist: ${snapshotWaitlist} (live now: ${liveWaitlist})\n\n` +
@@ -4921,7 +5325,7 @@ button {
                 }
 
                 alert(
-                    `✅ Latest server snapshot restored\n\n` +
+                    `✅ Latest durable snapshot restored\n\n` +
                     `Source: ${data.snapshotFile || 'server snapshot'}\n` +
                     `Saved: ${data.snapshotSavedAt || 'unknown'}\n` +
                     `Mode: ${(data.mode || 'replace').toUpperCase()}\n` +
