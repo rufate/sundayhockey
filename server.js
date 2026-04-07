@@ -29,6 +29,51 @@ const pool = HAS_DB ? new Pool({
     statement_timeout: Number(process.env.PG_STATEMENT_TIMEOUT_MS || 8000)
 }) : null;
 
+const STRICT_DATABASE_MODE = HAS_DB && String(process.env.STRICT_DATABASE_MODE || 'true').toLowerCase() !== 'false';
+const DB_GUARD_RETRIES = Math.max(1, Number(process.env.DB_GUARD_RETRIES || 3));
+const DB_GUARD_RETRY_DELAY_MS = Math.max(250, Number(process.env.DB_GUARD_RETRY_DELAY_MS || 1500));
+const DB_GUARD_PATH_EXCLUSIONS = new Set([
+    '/api/verify-code',
+    '/api/register-init',
+    '/api/admin/check-session',
+    '/api/admin/login',
+    '/api/admin/logout',
+    '/api/admin/logout-all',
+    '/api/admin/players',
+    '/api/admin/players-full',
+    '/api/admin/settings',
+    '/api/admin/app-settings',
+    '/api/admin/download-backup'
+]);
+
+function shouldEnforceDurableMutation(req) {
+    if (!STRICT_DATABASE_MODE || !HAS_DB) return false;
+    const method = String(req.method || '').toUpperCase();
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return false;
+    const pathValue = String(req.path || req.originalUrl || '').split('?')[0];
+    if (!pathValue.startsWith('/api/')) return false;
+    if (DB_GUARD_PATH_EXCLUSIONS.has(pathValue)) return false;
+    return true;
+}
+
+function waitMs(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function pingDatabaseWithRetry(retries = DB_GUARD_RETRIES, delayMs = DB_GUARD_RETRY_DELAY_MS) {
+    let last = null;
+    for (let attempt = 1; attempt <= retries; attempt += 1) {
+        const result = await pingDatabase();
+        last = result;
+        if (result.ok || result.mode === 'file') {
+            return { ...result, attempt };
+        }
+        if (attempt < retries) await waitMs(delayMs);
+    }
+    return { ...(last || { ok: false, mode: 'postgres', error: 'Database unavailable' }), attempt: retries };
+}
+
+
 if (pool) {
     // Handle pool errors
     pool.on('error', (err) => {
@@ -82,6 +127,36 @@ function shouldTriggerSchedulerOnRequest(req) {
     return true;
 }
 
+
+async function durableMutationGuardMiddleware(req, res, next) {
+    if (!shouldEnforceDurableMutation(req)) {
+        next();
+        return;
+    }
+
+    try {
+        const db = await pingDatabaseWithRetry();
+        if (db.ok || db.mode === 'file') {
+            next();
+            return;
+        }
+
+        res.status(503).json({
+            error: 'Database is temporarily unavailable. No changes were saved. Please try again in a moment.',
+            code: 'DATABASE_UNAVAILABLE',
+            database: db,
+            strictDatabaseMode: STRICT_DATABASE_MODE
+        });
+    } catch (err) {
+        res.status(503).json({
+            error: 'Database check failed. No changes were saved. Please try again in a moment.',
+            code: 'DATABASE_CHECK_FAILED',
+            detail: err && err.message ? err.message : 'Unknown database check error',
+            strictDatabaseMode: STRICT_DATABASE_MODE
+        });
+    }
+}
+
 async function schedulerCatchupMiddleware(req, res, next) {
     if (!shouldTriggerSchedulerOnRequest(req)) {
         next();
@@ -99,6 +174,7 @@ async function schedulerCatchupMiddleware(req, res, next) {
     next();
 }
 
+app.use(durableMutationGuardMiddleware);
 app.use(schedulerCatchupMiddleware);
 
 // --- DATA STORE ---
@@ -1667,7 +1743,9 @@ async function loadDataFromDB() {
             }
         }
 
-        await reconcileFromFileBackup();
+        if (!STRICT_DATABASE_MODE) {
+            await reconcileFromFileBackup();
+        }
         
     } catch (err) {
         console.error('Error loading from DB:', err);
@@ -2004,9 +2082,21 @@ async function saveData(reason = 'saveData') {
             return { ok: true, database: dbResult, localSnapshot: localResult };
         } catch (err) {
             const localResult = persistDataToFile(`db-failed-${reason}`, snapshot);
-            await appendDataAudit('save', 'error', { reason, error: err.message, localSnapshot: localResult });
+            await appendDataAudit('save', 'error', {
+                reason,
+                error: err.message,
+                localSnapshot: localResult,
+                strictDatabaseMode: STRICT_DATABASE_MODE,
+                databaseRequired: HAS_DB
+            });
             console.error('Error saving data:', err);
-            return { ok: false, error: err.message, localSnapshot: localResult };
+            return {
+                ok: false,
+                error: err.message,
+                localSnapshot: localResult,
+                strictDatabaseMode: STRICT_DATABASE_MODE,
+                databaseRequired: HAS_DB
+            };
         }
     }).catch(err => {
         console.error('Queued saveData error:', err.message);
@@ -5575,6 +5665,13 @@ app.get('/api/admin/system-status', async (req, res) => {
     return res.json({
         ok: db.ok || db.mode === 'file',
         database: db,
+        persistence: {
+            strictDatabaseMode: STRICT_DATABASE_MODE,
+            hasDatabaseUrl: HAS_DB,
+            databaseGuardRetries: DB_GUARD_RETRIES,
+            databaseGuardRetryDelayMs: DB_GUARD_RETRY_DELAY_MS,
+            localSnapshotsAreEmergencyOnly: STRICT_DATABASE_MODE && HAS_DB
+        },
         service: process.env.LEAGUE_NAME || 'hockey',
         uptimeSeconds: Math.round(process.uptime()),
         scheduler: {
@@ -5711,8 +5808,10 @@ process.on('unhandledRejection', (err) => {
 
 // Initialize and start
 initDatabase().then(async () => {
-    await reconcileFromFileBackup();
-    await runDatabaseSelfHeal('startup');
+    if (!STRICT_DATABASE_MODE) {
+        await reconcileFromFileBackup();
+        await runDatabaseSelfHeal('startup');
+    }
     checkAutoLock();
     runSchedulerTick();
     
