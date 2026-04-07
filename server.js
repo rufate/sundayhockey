@@ -4364,7 +4364,8 @@ app.post('/api/admin/download-backup', async (req, res) => {
             }
         };
 
-        const filename = `phans-hockey-backup-${yyyy}${mm}${dd}-${hh}${mi}${ss}-ET.json`;
+        const gameDaySlug = String(getGameDayName() || 'GameDay').trim().replace(/\s+/g, '-');
+        const filename = `GameDay-${gameDaySlug}-${yyyy}${mm}${dd}-${hh}${mi}${ss}-ET.json`;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         return res.status(200).send(JSON.stringify(backup, null, 2));

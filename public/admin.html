@@ -1650,7 +1650,6 @@ button {
 
 
 <style id="safe-ui-hide-unused-admin-panels">
-.add-player-form,
 .regular-summary-section,
 .regular-skaters-section,
 .goalies-section,
@@ -1658,6 +1657,16 @@ button {
 .add-goalie-fly-section {
     display: none !important;
 }
+</style>
+
+<style>
+#goalieQuickSelectWrap { display:none; }
+#goalieQuickSelectWrap.visible { display:block; }
+.add-player-form .inline-check-row {
+    display:flex; align-items:center; gap:10px; margin:8px 0 4px 0; color:#ddd; flex-wrap:wrap;
+}
+.add-player-form .inline-check-row input[type="checkbox"] { width:auto; margin:0; }
+.add-player-form .goalie-helper { color:#8fd18f; font-size:0.82rem; }
 </style>
 
 </head>
@@ -2105,6 +2114,26 @@ button {
                     <option value="PIA">PIA (Pay In Advance)</option>
                 </select>
             </div>
+
+            <div class="inline-check-row">
+                <label style="display:flex; align-items:center; gap:10px; margin:0; color:#ddd;">
+                    <input type="checkbox" id="newIsGoalie" onchange="toggleManualGoalieMode()">
+                    Goalie (always free)
+                </label>
+                <span class="goalie-helper">When checked, payment is auto-set to FREE.</span>
+            </div>
+
+            <div id="goalieQuickSelectWrap">
+                <select id="goalieQuickSelect" onchange="fillManualGoalieFromPreset()">
+                    <option value="">-- Quick Select Goalie --</option>
+                    <option value="Craig Scolack" data-first="Craig" data-last="Scolack" data-phone="(519) 982-6311" data-rating="9">Craig Scolack</option>
+                    <option value="Hao Chau" data-first="Hao" data-last="Chau" data-phone="(519) 995-9884" data-rating="8">Hao Chau</option>
+                    <option value="Mat Carriere" data-first="Mat" data-last="Carriere" data-phone="(226) 350-0217" data-rating="7">Mat Carriere</option>
+                    <option value="Jesse Laframboise" data-first="Jesse" data-last="Laframboise" data-phone="(519) 566-6711" data-rating="7">Jesse Laframboise</option>
+                    <option value="Kent Nelson" data-first="Kent" data-last="Nelson" data-phone="(250) 884-6609" data-rating="7">Kent Nelson</option>
+                </select>
+            </div>
+
             <label style="display:flex; align-items:center; gap:10px; margin:10px 0; color:#aaa;">
                 <input type="checkbox" id="addToWaitlist" style="width:auto;">
                 Add to Waitlist
@@ -4362,12 +4391,40 @@ button {
             }
         }
 
+        function toggleManualGoalieMode() {
+            const isGoalie = !!document.getElementById('newIsGoalie')?.checked;
+            const quickWrap = document.getElementById('goalieQuickSelectWrap');
+            const quickSelect = document.getElementById('goalieQuickSelect');
+            const paymentSelect = document.getElementById('newPayment');
+            if (quickWrap) quickWrap.classList.toggle('visible', isGoalie);
+            if (paymentSelect) {
+                paymentSelect.disabled = isGoalie;
+                paymentSelect.style.opacity = isGoalie ? '0.6' : '1';
+                if (isGoalie) paymentSelect.value = 'Cash';
+            }
+            if (!isGoalie && quickSelect) quickSelect.value = '';
+        }
+
+        function fillManualGoalieFromPreset() {
+            const select = document.getElementById('goalieQuickSelect');
+            if (!select) return;
+            const option = select.options[select.selectedIndex];
+            if (!option || !option.dataset.first) return;
+            document.getElementById('newIsGoalie').checked = true;
+            document.getElementById('newFirstName').value = option.dataset.first || '';
+            document.getElementById('newLastName').value = option.dataset.last || '';
+            document.getElementById('newPhone').value = option.dataset.phone || '';
+            document.getElementById('newRating').value = option.dataset.rating || '';
+            toggleManualGoalieMode();
+        }
+
         async function addPlayer() {
-            const firstName = document.getElementById('newFirstName').value;
-            const lastName = document.getElementById('newLastName').value;
-            const phone = document.getElementById('newPhone').value;
+            const firstName = document.getElementById('newFirstName').value.trim();
+            const lastName = document.getElementById('newLastName').value.trim();
+            const phone = document.getElementById('newPhone').value.trim();
             const rating = document.getElementById('newRating').value;
-            const paymentMethod = document.getElementById('newPayment').value;
+            const isGoalie = !!document.getElementById('newIsGoalie').checked;
+            const paymentMethod = isGoalie ? 'FREE' : document.getElementById('newPayment').value;
             const toWaitlist = document.getElementById('addToWaitlist').checked;
 
             if (!firstName || !lastName || !phone || !rating) {
@@ -4385,8 +4442,8 @@ button {
                         lastName, 
                         phone, 
                         rating,
-                        paymentMethod, 
-                        isGoalie: false,
+                        paymentMethod,
+                        isGoalie,
                         toWaitlist 
                     })
                 });
@@ -4396,7 +4453,11 @@ button {
                     document.getElementById('newLastName').value = '';
                     document.getElementById('newPhone').value = '';
                     document.getElementById('newRating').value = '';
+                    document.getElementById('newIsGoalie').checked = false;
                     document.getElementById('addToWaitlist').checked = false;
+                    const goalieSelect = document.getElementById('goalieQuickSelect');
+                    if (goalieSelect) goalieSelect.value = '';
+                    toggleManualGoalieMode();
                     loadData();
                 } else if (res.status === 401) {
                     logout();
@@ -4655,7 +4716,8 @@ button {
                 const blob = await res.blob();
                 const contentDisposition = res.headers.get('content-disposition') || '';
                 const match = contentDisposition.match(/filename="?([^";]+)"?/i);
-                const filename = match ? match[1] : `phans-hockey-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+                const fallbackDay = String((window.currentStatus && window.currentStatus.gameDayName) || 'GameDay').trim().replace(/\s+/g, '-');
+                const filename = match ? match[1] : `GameDay-${fallbackDay}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
 
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
