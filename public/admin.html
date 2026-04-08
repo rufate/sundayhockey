@@ -868,6 +868,79 @@
             font-weight: bold;
         }
 
+
+
+        /* Compact combined Game Setup */
+        .game-setup-section {
+            background: linear-gradient(135deg, #2a1a3a, #214235);
+            border: 2px solid #ff2e63;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 25px;
+        }
+        .game-setup-section h3 {
+            margin: 0 0 12px 0;
+            color: #ff9a3c;
+            font-size: 1.1rem;
+        }
+        .game-setup-title-row { margin-bottom: 10px; }
+        .game-setup-grid {
+            display: grid;
+            grid-template-columns: 1.15fr 1fr;
+            gap: 12px;
+            align-items: start;
+        }
+        .game-setup-section .title-preview {
+            margin-bottom: 0;
+            padding: 12px;
+            font-size: 1.15rem;
+        }
+        .game-setup-section .title-control-group label {
+            color: #d7d7d7;
+            font-size: 0.88rem;
+            margin-bottom: 4px;
+        }
+        .game-setup-section .arena-select-group {
+            display: block;
+        }
+        .game-setup-section .arena-select-group select {
+            width: 100%;
+            margin: 0;
+        }
+        .game-setup-help {
+            color: #9fb2b0;
+            font-size: 0.8rem;
+            line-height: 1.35;
+            margin-top: 8px;
+        }
+        .game-setup-preview-line {
+            margin-top: 10px;
+            background: rgba(0,0,0,0.22);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 10px 12px;
+            color: #cfd7d6;
+            font-size: 0.92rem;
+            line-height: 1.35;
+        }
+        .game-setup-preview-line strong {
+            color: #ffffff;
+        }
+        .game-setup-preview-line .preview-sep {
+            opacity: .6;
+            margin: 0 6px;
+        }
+        .game-setup-savebar {
+            position: sticky;
+            bottom: 0;
+            margin-top: 12px;
+            padding-top: 8px;
+            background: linear-gradient(180deg, rgba(42,26,58,0), rgba(42,26,58,0.98) 35%);
+        }
+        .game-setup-savebar .update-title-btn {
+            margin-top: 0;
+        }
+
         /* Released Roster Preview */
         .released-roster-preview {
             background: linear-gradient(135deg, #1a3a1a, #2d4d2d);
@@ -1053,7 +1126,10 @@
             .payment-stats { grid-template-columns: 1fr; }
             .fly-goalie-form { grid-template-columns: 1fr; }
             .title-controls { grid-template-columns: 1fr; }
-            .title-editor-section, .backup-goalies-section, .add-goalie-fly-section { padding: 15px; }
+            .game-setup-section, .backup-goalies-section, .add-goalie-fly-section { padding: 14px; }
+            .game-setup-grid { grid-template-columns: 1fr; gap: 10px; }
+            .game-setup-section .title-preview { font-size: 1rem; padding: 10px; }
+            .game-setup-preview-line { font-size: 0.88rem; }
         }
     
         .schedule-editor { margin-top: 12px; padding-top: 12px; border-top: 1px solid #444; }
@@ -1727,6 +1803,128 @@ button {
 @media (max-width: 640px) {
   .snapshot-stats, .snapshot-preview-grid, .snapshot-meta-grid { grid-template-columns:1fr; }
 }
+
+/* ===== Final polish pass ===== */
+.snapshot-pro-subtitle,
+.game-setup-help,
+.message-box small {
+    display:none !important;
+}
+
+.maintenance-control h3,
+.compact-announcement-control h3,
+.game-setup-section h3 {
+    margin-bottom: 10px;
+}
+
+.maintenance-control,
+.compact-announcement-control,
+.game-setup-section,
+.snapshot-pro-section,
+.control-box,
+.payment-summary-box,
+.roster-status,
+.waitlist-section,
+.cancellations-section {
+    padding: 14px !important;
+    border-radius: 12px !important;
+}
+
+.compact-announcement-control .announcement-topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    margin-bottom:10px;
+    flex-wrap:wrap;
+}
+.compact-announcement-control .announcement-topbar h3{
+    margin:0;
+}
+.compact-announcement-control .announcement-status{
+    margin-left:0;
+    min-width:88px;
+    text-align:center;
+    padding:8px 14px;
+}
+.compact-announcement-control .announcement-toggle-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:10px;
+    padding:10px 12px;
+    background:rgba(0,0,0,0.18);
+    border-radius:10px;
+}
+.compact-announcement-control .announcement-toggle-row .maintenance-label{
+    margin:0;
+    font-size:1rem;
+}
+.compact-announcement-control .announcement-compact-grid{
+    display:grid;
+    grid-template-columns:1.15fr 0.85fr;
+    gap:12px;
+    align-items:start;
+}
+.compact-announcement-control .announcement-side-stack{
+    display:grid;
+    gap:12px;
+}
+.compact-announcement-control .message-box{
+    margin-top:0;
+    padding:12px;
+}
+.compact-announcement-control textarea,
+.compact-announcement-control input[type="email"],
+.compact-announcement-control input[type="file"]{
+    margin:6px 0 0 0;
+}
+.compact-announcement-control .compact-preview-row{
+    margin-top:8px;
+    gap:10px;
+}
+.compact-announcement-control .preview-thumb{
+    width:140px !important;
+    height:auto !important;
+    max-height:140px !important;
+}
+.compact-announcement-control .compact-message-actions{
+    margin-top:12px;
+}
+.compact-announcement-control .compact-message-actions .control-btn{
+    min-width:120px;
+}
+.snapshot-stats{
+    display:none !important;
+}
+.snapshot-toolbar{
+    margin-bottom:10px;
+}
+.snapshot-picker-toolbar{
+    margin-top:0 !important;
+}
+#snapshotCompactCard{
+    display:block !important;
+    margin-top:0 !important;
+}
+#snapshotList,
+#snapshotPreviewPanel{
+    display:none !important;
+}
+.message-actions .control-btn,
+.snapshot-picker-toolbar .control-btn,
+.control-btn,
+.logout-btn{
+    padding:8px 12px !important;
+    font-size:0.85rem !important;
+    border-radius:8px !important;
+}
+@media (max-width: 820px){
+    .compact-announcement-control .announcement-compact-grid{
+        grid-template-columns:1fr;
+    }
+}
+
 </style>
 
 </head>
@@ -1772,8 +1970,8 @@ button {
         
 
         <div class="snapshot-pro-section">
-            <h3>🧠 Snapshot Center</h3>
-            <div class="snapshot-pro-subtitle">Browse durable snapshots, preview the exact record you want, restore by fingerprint, create a manual safety point anytime, and keep cleanup compact with the newest 100 snapshots retained per source.</div>
+            <h3>🧠 Quick Restore</h3>
+
             <div class="snapshot-stats">
                 <div class="snapshot-stat-card"><div class="snapshot-stat-label">Snapshots Loaded</div><div class="snapshot-stat-value" id="snapshotStatCount">--</div></div>
                 <div class="snapshot-stat-card"><div class="snapshot-stat-label">Database Snapshots</div><div class="snapshot-stat-value" id="snapshotStatDb">--</div></div>
@@ -1828,106 +2026,96 @@ button {
 
         <!-- MAINTENANCE MODE CONTROL -->
         <div class="maintenance-control">
-            <h3>🔧 Maintenance Mode Control</h3>
+            <h3>🔧 Maintenance</h3>
             <div class="maintenance-toggle">
                 <input type="checkbox" id="maintenanceCheckbox" class="maintenance-checkbox" onchange="toggleMaintenance()">
                 <label for="maintenanceCheckbox" class="maintenance-label">Enable Maintenance Mode</label>
                 <div class="maintenance-status inactive" id="maintenanceStatus">PORTAL ACTIVE</div>
             </div>
-            <p style="color:#888; font-size:0.85rem; margin-top:10px;">
-                When enabled, a flashing alert will appear on all pages warning users that the portal is down for maintenance.
-            </p>
-
-        </div>
-
+</div>
         <!-- ANNOUNCEMENT -->
-        <div class="announcement-control">
-            <h3>📢 Announcement (does not block signup)</h3>
-            <div class="maintenance-toggle">
+        <div class="announcement-control compact-announcement-control">
+            <div class="announcement-topbar">
+                <h3>📢 Announcement</h3>
+                <div class="announcement-status inactive" id="announcementStatus">OFF</div>
+            </div>
+
+            <div class="announcement-toggle-row">
                 <input type="checkbox" id="announcementCheckbox" class="maintenance-checkbox">
-                <label for="announcementCheckbox" class="maintenance-label">Enable Announcement</label>
-                <div class="announcement-status inactive" id="announcementStatus">ANNOUNCEMENT OFF</div>
-            </div>
-            <p style="color:#9fc7ff; font-size:0.9rem; margin-top:10px;">
-                Use this for any player-facing message. It shows on the signup page and does not block signup.
-            </p>
-
-            <div class="message-box">
-                <label for="announcementText">Custom Announcement</label>
-                <textarea id="announcementText" rows="4" placeholder="Type any custom announcement here..."></textarea>
-                <small>This banner is separate from maintenance mode and will not shut down signup.</small>
+                <label for="announcementCheckbox" class="maintenance-label">Enable</label>
             </div>
 
-            <div class="message-box">
-                <label for="paymentEmail">Dynamic Payment E-transfer Email</label>
-                <input type="email" id="paymentEmail" placeholder="Enter payment email">
-                <small>Used automatically when roster is released to build the payment reminder banner. Players can tap the email on signup page to copy it.</small>
-            </div>
-
-            <div class="message-grid">
-                <div class="message-box">
-                    <label for="announcementImageUpload">Upload Announcement Picture</label>
-                    <input type="file" id="announcementImageUpload" accept="image/*">
-                    <small>Large clear image supported. It will display directly on the signup page.</small>
+            <div class="announcement-compact-grid">
+                <div class="message-box message-box-main">
+                    <label for="announcementText">Message</label>
+                    <textarea id="announcementText" rows="4" placeholder="Type announcement..."></textarea>
                 </div>
 
-                <div class="message-box">
-                    <label>Image Preview</label>
-                    <div class="preview-row">
-                        <img id="announcementImagePreview" class="preview-thumb visible" alt="Announcement preview" style="width:180px;height:auto;max-height:180px;object-fit:contain;">
-                        <button type="button" class="secondary-btn control-btn" onclick="clearAnnouncementImage()">Remove Picture</button>
+                <div class="announcement-side-stack">
+                    <div class="message-box">
+                        <label for="paymentEmail">E-transfer Email</label>
+                        <input type="email" id="paymentEmail" placeholder="Enter payment email">
+                    </div>
+
+                    <div class="message-box">
+                        <label for="announcementImageUpload">Upload Image</label>
+                        <input type="file" id="announcementImageUpload" accept="image/*">
+                    </div>
+
+                    <div class="message-box">
+                        <label>Preview</label>
+                        <div class="preview-row compact-preview-row">
+                            <img id="announcementImagePreview" class="preview-thumb visible" alt="Announcement preview" style="width:140px;height:auto;max-height:140px;object-fit:contain;">
+                            <button type="button" class="secondary-btn control-btn" onclick="clearAnnouncementImage()">Remove</button>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="message-actions">
-                <button type="button" id="saveAnnouncementBtn" class="control-btn" onclick="saveAnnouncementSettings()">Save Announcement</button>
-                <button type="button" class="control-btn secondary-btn" onclick="clearAnnouncementSettings()">Clear & Turn Off</button>
+            <div class="message-actions compact-message-actions">
+                <button type="button" id="saveAnnouncementBtn" class="control-btn" onclick="saveAnnouncementSettings()">Save</button>
+                <button type="button" class="control-btn secondary-btn" onclick="clearAnnouncementSettings()">Clear</button>
             </div>
         </div>
-
 
         <div id="legacyRegularSkatersSection" style="display:none;"></div>
 
-        <!-- TITLE EDITOR -->
-        <div class="title-editor-section">
-            <h3>🏷️ Title Editor</h3>
-            <div class="title-preview" id="titlePreview">Phan's Friday Hockey</div>
-            <div class="title-controls">
+        <!-- GAME SETUP -->
+        <div class="game-setup-section">
+            <h3>🏒 Game Setup</h3>
+            <div class="game-setup-title-row">
+                <div class="title-preview" id="titlePreview">Phan's Friday Hockey</div>
+            </div>
+            <div class="game-setup-grid">
                 <div class="title-control-group">
-                    <label for="titleDayTime">Select day and time:</label>
+                    <label for="titleDayTime">Day and time</label>
                     <input type="datetime-local" id="titleDayTime" class="control-input" onchange="updateTitlePreview()">
-                    <div style="color:#888; font-size:0.85rem; margin-top:6px;">
-                        Pick a weekday/time in ET. V51 auto-schedule will rebuild the weekly lock, roster release, and reset times from this selection.
-                    </div>
+
                 </div>
                 <div class="title-control-group">
-                    <label>Preview:</label>
-                    <div id="dynamicTitlePreview" style="color:#aaa; font-size:1rem; padding:10px 0;">
-                        Phan's Friday Hockey
+                    <label for="arenaSelect">Arena</label>
+                    <div class="arena-select-group">
+                        <select id="arenaSelect" onchange="updateGameSetupPreview()">
+                            <option value="WFCU Bowl">WFCU Bowl</option>
+                            <option value="WFCU Greenshield">WFCU Greenshield</option>
+                            <option value="WFCU Grenon">WFCU Grenon</option>
+                            <option value="WFCU AM800">WFCU AM800</option>
+                            <option value="Capri Recreation Complex">Capri Recreation Complex</option>
+                            <option value="Vollmer Lasalle Arena">Vollmer Lasalle Arena</option>
+                            <option value="Atlas Tube Lakeshore">Atlas Tube Lakeshore</option>
+                        </select>
                     </div>
+
                 </div>
             </div>
-            <button id="updateTitleBtn" class="update-title-btn" onclick="updateTitle()">Update Title & Time</button>
-        </div>
-
-        <!-- ARENA SELECTOR -->
-        <div class="arena-section">
-            <h3>🏟️ Arena Selection</h3>
-            <div class="arena-select-group">
-                <select id="arenaSelect">
-                    <option value="WFCU Bowl">WFCU Bowl</option>
-                    <option value="WFCU Greenshield">WFCU Greenshield</option>
-                    <option value="WFCU Grenon">WFCU Grenon</option>
-                    <option value="WFCU AM800">WFCU AM800</option>
-                    <option value="Capri Recreation Complex">Capri Recreation Complex</option>
-                    <option value="Vollmer Lasalle Arena">Vollmer Lasalle Arena</option>
-                    <option value="Atlas Tube Lakeshore">Atlas Tube Lakeshore</option>
-                </select>
-                <button id="updateArenaBtn" class="update-arena-btn" onclick="updateArena()">Update Arena</button>
+            <div class="game-setup-preview-line">
+                <strong>Preview:</strong>
+                <span id="dynamicTitlePreview">Phan's Friday Hockey</span>
+                <span class="preview-sep">•</span>
+                <span id="currentArenaDisplay">--</span>
             </div>
-            <div class="current-arena-display">
-                Current Arena: <span id="currentArenaDisplay">--</span>
+            <div class="game-setup-savebar">
+                <button id="updateGameSetupBtn" class="update-title-btn" onclick="updateGameSetup()">Save Game Setup</button>
             </div>
         </div>
 
@@ -3142,12 +3330,14 @@ button {
                 if (data.customTitle) {
                     document.getElementById('titlePreview').innerText = data.customTitle;
                     document.getElementById('dynamicTitlePreview').innerText = data.customTitle;
+                    updateGameSetupPreview();
                 }
                 
                 // Update arena selector
                 if (data.selectedArena) {
                     document.getElementById('arenaSelect').value = data.selectedArena;
                     document.getElementById('currentArenaDisplay').innerText = data.selectedArena;
+                    updateGameSetupPreview();
                 }
                 
                 // Store backup goalies data
@@ -3273,11 +3463,76 @@ button {
             if (hiddenInput) {
                 hiddenInput.value = buildDatetimeLocal(parts.dateVal, parts.hour24, parts.minute);
             }
+            updateGameSetupPreview();
+        }
+
+        function updateGameSetupPreview() {
+            const titleText = (document.getElementById('dynamicTitlePreview')?.innerText || document.getElementById('titlePreview')?.innerText || "Phan's Hockey").trim();
+            const arenaText = (document.getElementById('arenaSelect')?.value || document.getElementById('currentArenaDisplay')?.innerText || '--').trim() || '--';
+            const arenaDisplay = document.getElementById('currentArenaDisplay');
+            if (arenaDisplay) arenaDisplay.innerText = arenaText;
+            return `${titleText} • ${arenaText}`;
+        }
+
+        async function updateGameSetup() {
+            const button = document.getElementById('updateGameSetupBtn');
+            return withBusyButton(button, 'Saving...', async () => {
+                const parts = getEnhancedControlParts('titleDayTime');
+                if (!parts) {
+                    alert('Please select a day and time first.');
+                    return;
+                }
+
+                const arena = document.getElementById('arenaSelect').value;
+                const newTitle = `Phan's ${parts.weekday} Hockey`;
+                const dayTime = `${parts.weekday} ${formatTime12(parts.hour24, parts.minute)}`;
+                const selectedGameDate = parts.dateVal;
+
+                const hiddenInput = document.getElementById('titleDayTime');
+                if (hiddenInput) {
+                    hiddenInput.value = buildDatetimeLocal(parts.dateVal, parts.hour24, parts.minute);
+                }
+
+                try {
+                    const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
+                        method: 'POST',
+                        headers: getAdminHeaders(),
+                        body: JSON.stringify({
+                            sessionToken: sessionToken,
+                            customTitle: newTitle,
+                            selectedDayTime: dayTime,
+                            gameDate: selectedGameDate,
+                            selectedArena: arena
+                        })
+                    });
+
+                    const result = await res.json().catch(() => ({}));
+                    if (res.ok) {
+                        document.getElementById('titlePreview').innerText = newTitle;
+                        document.getElementById('dynamicTitlePreview').innerText = newTitle;
+                        document.getElementById('currentArenaDisplay').innerText = arena;
+                        document.getElementById('locationInput').value = arena;
+                        document.getElementById('timeInput').value = dayTime;
+                        updateGameSetupPreview();
+                        alert(`✅ Game setup saved
+Title: ${newTitle}
+Arena: ${arena}
+Time: ${formatEtDateTimeLocal(buildDatetimeLocal(parts.dateVal, parts.hour24, parts.minute))}
+Date: ${selectedGameDate}`);
+                        await loadSettings();
+                    } else {
+                        alert(result.error || 'Failed to update game setup');
+                    }
+                } catch (err) {
+                    console.error('Error updating game setup:', err);
+                    alert('Error updating game setup');
+                }
+            });
         }
 
         // Update title and time
         async function updateTitle() {
-            const button = document.getElementById('updateTitleBtn');
+            const button = document.getElementById('updateTitleBtn') || document.getElementById('updateGameSetupBtn');
             return withBusyButton(button, 'Saving...', async () => {
                 const parts = getEnhancedControlParts('titleDayTime');
                 if (!parts) {
@@ -3324,7 +3579,7 @@ button {
 
         // Update arena
         async function updateArena() {
-            const button = document.getElementById('updateArenaBtn');
+            const button = document.getElementById('updateArenaBtn') || document.getElementById('updateGameSetupBtn');
             return withBusyButton(button, 'Saving...', async () => {
                 const arena = document.getElementById('arenaSelect').value;
 
