@@ -1851,33 +1851,58 @@ function sanitizeFileSegment(value, fallback = 'backup') {
 }
 
 function getEtDateParts(date = new Date()) {
-    const etDate = date instanceof Date ? new Date(date.getTime()) : new Date(date);
-    const year = etDate.getFullYear();
-    const month = String(etDate.getMonth() + 1).padStart(2, '0');
-    const day = String(etDate.getDate()).padStart(2, '0');
-    let hour24 = etDate.getHours();
-    const minute = String(etDate.getMinutes()).padStart(2, '0');
-    const second = String(etDate.getSeconds()).padStart(2, '0');
+    const source = date instanceof Date ? date : new Date(date);
+    const etString = source.toLocaleString('en-US', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+
+    const [datePart, timePart] = etString.split(', ');
+    const [monthRaw, dayRaw, yearRaw] = datePart.split('/');
+    const [hourRaw, minuteRaw, secondRaw] = timePart.split(':');
+
+    const year = Number(yearRaw);
+    const month = String(monthRaw).padStart(2, '0');
+    const day = String(dayRaw).padStart(2, '0');
+    let hour24 = Number(hourRaw);
+    const minute = String(minuteRaw).padStart(2, '0');
+    const second = String(secondRaw).padStart(2, '0');
     const ampm = hour24 >= 12 ? 'PM' : 'AM';
     let hour12 = hour24 % 12;
     if (hour12 === 0) hour12 = 12;
-    const dayName = INDEX_TO_DAY_NAME[etDate.getDay()] || 'Backup';
+
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const etDate = new Date(year, Number(month) - 1, Number(day), hour24, Number(minute), Number(second));
+    const dayName = dayNames[etDate.getDay()];
+
     return {
-        dayName,
+        year,
+        yy: String(year).slice(-2),
+        month,
+        day,
         mmddyy: `${month}${day}${String(year).slice(-2)}`,
-        hour12,
+        hour24,
+        hour12: String(hour12),
         minute,
         second,
-        ampm
+        ampm,
+        dayName
     };
 }
 
 function getFormattedBackupBaseName(date = new Date(), options = {}) {
     const includeSeconds = !!options.includeSeconds;
     const parts = getEtDateParts(date);
+    const configuredDay = getGameDayName();
     const timeCore = `${parts.hour12}${parts.minute}${parts.ampm}`;
     const timeValue = includeSeconds ? `${timeCore}${parts.second}` : timeCore;
-    return `${parts.dayName}-${parts.mmddyy}-${timeValue}`;
+    return `${configuredDay}-${parts.mmddyy}-${timeValue}`;
 }
 
 function buildBackupFileName(options = {}) {
@@ -1895,19 +1920,8 @@ function buildBackupFileName(options = {}) {
 
 
 function getGameDayBackupDownloadName(ext = 'json') {
-    const parsed = parseGameTimeString(gameTime);
-    const dayName = parsed && parsed.dayName ? parsed.dayName : getGameDayName();
-    const safeDate = String(gameDate || calculateNextGameDate());
-    const parts = safeDate.split('-');
-    const year = parts[0] || '';
-    const month = String(parts[1] || '').padStart(2, '0');
-    const day = String(parts[2] || '').padStart(2, '0');
-    let hour24 = Number(parsed && Number.isFinite(parsed.hour24) ? parsed.hour24 : 0);
-    let hour12 = hour24 % 12;
-    if (hour12 === 0) hour12 = 12;
-    const ampm = hour24 >= 12 ? 'PM' : 'AM';
     const safeExt = String(ext || 'json').replace(/^\./, '') || 'json';
-    return `${dayName}-${month}${day}${String(year).slice(-2)}-${hour12}${ampm}.${safeExt}`;
+    return `${getFormattedBackupBaseName(new Date())}.${safeExt}`;
 }
 
 function isSnapshotBackupFilename(name = '') {
