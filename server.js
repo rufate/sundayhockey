@@ -492,6 +492,7 @@ saveAdminSessionState();
 // Weekly reset tracking
 let lastResetWeek = null;
 let rosterReleased = false;
+let resetArmed = false;
 let currentWeekData = {
     weekNumber: null,
     year: null,
@@ -887,27 +888,31 @@ function minutesSinceLatestWeeklyOccurrence(scheduleAt, etDate = getCurrentETTim
 }
 
 function canSafelyRunWeeklyReset(etTime = getCurrentETTime()) {
-    const activeSignupCount = players.filter(p => !(p && p.isGoalie && p.paidAmount === 0 && p.paymentMethod === 'FREE')).length + waitlist.length;
+    const registeredPlayerCount = Array.isArray(players) ? players.length : 0;
+    const waitlistCount = Array.isArray(waitlist) ? waitlist.length : 0;
 
-    if (activeSignupCount === 0) {
-        return { ok: true, reason: 'No active signups to protect.' };
+    if (!resetArmed) {
+        return {
+            ok: false,
+            reason: 'Blocked weekly reset because reset arm is OFF.'
+        };
     }
 
-    if (rosterReleased) {
-        return { ok: true, reason: 'Roster already released.' };
+    if (registeredPlayerCount > 0) {
+        return {
+            ok: false,
+            reason: `Blocked weekly reset because ${registeredPlayerCount} registered player${registeredPlayerCount === 1 ? '' : 's'} still exist.`
+        };
     }
 
-    if (rosterReleaseSchedule && rosterReleaseSchedule.enabled && rosterReleaseSchedule.at) {
-        const minutesSinceReleaseWindow = minutesSinceLatestWeeklyOccurrence(rosterReleaseSchedule.at, etTime);
-        if (minutesSinceReleaseWindow !== null && minutesSinceReleaseWindow <= (18 * 60)) {
-            return { ok: true, reason: 'Roster release window passed recently this cycle.' };
-        }
+    if (waitlistCount > 0) {
+        return {
+            ok: false,
+            reason: `Blocked weekly reset because ${waitlistCount} waitlist player${waitlistCount === 1 ? '' : 's'} still exist.`
+        };
     }
 
-    return {
-        ok: false,
-        reason: 'Blocked weekly reset because roster was not released and the configured roster-release time has not passed recently.'
-    };
+    return { ok: true, reason: 'Reset arm is ON and there are no registered players or waitlist entries to reset.' };
 }
 
 function getNextOccurrenceEtParts(scheduleAt, etDate = getCurrentETTime()) {
@@ -1046,24 +1051,36 @@ function formatScheduleDowTime(scheduleAt) {
     return `${dayName} ${hour12}:${String(minute).padStart(2, '0')} ${ampm} ET`;
 }
 
+function shouldAutoBuildMissingSchedules(scheduleSettings = {}) {
+    if (!AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME) return false;
+    const hasStoredSignupLockSchedule = !!scheduleSettings.signupLockSchedule;
+    const hasStoredRosterReleaseSchedule = !!scheduleSettings.rosterReleaseSchedule;
+    const hasStoredResetWeekSchedule = !!scheduleSettings.resetWeekSchedule;
+    return !hasStoredSignupLockSchedule && !hasStoredRosterReleaseSchedule && !hasStoredResetWeekSchedule;
+}
+
 function buildAutoSchedulesFromGameTime(selectedGameTime = gameTime, anchorDate = gameDate) {
     const parsed = parseGameTimeString(selectedGameTime);
     const gameDow = parsed.dayIndex;
     const resetDow = (gameDow + 1) % 7;
 
+    const previousSignupLockEnabled = !!(signupLockSchedule && signupLockSchedule.enabled);
+    const previousRosterReleaseEnabled = !!(rosterReleaseSchedule && rosterReleaseSchedule.enabled);
+    const previousResetWeekEnabled = !!(resetWeekSchedule && resetWeekSchedule.enabled);
+
     signupLockSchedule = {
-        enabled: true,
+        enabled: previousSignupLockEnabled,
         start: { dow: gameDow, hour: AUTO_SCHEDULE_LOCK_HOUR, minute: AUTO_SCHEDULE_LOCK_MINUTE },
         end: { dow: resetDow, hour: AUTO_SCHEDULE_RESET_HOUR, minute: AUTO_SCHEDULE_RESET_MINUTE }
     };
 
     rosterReleaseSchedule = {
-        enabled: true,
+        enabled: previousRosterReleaseEnabled,
         at: { dow: gameDow, hour: AUTO_SCHEDULE_LOCK_HOUR, minute: AUTO_SCHEDULE_LOCK_MINUTE }
     };
 
     resetWeekSchedule = {
-        enabled: true,
+        enabled: previousResetWeekEnabled,
         at: { dow: resetDow, hour: AUTO_SCHEDULE_RESET_HOUR, minute: AUTO_SCHEDULE_RESET_MINUTE }
     };
 
@@ -1113,22 +1130,6 @@ function shouldBeLocked() {
 function checkAutoLock() {
     refreshDynamicSignupCode();
     const etTime = getCurrentETTime();
-
-    if (rosterReleased) {
-        if (!requirePlayerCode || manualOverrideState !== 'locked' || !manualOverride) {
-            requirePlayerCode = true;
-            manualOverride = true;
-            manualOverrideState = 'locked';
-            saveData();
-        }
-        return {
-            requirePlayerCode: true,
-            manualOverride: true,
-            manualOverrideState: 'locked',
-            isLockedWindow: true,
-            rosterReleased: true
-        };
-    }
 
     const shouldLock = shouldBeLocked();
 
@@ -1205,9 +1206,7 @@ async function autoReleaseRoster() {
         const teams = generateFairTeams();
 
         rosterReleased = true;
-        requirePlayerCode = true;
-        manualOverride = true;
-        manualOverrideState = 'locked';
+        resetArmed = true;
 
         announcementEnabled = true;
         announcementText = buildRosterReleasePaymentAnnouncement();
@@ -1383,6 +1382,7 @@ async function checkWeeklyReset() {
     players = [];
     waitlist = [];
     rosterReleased = false;
+    resetArmed = false;
     lastResetWeek = currentWeek;
     gameDate = calculateNextGameDate();
 
@@ -1655,6 +1655,7 @@ async function loadDataFromDB() {
         if (settings.manualOverrideState !== undefined) manualOverrideState = settings.manualOverrideState;
         if (settings.lastResetWeek) lastResetWeek = settings.lastResetWeek;
         if (settings.rosterReleased !== undefined) rosterReleased = settings.rosterReleased;
+        if (settings.resetArmed !== undefined) resetArmed = !!settings.resetArmed;
         if (settings.currentWeekData) currentWeekData = settings.currentWeekData;
         if (settings.cancelledRegistrations) cancelledRegistrations = Array.isArray(settings.cancelledRegistrations) ? settings.cancelledRegistrations : [];
         if (settings.customSignupCode !== undefined) customSignupCode = String(settings.customSignupCode || '').trim();
@@ -1669,7 +1670,7 @@ async function loadDataFromDB() {
         if (settings.signupLockSchedule) signupLockSchedule = settings.signupLockSchedule;
         if (settings.rosterReleaseSchedule) rosterReleaseSchedule = settings.rosterReleaseSchedule;
         if (settings.resetWeekSchedule) resetWeekSchedule = settings.resetWeekSchedule;
-        if (AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME && (!signupLockSchedule.start || !signupLockSchedule.end || !rosterReleaseSchedule.at || !resetWeekSchedule.at)) {
+        if (shouldAutoBuildMissingSchedules(settings)) {
             buildAutoSchedulesFromGameTime(gameTime, gameDate);
         }
         refreshDynamicSignupCode();
@@ -1839,6 +1840,65 @@ function safeIsoStamp(date = new Date()) {
     return new Date(date).toISOString().replace(/[:.]/g, '-');
 }
 
+
+function sanitizeFileSegment(value, fallback = 'backup') {
+    const cleaned = String(value == null ? '' : value)
+        .trim()
+        .replace(/[^a-z0-9_-]+/gi, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+    return cleaned || fallback;
+}
+
+function getEtDateParts(date = new Date()) {
+    const etDate = date instanceof Date ? new Date(date.getTime()) : new Date(date);
+    const year = etDate.getFullYear();
+    const month = String(etDate.getMonth() + 1).padStart(2, '0');
+    const day = String(etDate.getDate()).padStart(2, '0');
+    let hour24 = etDate.getHours();
+    const minute = String(etDate.getMinutes()).padStart(2, '0');
+    const second = String(etDate.getSeconds()).padStart(2, '0');
+    const ampm = hour24 >= 12 ? 'PM' : 'AM';
+    let hour12 = hour24 % 12;
+    if (hour12 === 0) hour12 = 12;
+    const dayName = INDEX_TO_DAY_NAME[etDate.getDay()] || 'Backup';
+    return {
+        dayName,
+        mmddyy: `${month}${day}${String(year).slice(-2)}`,
+        hour12,
+        minute,
+        second,
+        ampm
+    };
+}
+
+function getFormattedBackupBaseName(date = new Date(), options = {}) {
+    const includeSeconds = !!options.includeSeconds;
+    const parts = getEtDateParts(date);
+    const timeCore = `${parts.hour12}${parts.minute}${parts.ampm}`;
+    const timeValue = includeSeconds ? `${timeCore}${parts.second}` : timeCore;
+    return `${parts.dayName}-${parts.mmddyy}-${timeValue}`;
+}
+
+function buildBackupFileName(options = {}) {
+    const {
+        date = new Date(),
+        reason = '',
+        ext = 'json',
+        includeSeconds = false
+    } = options || {};
+    const base = getFormattedBackupBaseName(date, { includeSeconds });
+    const suffix = reason ? `-${sanitizeFileSegment(reason, 'backup')}` : '';
+    const safeExt = String(ext || 'json').replace(/^\./, '') || 'json';
+    return `${base}${suffix}.${safeExt}`;
+}
+
+function isSnapshotBackupFilename(name = '') {
+    const value = String(name || '');
+    return /^snapshot-.*\.json$/i.test(value) || /^(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)-\d{6}-\d{3,8}(AM|PM)(-[a-z0-9_-]+)?\.json$/i.test(value);
+}
+
+
 function updateLatestSnapshotMeta(snapshot, filePath, source = 'memory') {
     latestLocalSnapshotMeta = {
         exists: true,
@@ -1904,7 +1964,7 @@ async function insertDatabaseSnapshot(snapshot, reason = 'saveData', clientOrPoo
         ) VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7)
         RETURNING id, created_at`,
         [
-            `snapshot-${safeIsoStamp(metadata.savedAt)}-${String(reason || 'save').replace(/[^a-z0-9_-]+/gi, '-').slice(0, 40)}`,
+            buildBackupFileName({ date: new Date(metadata.savedAt || new Date()), reason: metadata.reason || 'snapshot', ext: 'json', includeSeconds: true }).replace(/\.json$/i, ''),
             JSON.stringify(snapshot),
             metadata.reason,
             metadata.version,
@@ -2034,7 +2094,7 @@ async function listAvailableSnapshots(limit = 100) {
         const localFiles = [];
         if (fs.existsSync(SNAPSHOT_DIR)) {
             for (const name of fs.readdirSync(SNAPSHOT_DIR)) {
-                if (!/^snapshot-.*\.json$/i.test(name)) continue;
+                if (!isSnapshotBackupFilename(name)) continue;
                 localFiles.push(path.join(SNAPSHOT_DIR, name));
             }
         }
@@ -2250,7 +2310,7 @@ function trimSnapshotBackups() {
     try {
         ensureDirSync(SNAPSHOT_DIR);
         const files = fs.readdirSync(SNAPSHOT_DIR)
-            .filter(name => /^snapshot-.*\.json$/i.test(name))
+            .filter(name => isSnapshotBackupFilename(name))
             .map(name => ({ name, full: path.join(SNAPSHOT_DIR, name), mtime: fs.statSync(path.join(SNAPSHOT_DIR, name)).mtimeMs }))
             .sort((a, b) => b.mtime - a.mtime);
         files.slice(SNAPSHOT_RETENTION).forEach(file => {
@@ -2270,7 +2330,7 @@ function persistDataToFile(reason = 'saveData', snapshot = null) {
         let snapshotFile = null;
         if (shouldCreateDurableSnapshot(reason)) {
             ensureDirSync(SNAPSHOT_DIR);
-            snapshotFile = path.join(SNAPSHOT_DIR, `snapshot-${safeIsoStamp(payload.savedAt || new Date())}-${String(reason || 'save').replace(/[^a-z0-9_-]+/gi, '-').slice(0,40)}.json`);
+            snapshotFile = path.join(SNAPSHOT_DIR, buildBackupFileName({ date: new Date(payload.savedAt || new Date()), reason: String(reason || 'save').slice(0, 40), ext: 'json', includeSeconds: true }));
             atomicWriteTextFile(snapshotFile, text);
             trimSnapshotBackups();
             updateLatestSnapshotMeta(payload, snapshotFile, reason);
@@ -2297,7 +2357,7 @@ function getBestLocalSnapshot() {
     const candidates = [];
     if (fs.existsSync(SNAPSHOT_DIR)) {
         for (const name of fs.readdirSync(SNAPSHOT_DIR)) {
-            if (!/^snapshot-.*\.json$/i.test(name)) continue;
+            if (!isSnapshotBackupFilename(name)) continue;
             const full = path.join(SNAPSHOT_DIR, name);
             try {
                 candidates.push({ file: full, stat: fs.statSync(full) });
@@ -2411,6 +2471,7 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
             ['manualOverrideState', manualOverrideState],
             ['lastResetWeek', lastResetWeek],
             ['rosterReleased', rosterReleased],
+            ['resetArmed', resetArmed],
             ['currentWeekData', currentWeekData],
             ['cancelledRegistrations', cancelledRegistrations],
             ['regularSkatersByDay', regularSkatersByDay],
@@ -2623,6 +2684,7 @@ function buildFullDataSnapshot() {
         manualOverrideState,
         lastResetWeek,
         rosterReleased,
+        resetArmed,
         currentWeekData,
         signupLockStartAt,
         signupLockEndAt,
@@ -2730,6 +2792,7 @@ function getSettingsSnapshot() {
         manualOverride,
         manualOverrideState,
         rosterReleased,
+        resetArmed,
         currentWeekData,
         cancelledRegistrations,
         regularSkatersByDay,
@@ -2804,6 +2867,7 @@ function loadDataFromFile() {
             manualOverrideState = data.manualOverrideState ?? null;
             lastResetWeek = data.lastResetWeek ?? null;
             rosterReleased = data.rosterReleased ?? false;
+            resetArmed = !!data.resetArmed;
             signupLockStartAt = data.signupLockStartAt ?? '';
             signupLockEndAt = data.signupLockEndAt ?? '';
             rosterReleaseAt = data.rosterReleaseAt ?? '';
@@ -2831,7 +2895,7 @@ function loadDataFromFile() {
             announcementEnabled = data.announcementEnabled ?? false;
             announcementText = data.announcementText ?? '';
             announcementImages = Array.isArray(data.announcementImages) ? data.announcementImages : [];
-            if (AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME && (!signupLockSchedule.start || !signupLockSchedule.end || !rosterReleaseSchedule.at || !resetWeekSchedule.at)) {
+            if (shouldAutoBuildMissingSchedules(data)) {
                 buildAutoSchedulesFromGameTime(gameTime, gameDate);
             }
             refreshDynamicSignupCode();
@@ -3354,7 +3418,7 @@ async function savePaymentReportSnapshot(triggerSource = 'manual') {
         const activeWeek = currentWeekData && currentWeekData.weekNumber ? currentWeekData.weekNumber : weekInfo.week;
         const activeYear = currentWeekData && currentWeekData.year ? currentWeekData.year : weekInfo.year;
         const safeGameDate = gameDate || etTime.toISOString().split('T')[0];
-        const reportName = `payment-report-${safeGameDate}-week-${activeWeek}-${Date.now()}.csv`;
+        const reportName = buildBackupFileName({ date: etTime, reason: `payment-report-week-${activeWeek}`, ext: 'csv', includeSeconds: true });
         const csvContent = buildPaymentReportCsv();
 
         const result = await pool.query(
@@ -3716,6 +3780,7 @@ app.get('/api/status', (req, res) => {
         date: gameDate,
         formattedDate: formatGameDate(gameDate),
         rosterReleased: rosterReleased,
+        resetArmed: resetArmed,
         noShowPolicy: NO_SHOW_POLICY_TEXT,
         rosterReleaseTime: currentWeekData.rosterReleaseTime,
         currentWeek: week,
@@ -4908,8 +4973,7 @@ app.post('/api/admin/download-backup', async (req, res) => {
             }
         };
 
-        const gameDaySlug = String(getGameDayName() || 'GameDay').trim().replace(/\s+/g, '-');
-        const filename = `GameDay-${gameDaySlug}-${yyyy}${mm}${dd}-${hh}${mi}${ss}-ET.json`;
+        const filename = buildBackupFileName({ date: etNow, ext: 'json' });
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         return res.status(200).send(JSON.stringify(backup, null, 2));
@@ -5289,6 +5353,7 @@ app.post('/api/admin/settings', (req, res) => {
         time: gameTime,
         date: gameDate,
         rosterReleased,
+        resetArmed,
         signupLockSchedule,
         rosterReleaseSchedule,
         resetWeekSchedule,
@@ -5443,6 +5508,7 @@ app.post('/api/admin/update-schedules', async (req, res) => {
         signupLockEndAt,
         rosterReleaseAt,
         resetWeekAt,
+        resetArmed,
         requireCode: requirePlayerCode,
         isLockedWindow: lockStatus.isLockedWindow
     });
@@ -5878,9 +5944,7 @@ app.post('/api/admin/release-roster', async (req, res) => {
         const teams = generateFairTeams();
         
         rosterReleased = true;
-        requirePlayerCode = true;
-        manualOverride = true;  // Keep locked after manual release
-        manualOverrideState = 'locked';  // Force locked state
+        resetArmed = true;
 
         // Auto-enable payment reminder when roster is released
         announcementEnabled = true;
@@ -5914,7 +5978,7 @@ app.post('/api/admin/release-roster', async (req, res) => {
         
         res.json({ 
             success: true, 
-            message: "Roster released successfully. Signup is now LOCKED until Monday 6pm.",
+            message: "Roster released successfully. Reset arm is now ON.",
             whiteTeam: teams.whiteTeam,
             darkTeam: teams.darkTeam,
             whiteRating: teams.whiteRating.toFixed(1),
