@@ -1893,6 +1893,23 @@ function buildBackupFileName(options = {}) {
     return `${base}${suffix}.${safeExt}`;
 }
 
+
+function getGameDayBackupDownloadName(ext = 'json') {
+    const parsed = parseGameTimeString(gameTime);
+    const dayName = parsed && parsed.dayName ? parsed.dayName : getGameDayName();
+    const safeDate = String(gameDate || calculateNextGameDate());
+    const parts = safeDate.split('-');
+    const year = parts[0] || '';
+    const month = String(parts[1] || '').padStart(2, '0');
+    const day = String(parts[2] || '').padStart(2, '0');
+    let hour24 = Number(parsed && Number.isFinite(parsed.hour24) ? parsed.hour24 : 0);
+    let hour12 = hour24 % 12;
+    if (hour12 === 0) hour12 = 12;
+    const ampm = hour24 >= 12 ? 'PM' : 'AM';
+    const safeExt = String(ext || 'json').replace(/^\./, '') || 'json';
+    return `${dayName}-${month}${day}${String(year).slice(-2)}-${hour12}${ampm}.${safeExt}`;
+}
+
 function isSnapshotBackupFilename(name = '') {
     const value = String(name || '');
     return /^snapshot-.*\.json$/i.test(value) || /^(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)-\d{6}-\d{3,8}(AM|PM)(-[a-z0-9_-]+)?\.json$/i.test(value);
@@ -4973,7 +4990,7 @@ app.post('/api/admin/download-backup', async (req, res) => {
             }
         };
 
-        const filename = buildBackupFileName({ date: etNow, ext: 'json' });
+        const filename = getGameDayBackupDownloadName('json');
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         return res.status(200).send(JSON.stringify(backup, null, 2));
