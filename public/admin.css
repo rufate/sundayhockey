@@ -1,0 +1,59 @@
+body{margin:0;background:#111;color:#fff;font-family:Arial}
+
+/* TABLE */
+.admin-table{width:100%}
+
+/* ROWS */
+.admin-row{
+  display:flex;
+  align-items:center;
+  border-bottom:1px solid #333;
+  padding:6px 10px;
+}
+
+/* HEADER */
+.admin-row.header{
+  font-weight:bold;
+  color:orange;
+}
+
+/* FREE */
+.status-free{
+  color:#4caf50;
+  font-weight:bold;
+  font-size:13px;
+}
+
+/* PILL (smaller) */
+.pill-paid{
+  display:inline-flex;
+  align-items:center;
+  padding:3px 7px;
+  font-size:10px;
+  border-radius:12px;
+  background:#e53935;
+  color:#fff;
+  min-height:20px;
+}
+
+/* AMOUNT (bigger) */
+.pill-paid .amount{
+  font-size:13px;
+  font-weight:bold;
+  margin-right:6px;
+}
+
+/* BUTTONS */
+.controls{display:flex;flex-direction:column}
+
+.btn{
+  width:15px;
+  height:15px;
+  font-size:9px;
+  border:none;
+  background:transparent;
+  color:#fff;
+  cursor:pointer;
+}
+
+.btn + .btn{margin-top:1px}

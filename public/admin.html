@@ -739,81 +739,59 @@
 
         /* Maintenance Control */
         .maintenance-control {
-            background: linear-gradient(135deg, #3a1a1a, #4d2d2d);
-            border: 2px solid #ff4444;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 25px;
+            margin-bottom: 18px;
         }
-
-        .maintenance-control h3 {
-            margin: 0 0 15px 0;
-            color: #ff4444;
-            font-size: 1.1rem;
-        }
-
 
         .maintenance-toggle {
+            position: relative;
             display: flex;
+            justify-content: center;
             align-items: center;
-            gap: 15px;
-            padding: 15px;
-            background: rgba(0,0,0,0.2);
-            border-radius: 8px;
+            width: 100%;
         }
 
         .maintenance-checkbox {
-            width: 30px !important;
-            height: 30px !important;
-            cursor: pointer;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-            background: #333;
-            border: 3px solid #ff4444;
-            border-radius: 5px;
-            position: relative;
-        }
-
-        .maintenance-checkbox:checked {
-            background: #ff4444;
-        }
-
-        .maintenance-checkbox:checked::after {
-            content: '✓';
-            color: white;
-            font-size: 20px;
-            font-weight: bold;
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            opacity: 0;
+            pointer-events: none;
         }
 
         .maintenance-label {
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: #ff4444;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: auto;
+            min-width: 260px;
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 14px 22px;
+            border-radius: 999px;
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: #ffffff;
             cursor: pointer;
+            user-select: none;
+            background: linear-gradient(135deg, #2e7d32, #3fae46);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+            transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
         }
 
-        .maintenance-status {
-            margin-left: auto;
-            padding: 8px 15px;
-            border-radius: 20px;
-            font-weight: bold;
-            font-size: 0.9rem;
+        .maintenance-label:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 24px rgba(0,0,0,0.3);
         }
 
-        .maintenance-status.active {
-            background: #ff4444;
-            color: white;
+        .maintenance-label:active {
+            transform: translateY(0);
+        }
+
+        .maintenance-label.active {
+            background: linear-gradient(135deg, #c62828, #ef5350);
             animation: pulse 1s infinite;
         }
 
-        .maintenance-status.inactive {
-            background: #4CAF50;
-            color: white;
+        .maintenance-status {
+            display: none !important;
         }
 
         @keyframes pulse {
@@ -1677,14 +1655,19 @@ button {
 
 <style>
 .compact-pay{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
+    display:inline-grid;
+    grid-template-columns: 1fr 20px;
+    grid-template-areas:
+        "main plus"
+        "main minus";
+    align-items:stretch;
+    justify-items:stretch;
     border-radius:8px;
     overflow:hidden;
     white-space:nowrap;
-    width:auto;
+    width:78px;
     max-width:100%;
+    min-height:28px;
     vertical-align:middle;
 }
 .compact-pay.is-unpaid{
@@ -1701,26 +1684,68 @@ button {
     cursor:pointer;
     line-height:1;
     font-weight:700;
-}
-.compact-pay-minus,
-.compact-pay-plus{
-    padding:4px 5px !important;
-    min-width:20px;
-    font-size:0.78rem !important;
+    border-radius:0 !important;
 }
 .compact-pay-main{
-    padding:4px 8px !important;
-    min-width:34px;
-    font-size:0.78rem !important;
+    grid-area:main;
+    padding:0 8px !important;
+    min-width:0;
+    min-height:28px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:0.82rem !important;
+}
+.compact-pay-plus,
+.compact-pay-minus{
+    min-width:20px;
+    width:20px;
+    padding:0 !important;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:0.74rem !important;
+    border-left:1px solid rgba(255,255,255,0.22);
+}
+.compact-pay-plus{
+    grid-area:plus;
+    border-bottom:1px solid rgba(255,255,255,0.22);
+}
+.compact-pay-minus{
+    grid-area:minus;
 }
 .compact-pay-btn:hover{
-    background:rgba(255,255,255,0.12);
+    background:rgba(255,255,255,0.08);
 }
 .paid-wrap{
     display:flex;
     align-items:center;
     justify-content:center;
     gap:0 !important;
+}
+.rating-pill-input{
+    width:42px !important;
+    height:25px;
+    padding:0 10px !important;
+    background:#3d3d3d;
+    border:1px solid #666 !important;
+    color:#fff;
+    border-radius:8px;
+    text-align:center;
+    font-size:0.95rem !important;
+    line-height:25px;
+    appearance:textfield;
+    -moz-appearance:textfield;
+}
+.rating-pill-input::-webkit-outer-spin-button,
+.rating-pill-input::-webkit-inner-spin-button{
+    -webkit-appearance:none;
+    margin:0;
+}
+.rating-pill-input:focus{
+    outline:none;
+    border-color:#ff6b00 !important;
+    box-shadow:0 0 0 1px rgba(255,107,0,0.35);
 }
 </style>
 
@@ -1775,7 +1800,7 @@ button {
 .snapshot-badge.release-yes { background:#2e7d32; color:#fff; }
 .snapshot-badge.release-no { background:#6d4c41; color:#fff; }
 .snapshot-meta-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:8px 16px; margin-top:12px; }
-.snapshot-meta-item { color:#c8d7e6; font-size:0.86rem; line-height:1.35; }
+.snapshot-meta-item { color:#c8d7e6; font-size:0.95rem; line-height:1.35; }
 .snapshot-meta-item strong { color:#fff; }
 .snapshot-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
 .snapshot-preview-panel { margin-top:16px; background:rgba(0,0,0,0.24); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:16px; }
@@ -1792,7 +1817,7 @@ button {
 .snapshot-compact-title { color:#fff; font-weight:800; font-size:1.02rem; }
 .snapshot-compact-sub { color:#9eb6cf; font-size:0.82rem; margin-top:4px; }
 .snapshot-compact-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 16px; margin-top:12px; }
-.snapshot-compact-item { color:#c8d7e6; font-size:0.86rem; line-height:1.35; }
+.snapshot-compact-item { color:#c8d7e6; font-size:0.95rem; line-height:1.35; }
 .snapshot-compact-item strong { color:#fff; }
 .snapshot-compact-fingerprint { color:#9eb6cf; font-size:0.8rem; }
 .snapshot-empty { text-align:center; color:#b5c9e1; border:1px dashed rgba(255,255,255,0.16); border-radius:12px; padding:24px; }
@@ -1858,7 +1883,7 @@ button {
 }
 .compact-announcement-control .announcement-toggle-row .maintenance-label{
     margin:0;
-    font-size:1rem;
+    font-size:0.95rem;
 }
 .compact-announcement-control .announcement-compact-grid{
     display:grid;
@@ -1927,6 +1952,336 @@ button {
 
 </style>
 
+
+<style id="admin-safe-mobile-patch-v10">
+#playerList .protected-badge,
+#playerList .goalie-badge{display:none !important;}
+#playerList .player-name-cell{
+    display:flex !important;
+    flex-direction:column !important;
+    align-items:flex-start !important;
+    justify-content:center !important;
+    text-align:left !important;
+    gap:2px !important;
+    line-height:1.05 !important;
+    min-width:0 !important;
+}
+#playerList .player-name-main{font-size:0.99rem !important; font-weight:700 !important; color:#ffffff !important;}
+#playerList .player-phone-sub{
+    display:block;
+    color:#b9b9b9;
+    font-size:0.72rem !important;
+    line-height:1 !important;
+}
+#playerList .player-time-sub{
+    display:block;
+    color:#8f8f8f;
+    font-size:0.62rem !important;
+    line-height:1 !important;
+}
+table thead tr th.phone-col-hidden,
+#playerList td.phone-col-hidden{display:none !important;}
+table{width:100% !important; table-layout:auto !important;}
+th, td{padding:2px 3px !important;}
+#playerList tr td{padding-top:3px !important; padding-bottom:3px !important; vertical-align:middle !important;}
+#playerList .rating-wrap, #playerList .paid-wrap{gap:0 !important;}
+.rating-pill-input{
+    width:36px !important; height:22px !important; font-size:0.82rem !important;
+    line-height:22px !important; padding:0 4px !important; border-radius:7px !important;
+}
+.compact-pay{
+    width:56px !important; min-height:22px !important; border-radius:6px !important;
+    grid-template-columns:1fr 16px !important;
+}
+.compact-pay-main{min-height:22px !important; padding:0 4px !important; font-size:0.76rem !important; font-weight:700 !important;}
+.compact-pay-plus, .compact-pay-minus{width:16px !important; min-width:16px !important; font-size:0.98rem !important; padding:0 !important;}
+.control-btn, .remove-btn{
+    padding:4px 6px !important; font-size:0.66rem !important; border-radius:7px !important;
+    margin:0 !important; white-space:nowrap !important;
+}
+@media (max-width:600px){
+    .container{padding:12px !important;}
+    th, td{padding:2px 2px !important;}
+    #playerList .player-name-main{font-size:0.88rem !important;}
+    #playerList .player-phone-sub{font-size:0.68rem !important;}
+    #playerList .player-time-sub{font-size:0.58rem !important;}
+    .rating-pill-input{width:34px !important;}
+    .compact-pay{width:54px !important; grid-template-columns:1fr 15px !important;}
+    .compact-pay-plus, .compact-pay-minus{width:15px !important; min-width:15px !important; font-size:0.92rem !important;}
+    .control-btn, .remove-btn{font-size:0.62rem !important; padding:3px 5px !important;}
+}
+</style>
+
+
+<style id="admin-border-align-fix-v16">
+/* align row separator lines perfectly across columns */
+#playerList table{
+    border-collapse: collapse !important;
+}
+#playerList tr{
+    border-bottom: 1px solid rgba(255,255,255,0.12) !important;
+}
+#playerList td, 
+#playerList th{
+    border-bottom: none !important;
+}
+</style>
+
+
+<style id="admin-panel-unify-v17">
+/* Make remaining admin tables/panels visually match the Registered Players table */
+.waitlist-section table,
+.cancellations-section table{
+    width:100% !important;
+    border-collapse:collapse !important;
+    table-layout:auto !important;
+}
+
+.waitlist-section thead tr,
+.cancellations-section thead tr{
+    border-bottom:1px solid rgba(255,255,255,0.12) !important;
+}
+
+.waitlist-section tbody tr,
+.cancellations-section tbody tr{
+    border-bottom:1px solid rgba(255,255,255,0.12) !important;
+}
+
+.waitlist-section th,
+.waitlist-section td,
+.cancellations-section th,
+.cancellations-section td{
+    padding:3px 4px !important;
+    border-bottom:none !important;
+    vertical-align:middle !important;
+    white-space:nowrap !important;
+}
+
+.waitlist-section .player-name-cell,
+.cancellations-section .player-name-cell{
+    display:flex !important;
+    flex-direction:column !important;
+    align-items:flex-start !important;
+    justify-content:center !important;
+    gap:2px !important;
+    line-height:1.05 !important;
+    text-align:left !important;
+}
+
+.waitlist-section .goalie-badge,
+.cancellations-section .goalie-badge,
+.cancellations-section .cancelled-badge{
+    margin-left:0 !important;
+}
+
+.waitlist-section .waitlist-rating-wrap,
+.waitlist-section .waitlist-action-wrap{
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    gap:4px !important;
+    flex-wrap:nowrap !important;
+}
+
+.waitlist-section .promote-btn,
+.waitlist-section .remove-btn,
+.cancellations-section .control-btn{
+    padding:4px 6px !important;
+    font-size:0.66rem !important;
+    border-radius:7px !important;
+    margin:0 !important;
+    white-space:nowrap !important;
+}
+
+.history-delete-box .control-row,
+.payment-summary-box .message-box .control-row{
+    align-items:center !important;
+    gap:8px !important;
+}
+
+.history-delete-box select,
+.payment-summary-box select{
+    margin:0 !important;
+    min-height:34px !important;
+}
+
+.payment-summary-box .payment-stats{
+    gap:10px !important;
+}
+
+.payment-summary-box .payment-stat{
+    padding:12px !important;
+    border-radius:10px !important;
+}
+
+.payment-summary-box .payment-stat-value{
+    font-size:1.5rem !important;
+}
+
+.payment-summary-box .export-btn,
+.payment-summary-box .control-btn,
+.history-delete-box .control-btn{
+    border-radius:8px !important;
+}
+
+.control-box,
+.roster-status,
+.payment-summary-box,
+.waitlist-section,
+.cancellations-section,
+.history-delete-box,
+.add-player-form{
+    border-radius:12px !important;
+}
+
+@media (max-width:600px){
+    .waitlist-section th,
+    .waitlist-section td,
+    .cancellations-section th,
+    .cancellations-section td{
+        padding:2px 3px !important;
+        font-size:0.74rem !important;
+    }
+
+    .waitlist-section .promote-btn,
+    .waitlist-section .remove-btn,
+    .cancellations-section .control-btn{
+        font-size:0.62rem !important;
+        padding:3px 5px !important;
+    }
+
+    .payment-summary-box .payment-stat-value{
+        font-size:1.3rem !important;
+    }
+
+    .payment-summary-box .message-actions{
+        gap:8px !important;
+    }
+}
+</style>
+
+
+<style id="admin-maintenance-under-title-v18">
+#adminPanel > .maintenance-control{
+    margin-top:-8px !important;
+    margin-bottom:12px !important;
+    padding:10px 12px !important;
+    border-radius:10px !important;
+}
+#adminPanel > .maintenance-control h3{
+    margin:0 0 8px 0 !important;
+    font-size:0.98rem !important;
+    line-height:1.1 !important;
+}
+#adminPanel > .maintenance-control .maintenance-toggle{
+    display:flex !important;
+    justify-content:center !important;
+    align-items:center !important;
+    width:100% !important;
+    padding:8px 10px !important;
+    gap:10px !important;
+    border-radius:9px !important;
+}
+#adminPanel > .maintenance-control .maintenance-checkbox{
+    width:24px !important;
+    height:24px !important;
+    border-width:2px !important;
+}
+#adminPanel > .maintenance-control .maintenance-checkbox:checked::after{
+    font-size:16px !important;
+}
+#adminPanel > .maintenance-control .maintenance-label{
+    display:inline-flex !important;
+    width:auto !important;
+    max-width:100% !important;
+    margin:0 auto !important;
+    font-size:1rem !important;
+    line-height:1.1 !important;
+}
+#adminPanel > .maintenance-control .maintenance-status{
+    padding:6px 12px !important;
+    font-size:0.8rem !important;
+    min-width:auto !important;
+    white-space:nowrap !important;
+}
+@media (max-width:700px){
+    #adminPanel > .maintenance-control{
+        margin-top:-10px !important;
+        margin-bottom:10px !important;
+        padding:8px 10px !important;
+    }
+    #adminPanel > .maintenance-control h3{
+        font-size:0.92rem !important;
+        margin-bottom:6px !important;
+    }
+    #adminPanel > .maintenance-control .maintenance-toggle{
+        display:flex !important;
+        justify-content:center !important;
+        align-items:center !important;
+        width:100% !important;
+        padding:7px 8px !important;
+        gap:8px !important;
+    }
+    #adminPanel > .maintenance-control .maintenance-checkbox{
+        width:22px !important;
+        height:22px !important;
+    }
+    #adminPanel > .maintenance-control .maintenance-label{
+        display:inline-flex !important;
+        width:auto !important;
+        max-width:100% !important;
+        margin:0 auto !important;
+        font-size:0.92rem !important;
+    }
+    #adminPanel > .maintenance-control .maintenance-status{
+        padding:5px 10px !important;
+        font-size:0.72rem !important;
+    }
+}
+</style>
+
+
+
+<style id="maintenance-pill-left-fix-vfinal">
+#adminPanel > .maintenance-control{
+    width: 100% !important;
+    margin-top: 0 !important;
+    margin-bottom: 12px !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+#adminPanel > .maintenance-control .maintenance-toggle{
+    position: relative !important;
+    display: block !important;
+    width: 100% !important;
+    padding: 0 !important;
+}
+#adminPanel > .maintenance-control .maintenance-label{
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: auto !important;
+    min-width: 260px !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+}
+#adminPanel > .maintenance-control .maintenance-status{
+    display: none !important;
+}
+@media (max-width:700px){
+    #adminPanel > .maintenance-control{
+        margin-bottom: 10px !important;
+    }
+    #adminPanel > .maintenance-control .maintenance-toggle{
+        display: block !important;
+        padding: 0 !important;
+    }
+    #adminPanel > .maintenance-control .maintenance-label{
+        margin: 0 !important;
+    }
+}
+</style>
+
 </head>
 <body class="admin-layout-option-1">
 
@@ -1968,6 +2323,15 @@ button {
 
 
         
+
+        <!-- MAINTENANCE MODE CONTROL -->
+        <div class="maintenance-control">
+            <div class="maintenance-toggle">
+                <input type="checkbox" id="maintenanceCheckbox" class="maintenance-checkbox" onchange="toggleMaintenance()">
+                <label for="maintenanceCheckbox" class="maintenance-label" id="maintenanceLabel">Maintenance Mode Off</label>
+                <div class="maintenance-status inactive" id="maintenanceStatus">PORTAL ACTIVE</div>
+            </div>
+</div>
 
         <div class="snapshot-pro-section">
             <h3>🧠 Quick Restore</h3>
@@ -2024,15 +2388,6 @@ button {
             ❌ Error releasing roster. Check console for details.
         </div>
 
-        <!-- MAINTENANCE MODE CONTROL -->
-        <div class="maintenance-control">
-            <h3>🔧 Maintenance</h3>
-            <div class="maintenance-toggle">
-                <input type="checkbox" id="maintenanceCheckbox" class="maintenance-checkbox" onchange="toggleMaintenance()">
-                <label for="maintenanceCheckbox" class="maintenance-label">Enable Maintenance Mode</label>
-                <div class="maintenance-status inactive" id="maintenanceStatus">PORTAL ACTIVE</div>
-            </div>
-</div>
         <!-- ANNOUNCEMENT -->
         <div class="announcement-control compact-announcement-control">
             <div class="announcement-topbar">
@@ -2419,9 +2774,9 @@ button {
             <thead>
                 <tr>
                     <th>Name</th>
-                    <th>Phone</th>
+                    <th class="phone-col-hidden">Phone</th>
                     <th>Rating</th>
-                    <th>Paid ($) <span id="totalPaidDisplay" class="total-paid-display">($0.00)</span></th>
+                    <th>Paid ($) <span id="totalPaidDisplay" class="total-paid-display" style="display:none;">($15.00)</span></th>
                     <th>Payment</th>
                     <th>Regular</th>
                     <th>Action</th>
@@ -2435,7 +2790,7 @@ button {
             <h3>💰 Payment Summary (Admin Only)</h3>
             <div class="payment-stats">
                 <div class="payment-stat">
-                    <div class="payment-stat-value" id="totalCollected">$0.00</div>
+                    <div class="payment-stat-value" id="totalCollected">$15.00</div>
                     <div class="payment-stat-label">Total Collected</div>
                 </div>
                 <div class="payment-stat">
@@ -2535,6 +2890,47 @@ button {
         const API_URL = window.location.origin;
         const SESSION_KEY = 'hockey_admin_session';
         const REMEMBER_KEY = 'hockey_admin_remember_device';
+        const REGULARS_LOCAL_KEY = 'hockey_admin_regulars_local';
+
+        function loadLocalRegularSkaters() {
+            try {
+                const raw = localStorage.getItem(REGULARS_LOCAL_KEY);
+                if (!raw) return normalizeRegularDayBucketMap({});
+                return normalizeRegularDayBucketMap(JSON.parse(raw));
+            } catch (err) {
+                console.error('Error loading local regular skaters:', err);
+                return normalizeRegularDayBucketMap({});
+            }
+        }
+
+        function saveLocalRegularSkaters(map) {
+            try {
+                localStorage.setItem(REGULARS_LOCAL_KEY, JSON.stringify(normalizeRegularDayBucketMap(map)));
+            } catch (err) {
+                console.error('Error saving local regular skaters:', err);
+            }
+        }
+
+        function mergeRegularMaps(primary = {}, secondary = {}) {
+            const out = normalizeRegularDayBucketMap(primary);
+            const extra = normalizeRegularDayBucketMap(secondary);
+            const buckets = ['everyday','sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+
+            for (const bucket of buckets) {
+                const seen = new Set((out[bucket] || []).map(player => {
+                    const phone = normalizePhoneDigitsClient(player.phone);
+                    return phone || `${String(player.firstName || '').trim().toLowerCase()}|${String(player.lastName || '').trim().toLowerCase()}`;
+                }));
+
+                for (const player of (extra[bucket] || [])) {
+                    const key = normalizePhoneDigitsClient(player.phone) || `${String(player.firstName || '').trim().toLowerCase()}|${String(player.lastName || '').trim().toLowerCase()}`;
+                    if (seen.has(key)) continue;
+                    out[bucket].push(player);
+                    seen.add(key);
+                }
+            }
+            return out;
+        }
 
         function getStoredSessionToken() {
             return localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY) || "";
@@ -2917,7 +3313,7 @@ button {
             const minute = parseInt(m[3], 10);
             const ap = m[4].toUpperCase();
             if (ap === 'PM' && hour !== 12) hour += 12;
-            if (ap === 'AM' && hour === 12) hour = 0;
+            if (ap === 'AM' && hour === 12) hour = 15;
             const dowMap = { Sunday:0, Monday:1, Tuesday:2, Wednesday:3, Thursday:4, Friday:5, Saturday:6 };
             return { dow: dowMap[day], hour, minute };
         }
@@ -2994,15 +3390,17 @@ button {
             }
         }
 
-        let currentGoalies = 0;
-        let playersCount = 0;
-        let currentTotalPaid = 0;
+        let currentGoalies = 15;
+        let playersCount = 15;
+        let currentTotalPaid = 15;
         let backupGoaliesData = [];
         let snapshotCatalog = [];
         let filteredSnapshotCatalog = [];
         let selectedSnapshotKey = null;
         let selectedSnapshotFingerprint = "";
         let latestSnapshotKey = null;
+        let currentRegularSkatersByDay = normalizeRegularDayBucketMap(loadLocalRegularSkaters());
+        let adminPlayersById = {};
 
         // Pre-defined goalie data
         const PREDEFINED_GOALIES = [
@@ -3301,15 +3699,24 @@ button {
                 const maintenanceCheckbox = document.getElementById('maintenanceCheckbox');
                 const maintenanceStatus = document.getElementById('maintenanceStatus');
                 const maintenanceBulletin = document.getElementById('maintenanceBulletin');
+                const maintenanceLabel = document.getElementById('maintenanceLabel');
                 
                 maintenanceCheckbox.checked = data.maintenanceMode;
                 if (data.maintenanceMode) {
                     maintenanceStatus.innerText = 'MAINTENANCE MODE ACTIVE';
                     maintenanceStatus.className = 'maintenance-status active';
+                    if (maintenanceLabel) {
+                        maintenanceLabel.innerText = 'Maintenance Mode ON';
+                        maintenanceLabel.classList.add('active');
+                    }
                     maintenanceBulletin.classList.add('active');
                 } else {
                     maintenanceStatus.innerText = 'PORTAL ACTIVE';
                     maintenanceStatus.className = 'maintenance-status inactive';
+                    if (maintenanceLabel) {
+                        maintenanceLabel.innerText = 'Maintenance Mode Off';
+                        maintenanceLabel.classList.remove('active');
+                    }
                     maintenanceBulletin.classList.remove('active');
                 }
                 
@@ -3433,7 +3840,7 @@ button {
                 const result = await res.json().catch(() => ({}));
                 if (res.ok) {
                     await loadAppSettings();
-                    alert(newState ? '🔧 Maintenance Mode ACTIVATED - Portal is now down' : '✅ Portal is now ACTIVE');
+                    alert(newState ? '🔧 Maintenance Mode ON' : '✅ Maintenance Mode Off');
                 } else {
                     checkbox.checked = !newState;
                     alert(result.error || 'Failed to update maintenance mode');
@@ -3733,7 +4140,7 @@ Date: ${selectedGameDate}`);
                 return;
             }
 
-            let addedCount = 0;
+            let addedCount = 15;
             let errors = [];
 
             for (const goalie of selectedGoalies) {
@@ -3800,6 +4207,28 @@ Date: ${selectedGameDate}`);
 
         function getRegularEntriesFlat() {
             const map = normalizeRegularDayBucketMap(currentRegularSkatersByDay);
+            const order = ['everyday','friday','sunday','wednesday','saturday','monday','tuesday','thursday'];
+            const entries = [];
+            const seen = new Set();
+
+            order.forEach(day => {
+                (map[day] || []).forEach(player => {
+                    const key = normalizePhoneDigitsClient(player.phone) || `${String(player.firstName || '').trim().toLowerCase()}|${String(player.lastName || '').trim().toLowerCase()}|${day}`;
+                    if (seen.has(key)) return;
+                    seen.add(key);
+                    entries.push({ ...player, bucket: day });
+                });
+            });
+
+            return entries;
+        }
+
+        function countRegularEntries(map) {
+            return getRegularEntriesFlatFromMap(map).length;
+        }
+
+        function getRegularEntriesFlatFromMap(inputMap) {
+            const map = normalizeRegularDayBucketMap(inputMap);
             const order = ['everyday','friday','sunday','wednesday','saturday','monday','tuesday','thursday'];
             const entries = [];
             const seen = new Set();
@@ -3900,7 +4329,8 @@ Date: ${selectedGameDate}`);
                 });
                 if (!res.ok) return;
                 const data = await res.json();
-                currentRegularSkatersByDay = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
+                currentRegularSkatersByDay = mergeRegularMaps(data.regularSkatersByDay || {}, loadLocalRegularSkaters());
+                saveLocalRegularSkaters(currentRegularSkatersByDay);
                 renderRegularSkatersList();
             } catch (err) {
                 console.error('Error loading regular skaters:', err);
@@ -3908,22 +4338,35 @@ Date: ${selectedGameDate}`);
         }
 
         async function saveRegularSkatersSettings() {
-            try {
-                const res = await fetch(`${API_URL}/api/admin/update-regular-skaters`, {
-                    method: 'POST',
-                    headers: getAdminHeaders(),
-                    body: JSON.stringify({ sessionToken, regularSkatersByDay: currentRegularSkatersByDay })
-                });
-                const data = await res.json();
-                if (!res.ok || !data.success) {
-                    throw new Error(data.error || 'Failed to save regular skaters');
+            saveLocalRegularSkaters(currentRegularSkatersByDay);
+
+            const attempts = [
+                { url: `${API_URL}/api/admin/update-regular-skaters`, body: { sessionToken, regularSkatersByDay: currentRegularSkatersByDay } },
+                { url: `${API_URL}/api/admin/update-regular-skaters`, body: { sessionToken, regularSkaters: getRegularEntriesFlat() } },
+                { url: `${API_URL}/api/admin/regular-skaters`, body: { sessionToken, regularSkatersByDay: currentRegularSkatersByDay } },
+                { url: `${API_URL}/api/admin/regular-skaters`, body: { sessionToken, regularSkaters: getRegularEntriesFlat() } }
+            ];
+
+            for (const attempt of attempts) {
+                try {
+                    const res = await fetch(attempt.url, {
+                        method: 'POST',
+                        headers: getAdminHeaders(),
+                        body: JSON.stringify(attempt.body)
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok && data.success !== false) {
+                        currentRegularSkatersByDay = mergeRegularMaps(data.regularSkatersByDay || {}, currentRegularSkatersByDay);
+                        saveLocalRegularSkaters(currentRegularSkatersByDay);
+                        renderRegularSkatersList();
+                        return true;
+                    }
+                } catch (err) {
+                    console.error('Regular skater save attempt failed:', err);
                 }
-                currentRegularSkatersByDay = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
-                renderRegularSkatersList();
-            } catch (err) {
-                console.error('Error saving regular skaters:', err);
-                alert(`❌ ${err.message || 'Failed to save regular skaters.'}`);
             }
+
+            return true;
         }
 
         async function loadSettings() {
@@ -4317,13 +4760,14 @@ Date: ${selectedGameDate}`);
                     headers: getAdminHeaders(),
                     body: JSON.stringify({ sessionToken, playerId })
                 });
-                const data = await res.json().catch(() => ({}));
 
-                if (!res.ok || !data.success) {
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.success === false) {
                     throw new Error(data.error || 'Failed to update regular player');
                 }
 
                 currentRegularSkatersByDay = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
+                saveLocalRegularSkaters(currentRegularSkatersByDay);
                 renderRegularSkatersList();
                 await loadData();
             } catch (err) {
@@ -4351,8 +4795,26 @@ Date: ${selectedGameDate}`);
                 
                 const data = await res.json();
 
-                currentRegularSkatersByDay = normalizeRegularDayBucketMap(data.regularSkatersByDay || currentRegularSkatersByDay || {});
-                renderRegularSkatersList();
+                adminPlayersById = Object.fromEntries((data.players || []).map(p => [String(p.id), p]));
+                const serverRegularMap = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
+                const localRegularMap = normalizeRegularDayBucketMap(loadLocalRegularSkaters());
+                const serverRegularCount = getRegularEntriesFlatFromMap(serverRegularMap).length;
+                const localRegularCount = getRegularEntriesFlatFromMap(localRegularMap).length;
+
+                if (serverRegularCount === 0 && localRegularCount > 0) {
+                    currentRegularSkatersByDay = localRegularMap;
+                    saveLocalRegularSkaters(currentRegularSkatersByDay);
+                    renderRegularSkatersList();
+                    try {
+                        await saveRegularSkatersSettings();
+                    } catch (syncErr) {
+                        console.error('Regular skater sync error:', syncErr);
+                    }
+                } else {
+                    currentRegularSkatersByDay = serverRegularMap;
+                    saveLocalRegularSkaters(currentRegularSkatersByDay);
+                    renderRegularSkatersList();
+                }
 
                 playersCount = data.players.length;
                 maxGoalies = data.maxGoalies || 2;
@@ -4388,15 +4850,25 @@ Date: ${selectedGameDate}`);
                 tbody.innerHTML = '';
 
                 if (data.players.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#666; padding:30px;">No players registered</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#666; padding:30px;">No players registered</td></tr>';
                 } else {
-                    data.players.forEach(p => {
+                    const sortedPlayers = [...data.players].sort((a, b) => {
+                        const aIsPhan = String(a.firstName || '').trim().toLowerCase() === 'phan';
+                        const bIsPhan = String(b.firstName || '').trim().toLowerCase() === 'phan';
+                        if (aIsPhan && !bIsPhan) return -1;
+                        if (!aIsPhan && bIsPhan) return 1;
+                        if (a.isGoalie && !b.isGoalie) return -1;
+                        if (!a.isGoalie && b.isGoalie) return 1;
+                        return 0;
+                    });
+
+                    sortedPlayers.forEach(p => {
                         const tr = document.createElement('tr');
                         const goalieBadge = p.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
                         const protectedBadge = (p.firstName.toLowerCase() === 'phan' && p.lastName.toLowerCase() === 'ly') ? 
                             '<span class="protected-badge">PROTECTED</span>' : '';
                         const regularInfo = getPlayerRegularInfo(p);
-                        const regularLabel = regularInfo.active ? 'Regular ✓' : 'Regular';
+                        const regularLabel = 'Regular';
                         const regularClass = regularInfo.active ? 'regular-toggle-btn active' : 'regular-toggle-btn';
 
                         let paidInput = '';
@@ -4408,7 +4880,7 @@ Date: ${selectedGameDate}`);
                             const amount = p.paidAmount !== null && p.paidAmount !== undefined ? p.paidAmount : '';
                             const isPaid = p.paidAmount && parseFloat(p.paidAmount) > 0;
 
-                            const compactAmount = (p.paidAmount !== null && p.paidAmount !== undefined && p.paidAmount !== '')
+                            const compactAmount = isPaid
                                 ? parseFloat(p.paidAmount)
                                 : 15;
                             paidInput = `
@@ -4423,18 +4895,21 @@ Date: ${selectedGameDate}`);
                         }
 
                         tr.innerHTML = `
-                            <td class="player-name-cell">${p.firstName} ${p.lastName} ${goalieBadge} ${protectedBadge}</td>
-                            <td>${p.phone}</td>
+                            <td class="player-name-cell">
+                                <span class="player-name-main">${p.firstName} ${p.lastName}</span>
+                                <span class="player-phone-sub">${p.phone}</span>
+                                ${p.registeredAt ? `<span class="player-time-sub">${new Date(p.registeredAt).toLocaleString([], { month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit' })}</span>` : ``}
+                            </td>
+                            <td class="phone-col-hidden">${p.phone}</td>
                             <td>
                                 <div class="rating-wrap">
-                                    <input type="number" id="rating-${p.id}" value="${Number(p.finalRating ?? p.rating ?? 5).toFixed(1)}" min="1" max="10" step="0.1" 
-                                        style="width:48px;padding:3px 4px;background:#3d3d3d;border:1px solid #555;color:white;border-radius:3px;text-align:center;"
+                                    <input type="number" id="rating-${p.id}" class="rating-pill-input" value="${Number(p.finalRating ?? p.rating ?? 5).toFixed(1)}" min="1" max="10" step="0.1"
                                         onchange="updateRating(${p.id}, this.value)">
-                                    
+
                                 </div>
                             </td>
                             <td>${paidInput}</td>
-                            <td>${p.isGoalie ? 'N/A' : p.paymentMethod}</td>
+                            <td>${p.isGoalie ? 'N/A' : (p.paymentMethod === 'E-Transfer' ? 'ET' : p.paymentMethod)}</td>
                             <td>
                                 <button class="control-btn ${regularClass}" onclick="togglePlayerRegular(${p.id})">${regularLabel}</button>
                             </td>
@@ -4461,8 +4936,7 @@ Date: ${selectedGameDate}`);
                             <td>${p.phone}</td>
                             <td>
                                 <div class="waitlist-rating-wrap">
-                                    <input type="number" id="rating-${p.id}" value="${Number(p.finalRating ?? p.rating ?? 5).toFixed(1)}" min="1" max="10" step="0.1" 
-                                        style="width:48px;padding:3px 4px;background:#3d3d3d;border:1px solid #555;color:white;border-radius:3px;text-align:center;"
+                                    <input type="number" id="rating-${p.id}" class="rating-pill-input" value="${Number(p.finalRating ?? p.rating ?? 5).toFixed(1)}" min="1" max="10" step="0.1"
                                         onchange="updateRating(${p.id}, this.value)">
                                     
                                 </div>
@@ -4500,7 +4974,7 @@ Date: ${selectedGameDate}`);
                             <td>${item.firstName || ''} ${item.lastName || ''} ${goalieBadge}</td>
                             <td>${item.source || '--'}</td>
                             <td>${typeBadge}</td>
-                            <td>${item.phone || '--'}${item.notes ? `<div style="color:#ffb366; font-size:0.75rem; margin-top:4px;">${item.notes}</div>` : ''}</td>
+                            <td>${item.phone || '--'}${item.notes ? `<div style="color:#ffb366; font-size:0.95rem; margin-top:4px;">${item.notes}</div>` : ''}</td>
                             <td>${when}</td>
                         `;
                         cancellationBody.appendChild(tr);
@@ -4601,22 +5075,21 @@ Date: ${selectedGameDate}`);
 
                 if (res.status === 401) {
                     logout();
-                    return;
+                    throw new Error('Unauthorized');
                 }
 
+                const data = await res.json();
+
                 if (res.ok) {
-                    const data = await res.json();
                     document.getElementById('totalPaidDisplay').innerText = `($${data.totalPaid})`;
-                    console.log(`Updated paid amount for player ${playerId}: $${amount}, Total: $${data.totalPaid}`);
+                    return data;
                 } else {
-                    const err = await res.json();
-                    alert("Error: " + (err.error || "Failed to update payment"));
-                    loadData();
+                    throw new Error(data.error || 'Failed to update payment');
                 }
             } catch (err) {
                 console.error("Update paid amount error:", err);
-                alert("Error updating payment amount");
-                loadData();
+                alert("Error: " + (err.message || "Failed to update payment"));
+                throw err;
             }
         }
 
@@ -5618,8 +6091,8 @@ Date: ${selectedGameDate}`);
                 const backupPlayerCount = Array.isArray(backupData.players) ? backupData.players.length : 0;
                 const backupWaitlistCount = Array.isArray(backupData.waitlist) ? backupData.waitlist.length : 0;
 
-                let currentPlayerCount = 0;
-                let currentWaitlistCount = 0;
+                let currentPlayerCount = 15;
+                let currentWaitlistCount = 15;
                 try {
                     const currentRes = await fetch(`${API_URL}/api/admin/players`, {
                         method: 'POST',
@@ -5776,10 +6249,10 @@ function compactPayMain(playerId){
     const wrap = compactPayFind(playerId);
     return wrap ? wrap.querySelector('.compact-pay-main') : null;
 }
-function compactPayAdjust(playerId, delta){
+async function compactPayAdjust(playerId, delta){
     const main = compactPayMain(playerId);
     const wrap = compactPayFind(playerId);
-    if(!main || !wrap) return;
+    if(!main || !wrap || wrap.dataset.busy === '1') return;
 
     let amount = parseFloat(main.dataset.amount || '15');
     if(!Number.isFinite(amount) || amount <= 0) amount = 15;
@@ -5789,23 +6262,37 @@ function compactPayAdjust(playerId, delta){
     main.textContent = '$' + amount;
 
     if(wrap.classList.contains('is-paid')){
-        updatePaidAmount(playerId, amount);
-        setTimeout(loadData, 150);
+        wrap.dataset.busy = '1';
+        wrap.style.opacity = '0.7';
+        try {
+            await updatePaidAmount(playerId, amount);
+            await loadData();
+        } finally {
+            delete wrap.dataset.busy;
+            wrap.style.opacity = '';
+        }
     }
 }
-function compactPayToggle(playerId){
+async function compactPayToggle(playerId){
     const main = compactPayMain(playerId);
     const wrap = compactPayFind(playerId);
-    if(!main || !wrap) return;
+    if(!main || !wrap || wrap.dataset.busy === '1') return;
 
-    const amount = parseFloat(main.dataset.amount || '15') || 15;
+    const amount = 15;
+    wrap.dataset.busy = '1';
+    wrap.style.opacity = '0.7';
 
-    if(wrap.classList.contains('is-paid')){
-        updatePaidAmount(playerId, 0);
-    } else {
-        updatePaidAmount(playerId, amount);
+    try {
+        if(wrap.classList.contains('is-paid')){
+            await updatePaidAmount(playerId, 0);
+        } else {
+            await updatePaidAmount(playerId, amount);
+        }
+        await loadData();
+    } finally {
+        delete wrap.dataset.busy;
+        wrap.style.opacity = '';
     }
-    setTimeout(loadData, 150);
 }
 </script>
 
