@@ -98,7 +98,7 @@
             margin-bottom: 5px;
         }
 
-        .game-time {
+        .game-time { display:none; /* hidden - merged into date */
             font-size: 1.1rem;
             color: #ccc;
         }
@@ -708,6 +708,24 @@
             font-weight: bold;
         }
 
+
+        .player-info-simple .goalie-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #2196f3;
+            color: white;
+            font-size: 0.62rem;
+            font-weight: 800;
+            line-height: 1;
+            padding: 3px 6px;
+            border-radius: 999px;
+            margin-top: 4px;
+            width: fit-content;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+
         .protected-label {
             color: #4CAF50;
             font-size: 0.7rem;
@@ -1051,6 +1069,157 @@
             margin: 0;
         }
 
+
+        /* Combined game + spots card */
+        .game-info {
+            border-radius: 16px;
+            padding: 22px 18px 20px;
+            margin: 20px 0 22px;
+            box-shadow:
+                0 14px 30px rgba(0,0,0,0.28),
+                inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+
+        .game-info .game-date {
+            font-size: 1.05rem;
+            letter-spacing: 0.2px;
+        }
+
+        .game-info .game-location {
+            font-size: 1.55rem;
+            margin-bottom: 6px;
+        }
+
+        .game-info .game-time { display:none; /* hidden - merged into date */
+            font-size: 1.2rem;
+            color: #d7d7d7;
+        }
+
+        .game-meta-divider {
+            width: min(180px, 55%);
+            height: 1px;
+            margin: 16px auto 14px;
+            background: linear-gradient(90deg, rgba(255,107,0,0), rgba(255,107,0,0.85), rgba(255,107,0,0));
+            opacity: 0.9;
+        }
+
+        .spots-container-inline {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .spots-container-inline .spot-counter {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
+            padding: 14px 26px 12px;
+            min-width: 210px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+        }
+
+        .spots-container-inline .spot-number {
+            font-size: 3.1rem;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+
+        .spots-container-inline .spot-text {
+            font-size: 0.92rem;
+            color: #e0e0e0;
+            letter-spacing: 0.2px;
+            margin-top: 0;
+        }
+
+        @media (max-width: 600px) {
+            .game-info {
+                padding: 18px 14px 16px;
+                margin: 16px 0 18px;
+                border-radius: 14px;
+            }
+
+            .game-info .game-date {
+                font-size: 0.98rem;
+            }
+
+            .game-info .game-location {
+                font-size: 1.32rem;
+            }
+
+            .game-info .game-time { display:none; /* hidden - merged into date */
+                font-size: 1.08rem;
+            }
+
+            .game-meta-divider {
+                margin: 14px auto 12px;
+            }
+
+            .spots-container-inline .spot-counter {
+                min-width: 180px;
+                padding: 12px 20px 10px;
+                border-radius: 12px;
+            }
+
+            .spots-container-inline .spot-number {
+                font-size: 2.7rem;
+            }
+
+            .spots-container-inline .spot-text {
+                font-size: 0.86rem;
+            }
+        }
+
+
+        .hero-join-wrap {
+            display: flex;
+            justify-content: center;
+            margin: 16px 0 14px;
+        }
+
+        .hero-join-btn {
+            width: auto;
+            min-width: 220px;
+            padding: 12px 28px;
+            border-radius: 999px;
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 800;
+            letter-spacing: 0.2px;
+            box-shadow: 0 0 0 rgba(255, 107, 0, 0.0);
+            animation: heroJoinPulse 1.35s infinite;
+        }
+
+        .hero-join-btn:hover {
+            background: #ff8533;
+        }
+
+        @keyframes heroJoinPulse {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(255, 107, 0, 0.45);
+            }
+            70% {
+                transform: scale(1.03);
+                box-shadow: 0 0 0 14px rgba(255, 107, 0, 0);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(255, 107, 0, 0);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .hero-join-wrap {
+                margin: 14px 0 12px;
+            }
+
+            .hero-join-btn {
+                min-width: 200px;
+                padding: 11px 24px;
+                font-size: 0.96rem;
+            }
+        }
+
 </style>
 <base target="_blank">
 
@@ -1275,6 +1444,17 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
             <div class="game-date" id="gameDate">Loading...</div>
             <div class="game-location" id="gameLocation">Loading...</div>
             <div class="game-time" id="gameTime">Loading...</div>
+        
+            <div class="hero-join-wrap">
+                <button type="button" class="hero-join-btn" id="heroJoinBtn">🏒 Join Game</button>
+            </div>
+            <div class="game-meta-divider"></div>
+            <div class="spots-container spots-container-inline">
+                <div class="spot-counter" id="playerSpotCounter">
+                    <div class="spot-number" id="spotsLeft">--</div>
+                    <div class="spot-text" id="spotsText">Player Spots Available</div>
+                </div>
+            </div>
         </div>
 
         <div class="open-spots-notice" id="openSpotsNotice"></div>
@@ -1318,12 +1498,6 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
         </div>
 
         <div id="registrationArea">
-            <div class="spots-container">
-                <div class="spot-counter" id="playerSpotCounter">
-                    <div class="spot-number" id="spotsLeft">--</div>
-                    <div class="spot-text" id="spotsText">Player Spots Available</div>
-                </div>
-            </div>
 
             <!-- Lock Schedule Notice -->
             <div class="lock-notice" id="lockNotice" style="display:none;">
@@ -1366,10 +1540,6 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
                     <p id="codeError" style="color:#ff4444; display:none; margin-top:10px;">Invalid code</p>
                 </div>
 
-                <div class="open-signup-notice" id="openNotice" style="display:none;">
-                    <h3>✅ Signup is Open!</h3>
-                    <p>No code required - register below</p>
-                </div>
             </div>
 
             <div class="quick-return-section" id="quickReturnSection">
@@ -2476,6 +2646,22 @@ function updateCalculatedRating() {
             rosterCountdownTimer = setInterval(tick, 1000);
         }
 
+
+        function jumpToSignupArea() {
+            const codeSection = document.getElementById('codeSection');
+            const signupForm = document.getElementById('signupForm');
+            const quickReturn = document.getElementById('quickReturnSection');
+            const target =
+                (codeSection && getComputedStyle(codeSection).display !== 'none') ? codeSection :
+                (quickReturn && getComputedStyle(quickReturn).display !== 'none') ? quickReturn :
+                (signupForm && getComputedStyle(signupForm).display !== 'none') ? signupForm :
+                document.getElementById('registrationArea');
+
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
         async function checkStatus() {
             try {
                 const res = await fetch(`${API_URL}/api/status`);
@@ -2525,8 +2711,9 @@ function updateCalculatedRating() {
                 currentPlayers = data.players || [];
                 
                 document.getElementById('gameLocation').innerText = currentLocation;
-                document.getElementById('gameTime').innerText = currentTime;
-                document.getElementById('gameDate').innerText = currentDate;
+                document.getElementById('gameTime').innerText = '';
+                const cleanTime = currentTime.replace(/^[A-Za-z]+\s*/, '');
+        document.getElementById('gameDate').innerText = currentDate + ' • ' + cleanTime;
                 document.getElementById('rosterNoticeHeadline').innerText = '';
                 document.getElementById('rosterMeta').innerText =
                     data.rosterReleaseAt
@@ -2549,12 +2736,15 @@ function updateCalculatedRating() {
                 }
                 
                 document.getElementById('spotsLeft').innerText = playerSpotsAvailable;
+                const heroJoinBtn = document.getElementById('heroJoinBtn');
                 if (playerSpotsAvailable === 0) {
                     document.getElementById('spotsLeft').classList.add('full');
                     document.getElementById('waitlistMode').style.display = 'block';
+                    if (heroJoinBtn) heroJoinBtn.innerText = '🏒 Join Waitlist';
                 } else {
                     document.getElementById('spotsLeft').classList.remove('full');
                     document.getElementById('waitlistMode').style.display = 'none';
+                    if (heroJoinBtn) heroJoinBtn.innerText = '🏒 Join Game';
                 }
                 
                 const effectiveLocked = !!(data.requireCode ?? data.signupLocked);
@@ -2586,7 +2776,6 @@ function updateCalculatedRating() {
                 const codeTitle = document.getElementById('codeTitle');
                 if (effectiveLocked) {
                     document.getElementById('codeEntryBox').style.display = 'block';
-                    document.getElementById('openNotice').style.display = 'none';
                     if (!verifiedCode) {
                         document.getElementById('signupForm').style.display = 'none';
                     }
@@ -2599,7 +2788,6 @@ function updateCalculatedRating() {
                     }
                 } else {
                     document.getElementById('codeEntryBox').style.display = 'none';
-                    document.getElementById('openNotice').style.display = 'block';
                     document.getElementById('signupForm').style.display = 'block';
                 }
                 
@@ -2985,6 +3173,12 @@ function updateCalculatedRating() {
                 }
             });
             
+
+            const heroJoinBtn = document.getElementById('heroJoinBtn');
+            if (heroJoinBtn) {
+                heroJoinBtn.addEventListener('click', jumpToSignupArea);
+            }
+
             const paymentRadios = document.querySelectorAll('input[name="payment"]');
             paymentRadios.forEach(radio => {
                 radio.addEventListener('change', function() {

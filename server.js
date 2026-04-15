@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -8,6 +10,9 @@ const cron = require('node-cron');
 const { Pool } = require('pg');
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
 
 // Database setup
 const HAS_DB = !!process.env.DATABASE_URL;
@@ -109,6 +114,43 @@ async function pingDatabase() {
 }
 
 // Middleware
+const apiLimiterConfig = {
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown',
+    handler: (req, res) => {
+        res.status(429).json({ error: 'Too many requests. Please wait a moment and try again.' });
+    }
+};
+
+const verifyCodeLimiter = rateLimit({
+    ...apiLimiterConfig,
+    windowMs: 15 * 60 * 1000,
+    max: Number(process.env.RL_VERIFY_CODE_MAX || 12)
+});
+
+const adminLoginLimiter = rateLimit({
+    ...apiLimiterConfig,
+    windowMs: 15 * 60 * 1000,
+    max: Number(process.env.RL_ADMIN_LOGIN_MAX || 8)
+});
+
+const cancelRegistrationLimiter = rateLimit({
+    ...apiLimiterConfig,
+    windowMs: 15 * 60 * 1000,
+    max: Number(process.env.RL_CANCEL_MAX || 8)
+});
+
+const registrationLimiter = rateLimit({
+    ...apiLimiterConfig,
+    windowMs: 10 * 60 * 1000,
+    max: Number(process.env.RL_REGISTRATION_MAX || 16)
+});
+
+app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: false
+}));
 app.use(cors());
 app.use(express.json({ limit: '12mb' }));
 app.use(express.urlencoded({ extended: true, limit: '12mb' }));
@@ -183,7 +225,10 @@ let players = [];
 let waitlist = [];
 let cancelledRegistrations = [];
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '').trim();
-const ADMIN_TOKEN_SECRET = String(process.env.ADMIN_TOKEN_SECRET || '').trim() || `fallback:${ADMIN_PASSWORD || 'change-me'}`;
+const ADMIN_TOKEN_SECRET = String(process.env.ADMIN_TOKEN_SECRET || '').trim() || crypto.randomBytes(48).toString('hex');
+if (!String(process.env.ADMIN_TOKEN_SECRET || '').trim()) {
+    console.warn('ADMIN_TOKEN_SECRET is not configured. Using an ephemeral secret for this server process.');
+}
 const ADMIN_REMEMBER_TOKEN_TTL_DAYS = Number(process.env.ADMIN_TOKEN_TTL_DAYS || 30);
 const ADMIN_SESSION_TOKEN_TTL_HOURS = Number(process.env.ADMIN_SESSION_HOURS || 12);
 const ADMIN_SESSION_FILE = './admin-sessions.json';
@@ -4051,7 +4096,7 @@ app.delete('/api/admin/history/:year/:week', async (req, res) => {
     }
 });
 
-app.post('/api/verify-code', (req, res) => {
+app.post('/api/verify-code', verifyCodeLimiter, (req, res) => {
     refreshDynamicSignupCode();
     checkAutoLock();
     
@@ -4068,7 +4113,7 @@ app.post('/api/verify-code', (req, res) => {
     }
 });
 
-app.post('/api/register-init', async (req, res) => {
+app.post('/api/register-init', registrationLimiter, async (req, res) => {
     refreshDynamicSignupCode();
     checkAutoLock();
 
@@ -4290,7 +4335,7 @@ app.post('/api/register-final', async (req, res) => {
 });
 
 // CANCEL REGISTRATION / WAITLIST ENDPOINT
-app.post('/api/cancel-registration', async (req, res) => {
+app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res) => {
     const { playerId, phone } = req.body;
 
     if (playerId === undefined || playerId === null || !phone) {
@@ -4497,7 +4542,7 @@ app.post('/api/admin/check-session', (req, res) => {
     });
 });
 
-app.post('/api/admin/login', (req, res) => {
+app.post('/api/admin/login', adminLoginLimiter, (req, res) => {
     const { password, rememberMe } = req.body || {};
 
     if (!hasConfiguredAdminPassword()) {
