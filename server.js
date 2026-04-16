@@ -3652,6 +3652,27 @@ async function getLatestPaymentReport() {
     }
 }
 
+async function deletePaymentReportById(reportId) {
+    if (!pool) {
+        return { success: false, error: 'Payment report snapshots require database storage.' };
+    }
+    try {
+        const res = await pool.query(
+            'DELETE FROM payment_reports WHERE id = $1 RETURNING id',
+            [reportId]
+        );
+
+        if (res.rowCount > 0) {
+            return { success: true, deleted: res.rowCount };
+        }
+
+        return { success: false, error: 'Payment report not found.' };
+    } catch (err) {
+        console.error('Error deleting payment report:', err);
+        return { success: false, error: err.message };
+    }
+}
+
 async function saveWeekHistory(year, weekNumber, whiteTeam, darkTeam) {
     try {
         // Add payment info to team data before saving
@@ -5871,6 +5892,25 @@ app.get('/api/admin/payment-reports/:id/download', async (req, res) => {
     res.send(report.report_csv);
 });
 
+app.delete('/api/admin/payment-reports/:id', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: 'Unauthorized - Admin access only' });
+    }
+
+    const reportId = parseInt(req.params.id, 10);
+    if (!Number.isFinite(reportId)) {
+        return res.status(400).json({ error: 'Invalid report ID.' });
+    }
+
+    const result = await deletePaymentReportById(reportId);
+    if (!result.success) {
+        return res.status(result.error === 'Payment report not found.' ? 404 : 500).json({
+            error: result.error || 'Failed to delete payment report.'
+        });
+    }
+
+    res.json({ success: true, deleted: result.deleted || 1, id: reportId });
+});
 
 
 function readLocalBackupSummary() {
