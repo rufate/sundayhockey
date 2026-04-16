@@ -6027,6 +6027,7 @@ Date: ${selectedGameDate}`);
                             <td class="player-name-cell">
                                 <span class="player-name-main">${p.firstName} ${p.lastName} ${goalieBadge}</span>
                                 <span class="player-phone-sub">${p.phone}</span>
+                                ${p.joinedAt ? `<span class="player-time-sub">${new Date(p.joinedAt).toLocaleString([], { month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit' })}</span>` : ``}
                             </td>
                             <td>
                                 <div class="waitlist-rating-wrap">
