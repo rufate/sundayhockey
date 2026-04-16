@@ -978,8 +978,9 @@
             background: linear-gradient(135deg, #1d2f45, #243a54);
             border: 2px solid #5fa8ff;
             border-radius: 14px;
-            padding: 18px;
-            margin: 18px 0;
+            padding: 14px;
+            margin: 14px 0;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
         }
 
         .quick-return-section.active {
@@ -989,70 +990,119 @@
         .quick-return-title {
             color: #9dcbff;
             font-weight: 800;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             text-align: center;
             letter-spacing: 0.3px;
-        }
-
-        .quick-return-subtitle {
-            color: #c9def7;
-            text-align: center;
-            font-size: 0.92rem;
-            margin-bottom: 14px;
+            font-size: 0.98rem;
+            line-height: 1.1;
         }
 
         .quick-return-primary {
             background: rgba(0,0,0,0.18);
             border: 1px solid rgba(255,255,255,0.12);
             border-radius: 12px;
-            padding: 14px;
-            margin-bottom: 12px;
+            padding: 12px;
+            margin-bottom: 10px;
         }
 
         .quick-return-primary-name {
-            font-size: 1.05rem;
+            font-size: 1rem;
             font-weight: 800;
             color: #fff;
             text-align: center;
+            line-height: 1.15;
         }
 
         .quick-return-primary-meta {
             color: #d9e8f8;
             text-align: center;
-            font-size: 0.88rem;
-            margin-top: 4px;
-            line-height: 1.4;
+            font-size: 0.83rem;
+            margin-top: 3px;
+            line-height: 1.3;
         }
 
         .quick-return-button {
             width: 100%;
-            margin-top: 12px;
+            margin-top: 10px;
+            padding: 12px;
             background: #5fa8ff;
+            border-radius: 10px;
+            font-size: 1rem;
         }
 
         .quick-return-button:hover {
             background: #78b7ff;
         }
 
+        .quick-return-edit-button {
+            width: 100%;
+            margin-top: 8px;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.16);
+            border-radius: 10px;
+            font-size: 0.9rem;
+        }
+
+        .quick-return-edit-button:hover {
+            background: rgba(255,255,255,0.16);
+        }
+
         .quick-return-list {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
             justify-content: center;
         }
 
         .quick-return-chip {
             width: auto;
             margin: 0;
-            padding: 10px 14px;
+            padding: 8px 12px;
             background: rgba(255,255,255,0.1);
             border: 1px solid rgba(255,255,255,0.14);
             border-radius: 999px;
-            font-size: 0.9rem;
+            font-size: 0.84rem;
+            line-height: 1.1;
         }
 
         .quick-return-chip:hover {
             background: rgba(255,255,255,0.18);
+        }
+
+        @media (max-width: 600px) {
+            .quick-return-section {
+                padding: 12px;
+                margin: 12px 0;
+            }
+            .quick-return-title {
+                margin-bottom: 8px;
+                font-size: 0.92rem;
+            }
+            .quick-return-primary {
+                padding: 10px;
+                margin-bottom: 8px;
+            }
+            .quick-return-primary-name {
+                font-size: 0.94rem;
+            }
+            .quick-return-primary-meta {
+                font-size: 0.78rem;
+            }
+            .quick-return-button {
+                margin-top: 8px;
+                padding: 11px;
+                font-size: 0.95rem;
+            }
+            .quick-return-edit-button {
+                margin-top: 6px;
+                padding: 9px 10px;
+                font-size: 0.84rem;
+            }
+            .quick-return-chip {
+                padding: 7px 10px;
+                font-size: 0.8rem;
+            }
         }
 
         .remember-device-row {
@@ -1544,7 +1594,6 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
 
             <div class="quick-return-section" id="quickReturnSection">
                 <div class="quick-return-title">⚡ Quick Return</div>
-                <div class="quick-return-subtitle">Returning players can sign up in 1 tap on this device, or fill the form if they need to change details.</div>
                 <div class="quick-return-primary" id="quickReturnPrimary" style="display:none;">
                     <div class="quick-return-primary-name" id="quickReturnPrimaryName">--</div>
                     <div class="quick-return-primary-meta" id="quickReturnPrimaryMeta">--</div>
@@ -1863,7 +1912,6 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
 
         function renderQuickReturnProfiles() {
             const section = document.getElementById('quickReturnSection');
-            const subtitle = section ? section.querySelector('.quick-return-subtitle') : null;
             const primary = document.getElementById('quickReturnPrimary');
             const primaryName = document.getElementById('quickReturnPrimaryName');
             const primaryMeta = document.getElementById('quickReturnPrimaryMeta');
@@ -1875,12 +1923,6 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
             const profiles = getStoredQuickPlayers()
                 .map(sanitizeQuickPlayerProfile)
                 .filter(Boolean);
-
-            if (subtitle) {
-                subtitle.textContent = (codeRequired && !verifiedCode)
-                    ? 'Saved players are ready. Enter the 4-digit code, then tap your name for 1-tap signup.'
-                    : 'Returning players can sign up in 1 tap on this device, or fill the form if they need to change details.';
-            }
 
             list.innerHTML = '';
 

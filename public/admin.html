@@ -3903,12 +3903,18 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
             </div>
             <div class="message-box" style="margin-top:12px;">
                 <label for="paymentReportSnapshotSelect">Saved Payment Report Snapshots</label>
-                <div class="control-row">
-                    <select id="paymentReportSnapshotSelect" style="flex:1;">
+                <div class="control-row" style="margin-bottom:10px; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+                    <select id="paymentReportSnapshotSelect" class="history-select" multiple size="8" style="flex:1; min-height:220px;">
                         <option value="">No saved reports loaded</option>
                     </select>
-                    <button type="button" class="control-btn" onclick="downloadSelectedPaymentReport()" style="background:#6f42c1;">Download Selected</button>
+                    <div style="display:flex; flex-direction:column; gap:10px; min-width:170px;">
+                        <button type="button" class="control-btn" onclick="loadPaymentReportSnapshots()" style="background:#4a90e2;">🔄 Refresh</button>
+                        <button type="button" class="control-btn" onclick="selectAllPaymentReports()" style="background:#2e7d32;">✅ Select All</button>
+                        <button type="button" class="control-btn" onclick="clearPaymentReportSelection()" style="background:#666;">🧹 Clear</button>
+                        <button type="button" class="control-btn" onclick="downloadSelectedPaymentReport()" style="background:#6f42c1;">📥 Download Selected</button>
+                    </div>
                 </div>
+                <button type="button" class="delete-btn" onclick="deleteSelectedPaymentReports()">❌ Delete Selected Reports</button>
                 <small id="paymentReportSnapshotStatus">Reports are auto-saved to the database before scheduled and manual weekly reset.</small>
             </div>
             <p class="security-notice">
@@ -6430,13 +6436,101 @@ Date: ${selectedGameDate}`);
             window.open(`${API_URL}/api/admin/payment-reports/latest?sessionToken=${sessionToken}`, '_blank');
         }
 
+        function selectAllPaymentReports() {
+            const select = document.getElementById('paymentReportSnapshotSelect');
+            if (!select) return;
+            Array.from(select.options).forEach(option => {
+                if (option.value) option.selected = true;
+            });
+        }
+
+        function clearPaymentReportSelection() {
+            const select = document.getElementById('paymentReportSnapshotSelect');
+            if (!select) return;
+            Array.from(select.options).forEach(option => {
+                option.selected = false;
+            });
+        }
+
         function downloadSelectedPaymentReport() {
             const select = document.getElementById('paymentReportSnapshotSelect');
-            if (!select || !select.value) {
-                alert('Please choose a saved report first.');
+            const selectedValues = select
+                ? Array.from(select.selectedOptions).map(option => option.value).filter(Boolean)
+                : [];
+
+            if (!selectedValues.length) {
+                alert('Please choose at least one saved report first.');
                 return;
             }
-            window.open(`${API_URL}/api/admin/payment-reports/${select.value}/download?sessionToken=${sessionToken}`, '_blank');
+
+            selectedValues.forEach(reportId => {
+                window.open(`${API_URL}/api/admin/payment-reports/${reportId}/download?sessionToken=${sessionToken}`, '_blank');
+            });
+        }
+
+        async function deleteSelectedPaymentReports() {
+            const select = document.getElementById('paymentReportSnapshotSelect');
+            const status = document.getElementById('paymentReportSnapshotStatus');
+            if (!select || !status || !sessionToken) return;
+
+            const selectedOptions = Array.from(select.selectedOptions).filter(option => option.value);
+            const selectedValues = selectedOptions.map(option => option.value);
+
+            if (!selectedValues.length) {
+                alert('Please select at least one saved report to delete.');
+                return;
+            }
+
+            const confirmMessage = selectedValues.length === 1
+                ? `⚠️ WARNING: This will permanently delete ${selectedOptions[0].text}.
+
+This action cannot be undone!
+
+Continue?`
+                : `⚠️ WARNING: This will permanently delete ${selectedValues.length} selected payment report snapshots.
+
+This action cannot be undone!
+
+Continue?`;
+
+            if (!confirm(confirmMessage)) return;
+
+            let deletedCount = 0;
+            const failures = [];
+            status.innerText = 'Deleting selected reports...';
+
+            for (const reportId of selectedValues) {
+                try {
+                    const res = await fetch(`${API_URL}/api/admin/payment-reports/${reportId}`, {
+                        method: 'DELETE',
+                        headers: getAdminHeaders(),
+                        body: JSON.stringify({ sessionToken })
+                    });
+
+                    if (res.ok) {
+                        deletedCount += 1;
+                    } else if (res.status === 401) {
+                        logout();
+                        return;
+                    } else {
+                        const err = await res.json().catch(() => ({}));
+                        failures.push(`#${reportId}: ${err.error || 'Failed to delete'}`);
+                    }
+                } catch (err) {
+                    console.error('Error deleting payment report snapshot:', err);
+                    failures.push(`#${reportId}: Network error`);
+                }
+            }
+
+            if (deletedCount > 0 && failures.length === 0) {
+                status.innerText = `✅ Deleted ${deletedCount} payment report${deletedCount === 1 ? '' : 's'}.`;
+            } else if (deletedCount > 0) {
+                status.innerText = `✅ Deleted ${deletedCount} report${deletedCount === 1 ? '' : 's'} • ⚠️ ${failures.length} failed`;
+            } else {
+                status.innerText = `❌ ${failures[0] || 'Failed to delete selected payment reports.'}`;
+            }
+
+            await loadPaymentReportSnapshots();
         }
         
         async function loadHistoryList() {
