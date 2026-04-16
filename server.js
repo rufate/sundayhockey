@@ -3936,6 +3936,15 @@ app.get('/api/status', (req, res) => {
         canCancel: !p.isGoalie && !(p.firstName.toLowerCase() === 'phan' && p.lastName.toLowerCase() === 'ly')
         // EXCLUDED: rating, paid, paidAmount, paymentMethod, phone
     }));
+
+    const publicWaitlist = waitlist.map((p, index) => ({
+        id: p.id,
+        position: index + 1,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        fullName: `${p.firstName} ${p.lastName}`.trim(),
+        isGoalie: p.isGoalie
+    }));
     
     res.json({
         playerSpotsRemaining: playerSpots > 0 ? playerSpots : 0,
@@ -3945,6 +3954,7 @@ app.get('/api/status', (req, res) => {
         totalPlayers: players.length,
         isFull: playerSpots === 0,
         waitlistCount: waitlist.length,
+        waitlist: publicWaitlist,
         requireCode: requirePlayerCode,
         signupLocked: requirePlayerCode,
         isLockedWindow: lockStatus.isLockedWindow,
