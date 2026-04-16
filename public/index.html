@@ -1270,6 +1270,165 @@
             }
         }
 
+        .venue-waitlist-box {
+            display: block;
+            margin-top: 16px;
+            padding: 14px 14px 12px;
+            background: linear-gradient(135deg, rgba(58,26,26,0.92), rgba(77,45,45,0.92));
+            border: 1px solid rgba(255,107,0,0.6);
+            border-radius: 14px;
+            text-align: left;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+        }
+
+        .venue-waitlist-box.active {
+            display: block;
+        }
+
+        .venue-waitlist-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .venue-waitlist-title {
+            color: #ffb366;
+            font-weight: 800;
+            font-size: 0.98rem;
+            letter-spacing: 0.2px;
+            text-transform: uppercase;
+        }
+
+        .venue-waitlist-count {
+            color: #fff;
+            font-size: 0.84rem;
+            font-weight: 700;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 999px;
+            padding: 4px 10px;
+        }
+
+        .venue-waitlist-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: grid;
+            gap: 8px;
+        }
+
+        .venue-waitlist-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            background: rgba(0,0,0,0.22);
+            border-radius: 10px;
+        }
+
+        .venue-waitlist-pos {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--accent);
+            color: #fff;
+            font-size: 0.85rem;
+            font-weight: 800;
+            flex: 0 0 28px;
+        }
+
+        .venue-waitlist-name {
+            color: #fff;
+            font-size: 0.95rem;
+            line-height: 1.2;
+            word-break: break-word;
+        }
+
+        .venue-waitlist-empty {
+            color: #d6b7a0;
+            text-align: center;
+            font-size: 0.9rem;
+            padding: 4px 0 2px;
+        }
+
+        @media (max-width: 600px) {
+            .game-info {
+                padding: 16px 12px 14px;
+                border-radius: 14px;
+            }
+
+            .game-info .game-date {
+                font-size: 0.96rem;
+                line-height: 1.2;
+                margin-bottom: 4px;
+            }
+
+            .game-info .game-location {
+                font-size: 1.22rem;
+                line-height: 1.15;
+                margin-bottom: 4px;
+            }
+
+            .venue-waitlist-box {
+                margin-top: 12px;
+                padding: 10px 10px 8px;
+                border-radius: 12px;
+            }
+
+            .venue-waitlist-header {
+                gap: 6px;
+                margin-bottom: 8px;
+                align-items: flex-start;
+            }
+
+            .venue-waitlist-title {
+                font-size: 0.84rem;
+                letter-spacing: 0.15px;
+            }
+
+            .venue-waitlist-count {
+                font-size: 0.72rem;
+                padding: 3px 7px;
+                line-height: 1.1;
+            }
+
+            .venue-waitlist-list {
+                gap: 6px;
+            }
+
+            .venue-waitlist-item {
+                padding: 6px 8px;
+                gap: 7px;
+                border-radius: 9px;
+            }
+
+            .venue-waitlist-pos {
+                width: 22px;
+                height: 22px;
+                flex-basis: 22px;
+                font-size: 0.72rem;
+            }
+
+            .venue-waitlist-name {
+                font-size: 0.82rem;
+                line-height: 1.15;
+            }
+
+            .venue-waitlist-name .goalie-badge {
+                font-size: 0.56rem;
+                padding: 2px 5px;
+                margin-left: 5px;
+                border-radius: 999px;
+                vertical-align: middle;
+            }
+        }
+
 </style>
 <base target="_blank">
 
@@ -1504,6 +1663,14 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
                     <div class="spot-number" id="spotsLeft">--</div>
                     <div class="spot-text" id="spotsText">Player Spots Available</div>
                 </div>
+            </div>
+
+            <div class="venue-waitlist-box" id="venueWaitlistBox">
+                <div class="venue-waitlist-header">
+                    <div class="venue-waitlist-title">Current Waitlist</div>
+                    <div class="venue-waitlist-count"><span id="venueWaitlistCount">0</span> player(s)</div>
+                </div>
+                <ul class="venue-waitlist-list" id="venueWaitlistList"></ul>
             </div>
         </div>
 
@@ -1755,7 +1922,6 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
                 <button type="submit" id="submitBtn">Continue</button>
                 <div id="signupError" style="display:none; margin-top:12px; background:#3a1a1a; border:1px solid #ff4444; color:#ff4444; padding:12px; border-radius:5px; text-align:center;"></div>
                 
-                <button type="button" class="view-waitlist-btn" onclick="window.location.href='/waitlist'">View Current Waitlist</button>
             </form>
         </div>
 
@@ -2704,6 +2870,57 @@ function updateCalculatedRating() {
             }
         }
 
+        function renderVenueWaitlist(entries) {
+            const wrap = document.getElementById('venueWaitlistBox');
+            const countEl = document.getElementById('venueWaitlistCount');
+            const listEl = document.getElementById('venueWaitlistList');
+            if (!wrap || !countEl || !listEl) return;
+
+            const safeEntries = Array.isArray(entries) ? entries : [];
+            countEl.innerText = safeEntries.length;
+            listEl.innerHTML = '';
+
+            if (!safeEntries.length) {
+                listEl.innerHTML = '<li class="venue-waitlist-empty">No players on the waitlist yet.</li>';
+                wrap.classList.add('active');
+                return;
+            }
+
+            safeEntries.forEach((player, index) => {
+                const li = document.createElement('li');
+                li.className = 'venue-waitlist-item';
+                const goalieBadge = player.isGoalie ? ' <span class="goalie-badge">GOALIE</span>' : '';
+                const displayName = player.fullName || [player.firstName || '', player.lastName || ''].join(' ').trim() || 'Waitlist Player';
+                const position = player.position || (index + 1);
+                li.innerHTML = `
+                    <span class="venue-waitlist-pos">${position}</span>
+                    <div class="venue-waitlist-name">${displayName}${goalieBadge}</div>
+                `;
+                listEl.appendChild(li);
+            });
+
+            wrap.classList.add('active');
+        }
+
+        async function loadVenueWaitlist() {
+            const wrap = document.getElementById('venueWaitlistBox');
+            const countEl = document.getElementById('venueWaitlistCount');
+            const listEl = document.getElementById('venueWaitlistList');
+            if (!wrap || !countEl || !listEl) return;
+
+            try {
+                const res = await fetch(`${API_URL}/api/waitlist`);
+                if (!res.ok) throw new Error(`Waitlist request failed: ${res.status}`);
+                const data = await res.json();
+                renderVenueWaitlist(data.waitlist);
+            } catch (err) {
+                console.error('Error loading venue waitlist', err);
+                countEl.innerText = '0';
+                listEl.innerHTML = '<li class="venue-waitlist-empty">Unable to load waitlist right now.</li>';
+                wrap.classList.add('active');
+            }
+        }
+
         async function checkStatus() {
             try {
                 const res = await fetch(`${API_URL}/api/status`);
@@ -2789,6 +3006,9 @@ function updateCalculatedRating() {
                     if (heroJoinBtn) heroJoinBtn.innerText = '🏒 Join Game';
                 }
                 
+                renderVenueWaitlist(data.waitlist);
+                await loadVenueWaitlist();
+
                 const effectiveLocked = !!(data.requireCode ?? data.signupLocked);
                 codeRequired = effectiveLocked;
 
