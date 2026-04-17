@@ -2015,6 +2015,98 @@ button {
 
 </style>
 
+<style id="admin-waitlist-bypass-mobile-v22">
+.waitlist-section {
+    max-width: 760px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+.waitlist-section table {
+    table-layout: fixed !important;
+    width: 100% !important;
+}
+.waitlist-section th:nth-child(1), .waitlist-section td:nth-child(1) {
+    width: 28px;
+    text-align:center !important;
+}
+.waitlist-section th:nth-child(3), .waitlist-section td:nth-child(3) {
+    width: 48px;
+    text-align:center !important;
+}
+.waitlist-section th:nth-child(4), .waitlist-section td:nth-child(4) {
+    width: 122px;
+    text-align:center !important;
+}
+.waitlist-section .waitlist-action-wrap {
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    gap:4px !important;
+    flex-wrap:nowrap !important;
+}
+.waitlist-section .action-stack {
+    display:flex !important;
+    flex-direction:column !important;
+    gap:3px !important;
+    align-items:center !important;
+    justify-content:center !important;
+}
+.waitlist-section .action-stack .promote-btn,
+.waitlist-section .action-stack .remove-btn {
+    width:48px !important;
+    min-width:48px !important;
+    margin:0 !important;
+    text-align:center !important;
+}
+.waitlist-section .bypass-btn {
+    background:#c62828 !important;
+    color:#fff !important;
+    border:none;
+    border-radius:7px;
+    padding:4px 6px !important;
+    font-size:0.66rem !important;
+    line-height:1;
+    margin:0 !important;
+    white-space:nowrap;
+    width:48px !important;
+    min-width:48px !important;
+    text-align:center !important;
+}
+.waitlist-section .bypass-btn.active {
+    background:#2e7d32 !important;
+    color:#fff !important;
+    font-weight:800;
+}
+.waitlist-section .player-badge-row {
+    display:flex;
+    gap:4px;
+    flex-wrap:wrap;
+    align-items:center;
+}
+.waitlist-section .player-phone-sub,
+.waitlist-section .player-time-sub { display:block; }
+@media (max-width:600px){
+    .waitlist-section { padding:10px !important; }
+    .waitlist-section th,
+    .waitlist-section td { padding:2px 2px !important; }
+    .waitlist-section th:nth-child(4), .waitlist-section td:nth-child(4) { width: 112px; }
+    .waitlist-section .player-name-main { font-size:0.80rem !important; }
+    .waitlist-section .player-phone-sub { font-size:0.64rem !important; line-height:1 !important; }
+    .waitlist-section .player-time-sub { font-size:0.55rem !important; line-height:1 !important; }
+    .waitlist-section .action-stack .promote-btn,
+    .waitlist-section .action-stack .remove-btn,
+    .waitlist-section .bypass-btn {
+        width:44px !important;
+        min-width:44px !important;
+        padding:3px 4px !important;
+        font-size:0.56rem !important;
+        border-radius:6px !important;
+    }
+    .waitlist-section .waitlist-action-wrap { gap:3px !important; }
+    .waitlist-section .action-stack { gap:2px !important; }
+}
+</style>
+
 
 <style id="admin-safe-mobile-patch-v10">
 #playerList .protected-badge,
@@ -3369,6 +3461,49 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
         min-width: 48px !important;
         height: 22px !important;
         font-size: 0.68rem !important;
+    }
+}
+</style>
+
+
+<style id="admin-waitlist-height-reduction-v1">
+/* Reduce waitlist box heights vertically by ~25% while keeping font sizes unchanged */
+.waitlist-section #waitlistList tr td {
+    padding-top: 1px !important;
+    padding-bottom: 1px !important;
+    vertical-align: middle !important;
+}
+.waitlist-section .player-name-cell {
+    line-height: 1.0 !important;
+    gap: 1px !important;
+}
+.waitlist-section .player-name-main,
+.waitlist-section .player-phone-sub,
+.waitlist-section .player-time-sub {
+    margin: 0 !important;
+}
+.waitlist-section .action-stack {
+    gap: 2px !important;
+}
+.waitlist-section .action-stack .promote-btn,
+.waitlist-section .action-stack .remove-btn,
+.waitlist-section .bypass-btn {
+    min-height: 18px !important;
+    height: 18px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    line-height: 1 !important;
+}
+@media (max-width:600px){
+    .waitlist-section #waitlistList tr td {
+        padding-top: 1px !important;
+        padding-bottom: 1px !important;
+    }
+    .waitlist-section .action-stack .promote-btn,
+    .waitlist-section .action-stack .remove-btn,
+    .waitlist-section .bypass-btn {
+        min-height: 17px !important;
+        height: 17px !important;
     }
 }
 </style>
@@ -6028,10 +6163,12 @@ Date: ${selectedGameDate}`);
                     data.waitlist.forEach((p, index) => {
                         const tr = document.createElement('tr');
                         const goalieBadge = p.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
+                        const bypassBadge = '';
                         tr.innerHTML = `
                             <td>${index + 1}</td>
                             <td class="player-name-cell">
-                                <span class="player-name-main">${p.firstName} ${p.lastName} ${goalieBadge}</span>
+                                <span class="player-name-main">${p.firstName} ${p.lastName}</span>
+                                <span class="player-badge-row">${goalieBadge}${bypassBadge}</span>
                                 <span class="player-phone-sub">${p.phone}</span>
                                 ${p.joinedAt ? `<span class="player-time-sub">${new Date(p.joinedAt).toLocaleString([], { month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit' })}</span>` : ``}
                             </td>
@@ -6039,13 +6176,15 @@ Date: ${selectedGameDate}`);
                                 <div class="waitlist-rating-wrap">
                                     <input type="number" id="rating-${p.id}" class="rating-pill-input" value="${Number(p.finalRating ?? p.rating ?? 5).toFixed(1)}" min="1" max="10" step="0.1"
                                         onchange="updateRating(${p.id}, this.value)">
-
                                 </div>
                             </td>
                             <td>
                                 <div class="waitlist-action-wrap">
-                                    <button class="promote-btn" data-player-id="${p.id}">Promote</button>
-                                    <button class="remove-btn" onclick="removeWaitlist(${p.id})">Remove</button>
+                                    <div class="action-stack">
+                                        <button class="promote-btn" data-player-id="${p.id}">Promote</button>
+                                        <button class="remove-btn" onclick="removeWaitlist(${p.id})">Remove</button>
+                                    </div>
+                                    <button class="bypass-btn ${p.bypassAutoPromote ? 'active' : ''}" data-bypass-id="${p.id}" data-bypass-state="${p.bypassAutoPromote ? '1' : '0'}">Bypass</button>
                                 </div>
                             </td>
                         `;
@@ -6196,6 +6335,12 @@ Date: ${selectedGameDate}`);
             if (e.target && e.target.classList.contains('promote-btn')) {
                 const playerId = parseInt(e.target.getAttribute('data-player-id'));
                 promotePlayer(playerId);
+                return;
+            }
+            if (e.target && e.target.classList.contains('bypass-btn')) {
+                const playerId = parseInt(e.target.getAttribute('data-bypass-id'));
+                const nextState = e.target.getAttribute('data-bypass-state') !== '1';
+                toggleWaitlistBypass(playerId, nextState);
             }
         });
 
@@ -6237,6 +6382,34 @@ Date: ${selectedGameDate}`);
             } catch (err) {
                 console.error("Promote player error:", err);
                 alert("Error promoting player");
+            }
+        }
+
+        async function toggleWaitlistBypass(id, bypassAutoPromote) {
+            const label = bypassAutoPromote ? 'bypass auto-promotion' : 'allow auto-promotion';
+            if (!confirm(`Set this waitlist player to ${label}?`)) return;
+
+            try {
+                const res = await fetch(`${API_URL}/api/admin/toggle-waitlist-bypass`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken: sessionToken, waitlistId: id, bypassAutoPromote })
+                });
+
+                if (res.status === 401) {
+                    logout();
+                    return;
+                }
+
+                if (res.ok) {
+                    loadData();
+                } else {
+                    const err = await res.json();
+                    alert("Error: " + err.error);
+                }
+            } catch (err) {
+                console.error("Toggle waitlist bypass error:", err);
+                alert("Error updating waitlist auto-promotion");
             }
         }
 

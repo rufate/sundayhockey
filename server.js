@@ -1599,6 +1599,7 @@ async function initDatabase() {
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS self_rating_raw NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS derived_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS final_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS bypass_auto_promote BOOLEAN DEFAULT false`);
         
         await pool.query(`
             CREATE TABLE IF NOT EXISTS history (
@@ -1773,6 +1774,7 @@ async function loadDataFromDB() {
             derivedRating: p.derived_rating == null ? null : Number(p.derived_rating),
             finalRating: p.final_rating == null ? null : Number(p.final_rating),
             isGoalie: !!p.is_goalie,
+            bypassAutoPromote: !!p.bypass_auto_promote,
             joinedAt: p.joined_at
         }));
         
@@ -2694,14 +2696,14 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
                 `INSERT INTO waitlist (
                     id, first_name, last_name, phone, payment_method, rating,
                     skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating, effort_rating,
-                    level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating, final_rating, is_goalie
+                    level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating, final_rating, is_goalie, bypass_auto_promote
                 ) VALUES (
-                    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18
+                    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19
                 )`,
                 [
                     player.id, player.firstName, player.lastName, player.phone, player.paymentMethod || null, toNumericOrNull(player.rating),
                     toNumericOrNull(player.skatingRating), toNumericOrNull(player.puckSkillsRating), toNumericOrNull(player.hockeySenseRating), toNumericOrNull(player.conditioningRating), toNumericOrNull(player.effortRating),
-                    player.levelPlayed || null, player.peerComparison || null, player.confidenceLevel || null, toNumericOrNull(player.selfRatingRaw), toNumericOrNull(player.derivedRating), toNumericOrNull(player.finalRating), !!player.isGoalie
+                    player.levelPlayed || null, player.peerComparison || null, player.confidenceLevel || null, toNumericOrNull(player.selfRatingRaw), toNumericOrNull(player.derivedRating), toNumericOrNull(player.finalRating), !!player.isGoalie, !!player.bypassAutoPromote
                 ]
             );
         }
@@ -3283,6 +3285,17 @@ function buildPlayerFromSkillProfile(basePlayer, skillProfile = {}) {
     });
 }
 
+
+function getNextAutoPromoteWaitlistIndex() {
+    return waitlist.findIndex(p => p && p.bypassAutoPromote !== true);
+}
+
+function extractWaitlistPlayerToPromote() {
+    const index = getNextAutoPromoteWaitlistIndex();
+    if (index === -1) return null;
+    const [player] = waitlist.splice(index, 1);
+    return player || null;
+}
 
 function isDuplicatePlayer(firstName, lastName, phone) {
     const normalizedName = (capitalizeFullName(firstName) + ' ' + capitalizeFullName(lastName)).toLowerCase().trim();
@@ -4230,6 +4243,7 @@ app.post('/api/register-init', registrationLimiter, async (req, res) => {
             peerComparison: skillProfile.peerComparison,
             confidenceLevel: skillProfile.confidenceLevel,
             isGoalie: false,
+            bypassAutoPromote: false,
             joinedAt: new Date()
         });
 
@@ -4242,15 +4256,15 @@ app.post('/api/register-init', registrationLimiter, async (req, res) => {
                     `INSERT INTO waitlist (
                         id, first_name, last_name, phone, payment_method, rating,
                         skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating, effort_rating,
-                        level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating, final_rating, is_goalie
+                        level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating, final_rating, is_goalie, bypass_auto_promote
                     )
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
                     [
                         waitlistPlayer.id, waitlistPlayer.firstName, waitlistPlayer.lastName,
                         waitlistPlayer.phone, waitlistPlayer.paymentMethod, waitlistPlayer.rating,
                         waitlistPlayer.skatingRating, waitlistPlayer.puckSkillsRating, waitlistPlayer.hockeySenseRating, waitlistPlayer.conditioningRating, waitlistPlayer.effortRating,
                         waitlistPlayer.levelPlayed, waitlistPlayer.peerComparison, waitlistPlayer.confidenceLevel,
-                        waitlistPlayer.selfRatingRaw, waitlistPlayer.derivedRating, waitlistPlayer.finalRating, false
+                        waitlistPlayer.selfRatingRaw, waitlistPlayer.derivedRating, waitlistPlayer.finalRating, false, false
                     ]
                 );
             } catch (err) {
@@ -4469,8 +4483,8 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
                 players.splice(playerIndex, 1);
                 playerSpots++;
 
-                if (waitlist.length > 0) {
-                    const waitlistPlayer = waitlist.shift();
+                const waitlistPlayer = extractWaitlistPlayerToPromote();
+                if (waitlistPlayer) {
 
                     promotedPlayer = hydratePlayerRatingProfile({
                         id: waitlistPlayer.id,
@@ -5618,6 +5632,30 @@ app.post('/api/admin/reset-schedule', async (req, res) => {
     });
 });
 
+app.post('/api/admin/toggle-waitlist-bypass', async (req, res) => {
+    const { waitlistId, bypassAutoPromote } = req.body;
+    if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
+
+    const index = waitlist.findIndex(p => String(p.id) === String(waitlistId));
+    if (index === -1) return res.status(404).json({ error: "Player not found in waitlist" });
+
+    const nextValue = !!bypassAutoPromote;
+
+    try {
+        await runProtectedMutation('toggle-waitlist-bypass', req, async () => {
+            waitlist[index] = hydratePlayerRatingProfile({
+                ...waitlist[index],
+                bypassAutoPromote: nextValue
+            });
+        }, { waitlistId, bypassAutoPromote: nextValue });
+    } catch (err) {
+        console.error('Error toggling waitlist bypass:', err);
+        return res.status(500).json({ error: "Failed to update waitlist bypass safely" });
+    }
+
+    return res.json({ success: true, waitlistId, bypassAutoPromote: nextValue });
+});
+
 app.post('/api/admin/promote-waitlist', async (req, res) => {
     const { password, sessionToken, waitlistId } = req.body;
     if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
@@ -5631,7 +5669,7 @@ app.post('/api/admin/promote-waitlist', async (req, res) => {
         hockeySenseRating: player.hockeySenseRating, conditioningRating: player.conditioningRating, effortRating: player.effortRating,
         levelPlayed: player.levelPlayed, peerComparison: player.peerComparison, confidenceLevel: player.confidenceLevel,
         selfRatingRaw: player.selfRatingRaw, derivedRating: player.derivedRating, finalRating: player.finalRating,
-        isGoalie: player.isGoalie, team: null, rulesAgreed: true
+        isGoalie: player.isGoalie, bypassAutoPromote: false, team: null, rulesAgreed: true
     });
     try {
         await runProtectedMutation('promote-waitlist', req, async () => {
@@ -5675,7 +5713,7 @@ app.post('/api/admin/add-player', async (req, res) => {
     const ratingNum = roundRating(parseFloat(rating) || 5);
     const isGoalieBool = isGoalie || false;
     if (toWaitlist) {
-        const waitlistPlayer = hydratePlayerRatingProfile({ id: Date.now(), firstName: cleanFirstName, lastName: cleanLastName, phone: formattedPhone, paymentMethod: paymentMethod || 'Cash', rating: ratingNum, derivedRating: ratingNum, finalRating: ratingNum, selfRatingRaw: ratingNum, isGoalie: isGoalieBool, joinedAt: new Date() });
+        const waitlistPlayer = hydratePlayerRatingProfile({ id: Date.now(), firstName: cleanFirstName, lastName: cleanLastName, phone: formattedPhone, paymentMethod: paymentMethod || 'Cash', rating: ratingNum, derivedRating: ratingNum, finalRating: ratingNum, selfRatingRaw: ratingNum, isGoalie: isGoalieBool, bypassAutoPromote: false, joinedAt: new Date() });
         try { await runProtectedMutation('admin-add-waitlist-player', req, async () => { waitlist.push(waitlistPlayer); }, { playerId: waitlistPlayer.id }); }
         catch (err) { console.error('Error adding to waitlist:', err); return res.status(500).json({ error: "Failed to add waitlist player safely" }); }
         return res.json({ success: true, player: waitlistPlayer, inWaitlist: true });
