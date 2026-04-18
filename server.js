@@ -1464,7 +1464,10 @@ async function checkWeeklyReset() {
     return true;
 }
 
-const CHECK_INTERVAL = process.env.NODE_ENV === 'production' ? 15000 : 5000;
+const BACKGROUND_SCHEDULER_ENABLED = String(process.env.BACKGROUND_SCHEDULER_ENABLED || 'false').toLowerCase() === 'true';
+const ENABLE_INTERNAL_SCHEDULER_CRON = String(process.env.ENABLE_INTERNAL_SCHEDULER_CRON || 'false').toLowerCase() === 'true';
+const WARM_TICK_ENABLED = String(process.env.WARM_TICK_ENABLED || 'false').toLowerCase() === 'true';
+const WARM_TICK_MS = Number(process.env.WARM_TICK_MS || 60000);
 let schedulerRunning = false;
 let lastSchedulerMinuteKey = null;
 let lastSchedulerRunAt = null;
@@ -1475,23 +1478,72 @@ let lastHealthPingAt = null;
 let lastCronUserAgent = '';
 let consecutiveDbFailures = 0;
 
+function buildPersistedStateFingerprint(snapshot = null) {
+    const payload = snapshot || buildFullDataSnapshot();
+    return JSON.stringify({
+        playerSpots: payload.playerSpots,
+        players: payload.players,
+        waitlist: payload.waitlist,
+        cancelledRegistrations: payload.cancelledRegistrations,
+        regularSkatersByDay: payload.regularSkatersByDay,
+        customSignupCode: payload.customSignupCode,
+        gameLocation: payload.gameLocation,
+        gameTime: payload.gameTime,
+        gameDate: payload.gameDate,
+        playerSignupCode: payload.playerSignupCode,
+        requirePlayerCode: payload.requirePlayerCode,
+        manualOverride: payload.manualOverride,
+        manualOverrideState: payload.manualOverrideState,
+        lastResetWeek: payload.lastResetWeek,
+        rosterReleased: payload.rosterReleased,
+        resetArmed: payload.resetArmed,
+        currentWeekData: payload.currentWeekData,
+        signupLockStartAt: payload.signupLockStartAt,
+        signupLockEndAt: payload.signupLockEndAt,
+        rosterReleaseAt: payload.rosterReleaseAt,
+        resetWeekAt: payload.resetWeekAt,
+        lastExactResetRunAt: payload.lastExactResetRunAt,
+        lastExactRosterReleaseRunAt: payload.lastExactRosterReleaseRunAt,
+        lastExactResetMinuteKey: payload.lastExactResetMinuteKey,
+        lastExactRosterReleaseMinuteKey: payload.lastExactRosterReleaseMinuteKey,
+        signupLockSchedule: payload.signupLockSchedule,
+        rosterReleaseSchedule: payload.rosterReleaseSchedule,
+        resetWeekSchedule: payload.resetWeekSchedule,
+        maintenanceMode: payload.maintenanceMode,
+        customTitle: payload.customTitle,
+        announcementEnabled: payload.announcementEnabled,
+        announcementText: payload.announcementText,
+        announcementImages: payload.announcementImages,
+        paymentEmail: payload.paymentEmail
+    });
+}
+
+let lastPersistedStateFingerprint = '';
+
 async function runSchedulerTick() {
     if (schedulerRunning) return;
 
     const startedAt = Date.now();
     const etTime = getCurrentETTime();
     const minuteKey = nowETMinuteKey(etTime);
-    if (process.env.NODE_ENV === 'production' && lastSchedulerMinuteKey === minuteKey) return;
+    if (lastSchedulerMinuteKey === minuteKey) return;
 
     schedulerRunning = true;
     lastSchedulerMinuteKey = minuteKey;
 
     try {
+        const beforeFingerprint = buildPersistedStateFingerprint();
         checkMaintenanceModeSchedule();
         checkAutoLock();
         await autoReleaseRoster();
         await checkWeeklyReset();
-        await saveData();
+        const afterSnapshot = buildFullDataSnapshot();
+        const afterFingerprint = buildPersistedStateFingerprint(afterSnapshot);
+
+        if (afterFingerprint !== beforeFingerprint) {
+            await saveData('scheduler-tick', { snapshot: afterSnapshot, fingerprint: afterFingerprint });
+        }
+
         lastSchedulerRunAt = new Date().toISOString();
         lastSchedulerDurationMs = Date.now() - startedAt;
         lastSchedulerError = '';
@@ -1505,13 +1557,12 @@ async function runSchedulerTick() {
     }
 }
 
-setInterval(runSchedulerTick, CHECK_INTERVAL);
-
 // --- DATABASE FUNCTIONS ---
 
 async function initDatabase() {
     if (!pool) {
         loadDataFromFile();
+        refreshPersistedStateFingerprint();
         return;
     }
     try {
@@ -1600,6 +1651,11 @@ async function initDatabase() {
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS derived_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS final_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS bypass_auto_promote BOOLEAN DEFAULT false`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_players_phone ON players (phone)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_players_registered_at ON players (registered_at DESC)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_players_team ON players (team)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_waitlist_joined_at ON waitlist (joined_at)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS idx_waitlist_bypass_auto_promote ON waitlist (bypass_auto_promote, joined_at)`);
         
         await pool.query(`
             CREATE TABLE IF NOT EXISTS history (
@@ -2719,24 +2775,39 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
     }
 }
 
-async function saveData(reason = 'saveData') {
-    const snapshot = buildFullDataSnapshot();
+async function saveData(reason = 'saveData', options = {}) {
+    const snapshot = options.snapshot || buildFullDataSnapshot();
+    const fingerprint = options.fingerprint || buildPersistedStateFingerprint(snapshot);
+    const forcePersist = !!options.forcePersist || shouldCreateDurableSnapshot(reason);
+
     saveQueue = saveQueue.then(async () => {
+        if (!forcePersist && fingerprint && fingerprint === lastPersistedStateFingerprint) {
+            return {
+                ok: true,
+                skipped: true,
+                reason,
+                message: 'State unchanged; skipped database/file persistence.'
+            };
+        }
+
         let dbResult = null;
         try {
             dbResult = await replaceDatabaseStateFromMemory(reason, snapshot);
             writeSettingsBackup(reason);
             const localResult = persistDataToFile(reason, snapshot);
-            await appendDataAudit('save', 'success', { reason, database: dbResult, localSnapshot: localResult });
-            return { ok: true, database: dbResult, localSnapshot: localResult };
+            lastPersistedStateFingerprint = fingerprint;
+            await appendDataAudit('save', 'success', { reason, database: dbResult, localSnapshot: localResult, skipped: false });
+            return { ok: true, database: dbResult, localSnapshot: localResult, skipped: false };
         } catch (err) {
             const localResult = persistDataToFile(`db-failed-${reason}`, snapshot);
+            lastPersistedStateFingerprint = fingerprint;
             await appendDataAudit('save', 'error', {
                 reason,
                 error: err.message,
                 localSnapshot: localResult,
                 strictDatabaseMode: STRICT_DATABASE_MODE,
-                databaseRequired: HAS_DB
+                databaseRequired: HAS_DB,
+                skipped: false
             });
             console.error('Error saving data:', err);
             return {
@@ -2744,7 +2815,8 @@ async function saveData(reason = 'saveData') {
                 error: err.message,
                 localSnapshot: localResult,
                 strictDatabaseMode: STRICT_DATABASE_MODE,
-                databaseRequired: HAS_DB
+                databaseRequired: HAS_DB,
+                skipped: false
             };
         }
     }).catch(err => {
@@ -2752,6 +2824,11 @@ async function saveData(reason = 'saveData') {
         return { ok: false, error: err.message };
     });
     return saveQueue;
+}
+
+function refreshPersistedStateFingerprint() {
+    lastPersistedStateFingerprint = buildPersistedStateFingerprint();
+    return lastPersistedStateFingerprint;
 }
 
 async function runDatabaseSelfHeal(reason = 'self-heal') {
@@ -6179,18 +6256,22 @@ initDatabase().then(async () => {
         await runDatabaseSelfHeal('startup');
     }
     checkAutoLock();
-    runSchedulerTick();
-    
-    // Safety net only: the app no longer depends on cron because every request runs catch-up logic.
-    cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '* * * * *', async () => {
-        await runSchedulerTick();
-    }, {
-        timezone: 'America/New_York'
-    });
+    refreshPersistedStateFingerprint();
+    await runSchedulerTick();
 
-    setInterval(() => {
-        runSchedulerTick().catch(err => console.error('Warm scheduler tick error:', err));
-    }, Number(process.env.WARM_TICK_MS || 60000));
+    if (BACKGROUND_SCHEDULER_ENABLED && ENABLE_INTERNAL_SCHEDULER_CRON) {
+        cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '* * * * *', async () => {
+            await runSchedulerTick();
+        }, {
+            timezone: 'America/New_York'
+        });
+    }
+
+    if (BACKGROUND_SCHEDULER_ENABLED && WARM_TICK_ENABLED) {
+        setInterval(() => {
+            runSchedulerTick().catch(err => console.error('Warm scheduler tick error:', err));
+        }, WARM_TICK_MS);
+    }
     
     app.listen(PORT, () => {
         console.log(`Phan's Friday Hockey server running on port ${PORT}`);
@@ -6200,26 +6281,32 @@ initDatabase().then(async () => {
         console.log(`Current signup code: ${getDynamicSignupCode()}`);
         console.log(`Auto-add goalies for ${getGameDayName()}: ${getWeeklyAutoAddPlayers().filter(p => p.isGoalie).map(p => `${p.firstName} ${p.lastName}`).join(', ')}`);
         console.log(`Current players registered: ${players.length}`);
+        console.log(`Background scheduler: ${BACKGROUND_SCHEDULER_ENABLED ? 'enabled' : 'disabled (request-driven mode)'}`);
     });
 }).catch(err => {
     console.error('Failed to initialize database, starting with file fallback:', err);
     loadDataFromFile();
+    refreshPersistedStateFingerprint();
     
     checkAutoLock();
     runSchedulerTick();
     
-    // Safety net only: the app no longer depends on cron because every request runs catch-up logic.
-    cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '* * * * *', async () => {
-        await runSchedulerTick();
-    }, {
-        timezone: 'America/New_York'
-    });
+    if (BACKGROUND_SCHEDULER_ENABLED && ENABLE_INTERNAL_SCHEDULER_CRON) {
+        cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '* * * * *', async () => {
+            await runSchedulerTick();
+        }, {
+            timezone: 'America/New_York'
+        });
+    }
 
-    setInterval(() => {
-        runSchedulerTick().catch(err => console.error('Warm scheduler tick error:', err));
-    }, Number(process.env.WARM_TICK_MS || 60000));
+    if (BACKGROUND_SCHEDULER_ENABLED && WARM_TICK_ENABLED) {
+        setInterval(() => {
+            runSchedulerTick().catch(err => console.error('Warm scheduler tick error:', err));
+        }, WARM_TICK_MS);
+    }
     
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT} (file fallback mode)`);
+        console.log(`Background scheduler: ${BACKGROUND_SCHEDULER_ENABLED ? 'enabled' : 'disabled (request-driven mode)'}`);
     });
 });
