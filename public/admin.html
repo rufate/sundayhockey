@@ -2017,9 +2017,14 @@ button {
 
 <style id="admin-waitlist-bypass-mobile-v22">
 .waitlist-section {
-    max-width: 760px !important;
     margin-left: auto !important;
     margin-right: auto !important;
+}
+@media (min-width: 601px) {
+    .waitlist-section {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
 }
 .waitlist-section table {
     table-layout: fixed !important;
@@ -7854,3 +7859,63 @@ async function compactPayToggle(playerId){
 
 </body>
 </html>
+
+<style id="admin-registered-pills-match-waitlist-mobile-v1">
+@media (max-width:600px){
+    /* Match registered-player pills/badges to waitlist pill sizing on Android/mobile */
+    #playerList .compact-pay{
+        width:44px !important;
+        min-width:44px !important;
+        height:17px !important;
+        min-height:17px !important;
+        grid-template-columns:1fr 14px !important;
+        grid-template-rows:8.5px 8.5px !important;
+        border-radius:6px !important;
+        overflow:hidden !important;
+        vertical-align:middle !important;
+    }
+
+    #playerList .compact-pay-main{
+        height:17px !important;
+        min-height:17px !important;
+        padding:0 2px !important;
+        font-size:0.58rem !important;
+        font-weight:700 !important;
+        line-height:1 !important;
+        display:flex !important;
+        align-items:center !important;
+        justify-content:center !important;
+    }
+
+    #playerList .compact-pay-plus,
+    #playerList .compact-pay-minus{
+        width:14px !important;
+        min-width:14px !important;
+        height:8.5px !important;
+        min-height:8.5px !important;
+        padding:0 !important;
+        font-size:0.66rem !important;
+        line-height:1 !important;
+        display:flex !important;
+        align-items:center !important;
+        justify-content:center !important;
+    }
+
+    #playerList .regular-toggle-btn,
+    #playerList .remove-btn{
+        width:44px !important;
+        min-width:44px !important;
+        height:17px !important;
+        min-height:17px !important;
+        padding:0 4px !important;
+        border-radius:6px !important;
+        font-size:0.56rem !important;
+        font-weight:700 !important;
+        line-height:1 !important;
+        display:inline-flex !important;
+        align-items:center !important;
+        justify-content:center !important;
+        white-space:nowrap !important;
+    }
+}
+</style>

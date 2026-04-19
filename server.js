@@ -925,6 +925,23 @@ function armScheduleGuardForCurrentWeek(scheduleAt, etDate = getCurrentETTime())
     };
 }
 
+function syncScheduledActionRunMarker(scheduleAt, runType = 'release', etDate = getCurrentETTime()) {
+    if (!scheduleAt) return { occurrenceKey: '', minuteKey: '' };
+
+    const guard = armScheduleGuardForCurrentWeek(scheduleAt, etDate);
+    if (!guard.occurrenceKey) return guard;
+
+    if (runType === 'reset') {
+        lastExactResetRunAt = guard.occurrenceKey;
+        lastExactResetMinuteKey = guard.minuteKey;
+    } else {
+        lastExactRosterReleaseRunAt = guard.occurrenceKey;
+        lastExactRosterReleaseMinuteKey = guard.minuteKey;
+    }
+
+    return guard;
+}
+
 function minutesSinceLatestWeeklyOccurrence(scheduleAt, etDate = getCurrentETTime()) {
     if (!scheduleAt) return null;
     const nowMinute = minuteOfWeekNow(etDate);
@@ -1446,9 +1463,7 @@ async function checkWeeklyReset() {
     clearAnnouncementState();
     refreshDynamicSignupCode();
 
-    // Keep weekly schedules intact
-    lastExactRosterReleaseRunAt = '';
-    lastExactRosterReleaseMinuteKey = '';
+    // Keep weekly schedule run markers intact so the same scheduled release cannot fire twice.
 
     if (pool) {
         try {
@@ -5913,6 +5928,7 @@ app.post('/api/admin/release-roster', async (req, res) => {
         await runProtectedMutation('release-roster', req, async () => {
             rosterReleased = true;
             resetArmed = true;
+            syncScheduledActionRunMarker(rosterReleaseSchedule.at, 'release', etTime);
             announcementEnabled = true;
             announcementText = buildRosterReleasePaymentAnnouncement();
             currentWeekData = { weekNumber: week, year, releaseDate: new Date().toISOString(), rosterReleaseTime: Date.now(), whiteTeam: teams.whiteTeam, darkTeam: teams.darkTeam };
@@ -5936,9 +5952,11 @@ app.post('/api/admin/manual-reset', async (req, res) => {
     const { week, year } = getWeekNumber(etTime);
     try {
         await runProtectedMutation('manual-reset', req, async () => {
-            playerSpots = 20; players = []; waitlist = []; rosterReleased = false; lastResetWeek = week; gameDate = calculateNextGameDate();
+            playerSpots = 20; players = []; waitlist = []; rosterReleased = false; resetArmed = false; lastResetWeek = week; gameDate = calculateNextGameDate();
             currentWeekData = { weekNumber: week, year, releaseDate: null, whiteTeam: [], darkTeam: [] };
-            manualOverride = false; manualOverrideState = null; requirePlayerCode = true; lastExactResetRunAt = ''; lastExactRosterReleaseRunAt = ''; clearAnnouncementState();
+            manualOverride = false; manualOverrideState = null; requirePlayerCode = true; clearAnnouncementState();
+            syncScheduledActionRunMarker(resetWeekSchedule.at, 'reset', etTime);
+            syncScheduledActionRunMarker(rosterReleaseSchedule.at, 'release', etTime);
             await addAutoPlayers();
         }, { week, year });
     } catch (err) {
