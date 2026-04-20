@@ -5947,7 +5947,7 @@ Date: ${selectedGameDate}`);
                     
                     await loadReleasedRosterPreview();
                     
-                    alert(`✅ Roster Released Successfully!\n\nWhite Team: ${data.whiteTeam.length} players (Avg: ${data.whiteRating})\nDark Team: ${data.darkTeam.length} players (Avg: ${data.darkRating})\n\nSignup is now LOCKED until the scheduled unlock time. Players can see the teams on the signup page!`);
+                    alert(`✅ Roster Released Successfully!\n\nWhite Team: ${data.whiteTeam.length} players (Avg: ${data.whiteRating})\nDark Team: ${data.darkTeam.length} players (Avg: ${data.darkRating})\n\nSignup stays OPEN after roster release. Players can see the teams on the signup page, and new signups go to the waitlist.`);
                 } else {
                     console.error("Server returned error:", data);
                     document.getElementById('releaseError').classList.add('active');

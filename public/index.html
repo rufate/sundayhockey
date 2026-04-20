@@ -566,6 +566,19 @@
             font-weight: bold;
         }
 
+        .cancel-badge {
+            background: #ff4444;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.65rem;
+            font-weight: bold;
+        }
+
+        .cancelled-player {
+            opacity: 0.6;
+        }
+
         /* Lock schedule notice */
         .lock-notice {
             background: linear-gradient(135deg, #4a1a1a, #5d2d2d);
@@ -1707,7 +1720,7 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
                 🏒 Registered Players (<span id="registeredCount">0</span>)
             </h3>
             <div style="text-align:center; color:#ffb366; margin: 0 0 14px 0; font-size: 0.95rem; font-weight: 700;">
-                Cancellation must be done before roster release. Late cancel / no-show owes.
+                Cancel anytime. Last minute cancellations must be done 3 hours before game time. No show owes!
             </div>
             <div class="players-grid" id="playersGrid">
                 <!-- Players will be loaded here -->
@@ -1953,13 +1966,13 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
         <div class="modal-content">
             <h3>⚠️ Cancel Registration</h3>
             <p>Enter the phone number you used to register to confirm cancellation.</p>
-            <p style="color:#ffb3b3; font-weight:bold; margin-top:-6px;">Cancellation must be done before roster release. Late cancel / no-show owes.</p>
+            <p style="color:#ffb3b3; font-weight:bold; margin-top:-6px;">Last minute cancellation must be done 3 hours before game time. No show owes!</p>
             <input type="tel" id="cancelPhoneInput" placeholder="Phone Number" inputmode="numeric" autocomplete="tel" maxlength="14" style="margin-bottom: 15px;">
             <div class="cancel-error" id="cancelError"></div>
             <div class="cancel-success" id="cancelSuccess"></div>
             <div class="modal-buttons">
-                <button class="abort-btn" onclick="closeCancelModal()">Abort</button>
-                <button class="confirm-cancel" onclick="confirmCancel()">Confirm Cancel</button>
+                <button class="abort-btn" id="abortCancelBtn" onclick="closeCancelModal()">Abort</button>
+                <button class="confirm-cancel" id="confirmCancelBtn" onclick="confirmCancel()">Confirm Cancel</button>
             </div>
         </div>
     </div>
@@ -1970,6 +1983,8 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
         let codeRequired = true;
         let currentLocation = "";
         let currentTime = "";
+        let cancelModalAwaitingContinue = false;
+        let cancelModalAfterCloseAction = null;
         let currentDate = "";
         let playerSpotsAvailable = 20;
         let isFull = false;
@@ -2150,11 +2165,6 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
 
             if (maintenanceMode) {
                 showSignupError('Portal is currently down for maintenance. Please check back later.');
-                return;
-            }
-
-            if (rosterReleased) {
-                showSignupError('Roster has already been released. Signup is closed for this skate.');
                 return;
             }
 
@@ -2621,51 +2631,43 @@ function updateCalculatedRating() {
             try {
                 const res = await fetch(`${API_URL}/api/roster`);
                 const data = await res.json();
-                
+
                 if (!data.released) {
                     document.getElementById('rosterDisplay').classList.remove('active');
                     return false;
                 }
-                
-                document.getElementById('rosterGameInfo').innerText = 
+
+                document.getElementById('rosterGameInfo').innerText =
                     `${data.formattedDate || data.date || currentDate} | ${data.location || currentLocation} | ${data.time || currentTime}`;
-                
-                document.getElementById('whiteCount').innerText = data.whiteTeam.length;
-                document.getElementById('darkCount').innerText = data.darkTeam.length;
-                
-                const whiteList = document.getElementById('whiteTeamList');
-                whiteList.innerHTML = '';
-                if (data.whiteTeam && Array.isArray(data.whiteTeam)) {
-                    data.whiteTeam.forEach(player => {
+
+                document.getElementById('whiteCount').innerText = data.whiteActiveCount ?? (Array.isArray(data.whiteTeam) ? data.whiteTeam.filter(p => !p.cancelled).length : 0);
+                document.getElementById('darkCount').innerText = data.darkActiveCount ?? (Array.isArray(data.darkTeam) ? data.darkTeam.filter(p => !p.cancelled).length : 0);
+
+                const renderTeam = (listEl, team) => {
+                    listEl.innerHTML = '';
+                    if (!Array.isArray(team)) return;
+                    team.forEach(player => {
                         const li = document.createElement('li');
-                        li.className = 'player-item' + (player.isGoalie ? ' goalie' : '');
+                        li.className = 'player-item' + (player.isGoalie ? ' goalie' : '') + (player.cancelled ? ' cancelled-player' : '');
                         const goalieBadge = player.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
-                        li.innerHTML = `
-                            <span class="player-name">${player.firstName || ''} ${player.lastName || ''} ${goalieBadge}</span>
-                        `;
-                        whiteList.appendChild(li);
+                        const cancelBadge = player.cancelled ? '<span class="cancel-badge">CANCEL</span>' : '';
+                        const safeFirstName = String(player.firstName || '').replace(/'/g, "\'");
+                        const safeLastName = String(player.lastName || '').replace(/'/g, "\'");
+                        const buttonHtml = (!player.cancelled && player.canCancel !== false && player.id != null)
+                            ? `<button class="cancel-btn" onclick="openCancelModal(${JSON.stringify(player.id)}, '${safeFirstName}', '${safeLastName}')">Cancel</button>`
+                            : '';
+                        li.innerHTML = `<span class="player-name">${player.firstName || ''} ${player.lastName || ''} ${goalieBadge} ${cancelBadge}</span>${buttonHtml}`;
+                        listEl.appendChild(li);
                     });
-                }
-                
-                const darkList = document.getElementById('darkTeamList');
-                darkList.innerHTML = '';
-                if (data.darkTeam && Array.isArray(data.darkTeam)) {
-                    data.darkTeam.forEach(player => {
-                        const li = document.createElement('li');
-                        li.className = 'player-item' + (player.isGoalie ? ' goalie' : '');
-                        const goalieBadge = player.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
-                        li.innerHTML = `
-                            <span class="player-name">${player.firstName || ''} ${player.lastName || ''} ${goalieBadge}</span>
-                        `;
-                        darkList.appendChild(li);
-                    });
-                }
-                
+                };
+
+                renderTeam(document.getElementById('whiteTeamList'), data.whiteTeam);
+                renderTeam(document.getElementById('darkTeamList'), data.darkTeam);
+
                 document.getElementById('rosterDisplay').classList.add('active');
                 return true;
-                
             } catch (err) {
-                console.error("Error loading roster:", err);
+                console.error('Error loading roster:', err);
                 return false;
             }
         }
@@ -3026,12 +3028,8 @@ function updateCalculatedRating() {
 
                 if (data.rosterReleased) {
                     document.getElementById('registeredPlayersSection').style.display = 'none';
-                    document.getElementById('codeSection').style.display = 'none';
-                    document.getElementById('signupForm').style.display = 'none';
-                    document.getElementById('waitlistMode').style.display = 'none';
                 } else {
                     document.getElementById('registeredPlayersSection').style.display = 'block';
-                    document.getElementById('codeSection').style.display = 'block';
                     await loadRegisteredPlayers();
                 }
 
@@ -3138,7 +3136,7 @@ function updateCalculatedRating() {
                 const protectedLabel = isProtected ? '<div class="protected-label">PROTECTED</div>' : '';
 
                 let cancelButton = '';
-                if (!isGoalie && !isProtected && !rosterReleased && player.canCancel !== false) {
+                if (!isGoalie && !isProtected && player.canCancel !== false) {
                     cancelButton = `<button class="cancel-btn" onclick="openCancelModal(${player.id}, '${firstName}', '${lastName}')">Cancel</button>`;
                 }
 
@@ -3156,30 +3154,52 @@ function updateCalculatedRating() {
             });
         }
 
+        function resetCancelModalButtons() {
+            const abortBtn = document.getElementById('abortCancelBtn');
+            const confirmBtn = document.getElementById('confirmCancelBtn');
+            if (abortBtn) abortBtn.style.display = '';
+            if (confirmBtn) confirmBtn.textContent = 'Confirm Cancel';
+        }
+
         function openCancelModal(playerId, firstName, lastName) {
-            if (rosterReleased) {
-                alert('Cannot cancel after roster has been released.');
-                return;
-            }
             playerToCancel = { id: playerId, firstName, lastName };
+            cancelModalAwaitingContinue = false;
+            cancelModalAfterCloseAction = null;
             document.getElementById('cancelPhoneInput').value = '';
+            document.getElementById('cancelPhoneInput').disabled = false;
             document.getElementById('cancelError').style.display = 'none';
             document.getElementById('cancelSuccess').style.display = 'none';
+            resetCancelModalButtons();
             document.getElementById('cancelModal').classList.add('active');
         }
 
         function closeCancelModal() {
             document.getElementById('cancelModal').classList.remove('active');
+            document.getElementById('cancelPhoneInput').disabled = false;
+            resetCancelModalButtons();
+            const afterCloseAction = cancelModalAfterCloseAction;
+            cancelModalAwaitingContinue = false;
+            cancelModalAfterCloseAction = null;
             playerToCancel = null;
+            if (typeof afterCloseAction === 'function') {
+                afterCloseAction();
+            }
         }
 
         async function confirmCancel() {
             if (!playerToCancel) return;
 
+            if (cancelModalAwaitingContinue) {
+                closeCancelModal();
+                return;
+            }
+
             const cancelPhoneDigits = normalizeCancelPhoneInput();
             const phone = formatPhoneInputValue(cancelPhoneDigits);
             const errorDiv = document.getElementById('cancelError');
             const successDiv = document.getElementById('cancelSuccess');
+            const abortBtn = document.getElementById('abortCancelBtn');
+            const confirmBtn = document.getElementById('confirmCancelBtn');
 
             if (!cancelPhoneDigits) {
                 errorDiv.innerText = 'Please enter your phone number.';
@@ -3209,22 +3229,24 @@ function updateCalculatedRating() {
 
                 if (res.ok && data.success) {
                     errorDiv.style.display = 'none';
-                    let successMsg = `✅ ${playerToCancel.firstName} ${playerToCancel.lastName}'s registration has been cancelled.`;
+                    let successMsg = data.lateCancel
+                        ? `✅ ${playerToCancel.firstName} ${playerToCancel.lastName}'s cancellation was recorded.<br><br>Late cancel / no-show owes.`
+                        : `✅ ${playerToCancel.firstName} ${playerToCancel.lastName}'s registration has been cancelled.`;
                     if (data.promotedPlayer) {
                         successMsg += `<br><br>🎉 ${data.promotedPlayer.firstName} ${data.promotedPlayer.lastName} has been promoted from the waitlist!`;
                     }
+                    successMsg += '<br><br>Tap Continue.';
                     successDiv.innerHTML = successMsg;
                     successDiv.style.display = 'block';
-                    
-                    setTimeout(() => {
-                        closeCancelModal();
+                    document.getElementById('cancelPhoneInput').disabled = true;
+                    if (abortBtn) abortBtn.style.display = 'none';
+                    if (confirmBtn) confirmBtn.textContent = 'Continue';
+                    cancelModalAwaitingContinue = true;
+                    cancelModalAfterCloseAction = () => {
                         checkStatus();
-                    }, 2500);
+                    };
                 } else {
                     errorDiv.innerText = data.error || 'Failed to cancel registration.';
-                    if (data && data.noShowOwes) {
-                        errorDiv.innerHTML = `<strong>${data.error || 'Cancellation closed.'}</strong><br><span style="color:#ffb3b3;">${data.policy || 'Late cancel / no-show owes.'}</span>`;
-                    }
                     errorDiv.style.display = 'block';
                 }
             } catch (err) {

@@ -520,7 +520,7 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
         </div>
 
         <div style="text-align:center; color:#ffb366; margin: 14px 0 18px 0; font-size: 0.95rem;">
-            Notice: Waitlist position 1 will automatically be promoted if a player cancels before roster release.
+            Notice: Waitlist position 1 will automatically be promoted if a player cancels before the 3-hour deadline.
         </div>
 
         <ul class="waitlist-list" id="waitlistList">
@@ -539,7 +539,7 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
         <div class="modal-content">
             <h3>Cancel Waitlist Spot</h3>
             <p>Enter the same 10-digit phone number used when you joined the waitlist.</p>
-            <p style="color:#ffb3b3; font-weight:bold; margin-top:-6px;">Cancellation closes at roster release.</p>
+            <p style="color:#ffb3b3; font-weight:bold; margin-top:-6px;">Cancel anytime from the waitlist using the same phone number you registered with.</p>
             <input type="tel" id="cancelPhoneInput" placeholder="(555) 555-5555" maxlength="14">
             <div class="cancel-error" id="cancelError"></div>
             <div class="cancel-success" id="cancelSuccess"></div>
@@ -553,6 +553,8 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
     <script>
         const API_URL = window.location.origin;
         let playerToCancel = null;
+        let cancelModalAwaitingContinue = false;
+        let cancelModalAfterCloseAction = null;
         let rosterReleased = false;
 
         function normalizePhoneDigits(value) {
@@ -577,35 +579,55 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
             return digits;
         }
 
+        function resetCancelModalButtons() {
+            const abortBtn = document.getElementById('abortCancelBtn');
+            const confirmBtn = document.getElementById('confirmCancelBtn');
+            if (abortBtn) {
+                abortBtn.style.display = '';
+                abortBtn.textContent = 'Keep Spot';
+            }
+            if (confirmBtn) confirmBtn.textContent = 'Confirm Cancel';
+        }
+
         function openCancelModal(player) {
-            console.log('openCancelModal called with player:', player);
-            if (!player || !player.id) {
-                console.error('Invalid player object:', player);
-                return;
-            }
-            if (rosterReleased) {
-                alert('Cannot cancel after roster has been released.');
-                return;
-            }
             playerToCancel = player;
+            cancelModalAwaitingContinue = false;
+            cancelModalAfterCloseAction = null;
             document.getElementById('cancelPhoneInput').value = '';
+            document.getElementById('cancelPhoneInput').disabled = false;
             document.getElementById('cancelError').style.display = 'none';
             document.getElementById('cancelSuccess').style.display = 'none';
+            resetCancelModalButtons();
             document.getElementById('cancelModal').classList.add('active');
             document.getElementById('cancelPhoneInput').focus();
         }
 
         function closeCancelModal() {
             document.getElementById('cancelModal').classList.remove('active');
+            document.getElementById('cancelPhoneInput').disabled = false;
+            resetCancelModalButtons();
+            const afterCloseAction = cancelModalAfterCloseAction;
+            cancelModalAwaitingContinue = false;
+            cancelModalAfterCloseAction = null;
             playerToCancel = null;
+            if (typeof afterCloseAction === 'function') {
+                afterCloseAction();
+            }
         }
 
         async function confirmCancel() {
             if (!playerToCancel) return;
 
+            if (cancelModalAwaitingContinue) {
+                closeCancelModal();
+                return;
+            }
+
             const digits = normalizeCancelPhoneInput();
             const errorDiv = document.getElementById('cancelError');
             const successDiv = document.getElementById('cancelSuccess');
+            const abortBtn = document.getElementById('abortCancelBtn');
+            const confirmBtn = document.getElementById('confirmCancelBtn');
 
             if (digits.length !== 10) {
                 errorDiv.innerText = 'Phone number must be exactly 10 digits.';
@@ -627,17 +649,17 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
                 const data = await res.json();
                 if (res.ok && data.success) {
                     errorDiv.style.display = 'none';
-                    successDiv.innerHTML = `✅ ${playerToCancel.fullName || (playerToCancel.firstName + ' ' + playerToCancel.lastName)} has been removed from the waitlist.`;
+                    successDiv.innerHTML = `✅ ${playerToCancel.fullName || (playerToCancel.firstName + ' ' + playerToCancel.lastName)} has been removed from the waitlist.<br><br>Tap Continue.`;
                     successDiv.style.display = 'block';
-                    setTimeout(async () => {
-                        closeCancelModal();
+                    document.getElementById('cancelPhoneInput').disabled = true;
+                    if (abortBtn) abortBtn.style.display = 'none';
+                    if (confirmBtn) confirmBtn.textContent = 'Continue';
+                    cancelModalAwaitingContinue = true;
+                    cancelModalAfterCloseAction = async () => {
                         await loadWaitlist();
-                    }, 1500);
+                    };
                 } else {
                     errorDiv.innerText = data.error || 'Failed to cancel waitlist registration.';
-                    if (data && data.noShowOwes) {
-                        errorDiv.innerHTML = `<strong>${data.error || 'Cancellation closed.'}</strong><br><span style="color:#ffb3b3;">${data.policy || ''}</span>`;
-                    }
                     errorDiv.style.display = 'block';
                 }
             } catch (err) {
@@ -669,6 +691,11 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
                     document.getElementById('gameLocationTime').innerText = `${data.location} | ${data.time}`;
                 }
 
+                const waitlistNote = document.querySelector('.container > div[style*="text-align:center; color:#ffb366"]');
+                if (waitlistNote && data.cancellationDeadlineLine) {
+                    waitlistNote.innerText = `Notice: Waitlist position 1 will automatically be promoted if a player cancels before the 3-hour deadline. ${data.cancellationDeadlineLine}`;
+                }
+
                 const list = document.getElementById('waitlistList');
                 list.innerHTML = '';
 
@@ -697,7 +724,7 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
                     `;
 
                     // Add cancel button if allowed
-                    if (player.canCancel !== false && !rosterReleased) {
+                    if (player.canCancel !== false) {
                         html += `<button type="button" class="cancel-btn" data-player-id="${player.id}">Cancel</button>`;
                     }
 
