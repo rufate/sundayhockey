@@ -1733,6 +1733,20 @@ async function initDatabase() {
                 dark_avg NUMERIC(3,1)
             )
         `);
+
+        // Keep only one history row per week/year. If older duplicates already exist,
+        // keep the newest row and remove the rest before enforcing the unique index.
+        await pool.query(`
+            DELETE FROM history h
+            USING history newer
+            WHERE h.year = newer.year
+              AND h.week_number = newer.week_number
+              AND (h.release_date < newer.release_date OR (h.release_date = newer.release_date AND h.id < newer.id))
+        `);
+        await pool.query(`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_history_year_week_unique
+            ON history (year, week_number)
+        `);
         
         // ============================================
         // ADD THIS NEW TABLE FOR APP SETTINGS
@@ -3898,6 +3912,8 @@ async function deletePaymentReportById(reportId) {
 }
 
 async function saveWeekHistory(year, weekNumber, whiteTeam, darkTeam) {
+    if (!pool) return;
+
     try {
         // Add payment info to team data before saving
         const whiteTeamWithPayment = whiteTeam.map(p => ({
@@ -3906,20 +3922,33 @@ async function saveWeekHistory(year, weekNumber, whiteTeam, darkTeam) {
             paidAmount: p.paidAmount,
             paymentMethod: p.paymentMethod
         }));
-        
+
         const darkTeamWithPayment = darkTeam.map(p => ({
             ...p,
             paid: p.paid,
             paidAmount: p.paidAmount,
             paymentMethod: p.paymentMethod
         }));
-        
-        const whiteAvg = (whiteTeam.reduce((sum, p) => sum + (parseInt(p.rating) || 0), 0) / whiteTeam.length).toFixed(1);
-        const darkAvg = (darkTeam.reduce((sum, p) => sum + (parseInt(p.rating) || 0), 0) / darkTeam.length).toFixed(1);
-        
+
+        const whiteAvg = whiteTeam.length
+            ? (whiteTeam.reduce((sum, p) => sum + (parseFloat(p.rating) || 0), 0) / whiteTeam.length).toFixed(1)
+            : '0.0';
+        const darkAvg = darkTeam.length
+            ? (darkTeam.reduce((sum, p) => sum + (parseFloat(p.rating) || 0), 0) / darkTeam.length).toFixed(1)
+            : '0.0';
+
         await pool.query(
             `INSERT INTO history (week_number, year, release_date, game_location, game_time, game_date, white_team, dark_team, white_avg, dark_avg)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             ON CONFLICT (year, week_number) DO UPDATE SET
+                release_date = EXCLUDED.release_date,
+                game_location = EXCLUDED.game_location,
+                game_time = EXCLUDED.game_time,
+                game_date = EXCLUDED.game_date,
+                white_team = EXCLUDED.white_team,
+                dark_team = EXCLUDED.dark_team,
+                white_avg = EXCLUDED.white_avg,
+                dark_avg = EXCLUDED.dark_avg`,
             [
                 weekNumber,
                 year,
@@ -3939,9 +3968,13 @@ async function saveWeekHistory(year, weekNumber, whiteTeam, darkTeam) {
 }
 
 async function getHistoryList() {
+    if (!pool) return [];
+
     try {
         const res = await pool.query(
-            'SELECT week_number, year, release_date FROM history ORDER BY year DESC, week_number DESC'
+            `SELECT DISTINCT ON (year, week_number) week_number, year, release_date
+             FROM history
+             ORDER BY year DESC, week_number DESC, release_date DESC, id DESC`
         );
         return res.rows.map(row => ({
             weekNumber: row.week_number,
@@ -3955,12 +3988,14 @@ async function getHistoryList() {
 }
 
 async function getWeekHistory(year, weekNumber) {
+    if (!pool) return null;
+
     try {
         const res = await pool.query(
-            'SELECT * FROM history WHERE year = $1 AND week_number = $2',
+            'SELECT * FROM history WHERE year = $1 AND week_number = $2 ORDER BY release_date DESC, id DESC LIMIT 1',
             [year, weekNumber]
         );
-        
+
         if (res.rows.length > 0) {
             const row = res.rows[0];
             return {
