@@ -58,41 +58,43 @@
         
 
         .container {
-            width: 100%;
-            max-width: 900px;
-            background: var(--card-bg);
-            padding: 30px;
-            border-radius: 15px;
+        width: 100%;
+        max-width: clamp(320px, 92vw, 900px);
+        background: var(--card-bg);
+        padding: clamp(16px, 3.6vw, 30px);
+        border-radius: clamp(12px, 2vw, 15px);
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             border: 1px solid #444;
         }
 
         h1 {
-            text-align: center;
-            color: var(--accent);
-            margin-bottom: 5px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
+        text-align: center;
+        color: var(--accent);
+        margin-bottom: 5px;
+        text-transform: uppercase;
+        letter-spacing: clamp(1px, 0.35vw, 2px);
+        font-size: clamp(1.65rem, 4.8vw, 2rem);
+        line-height: 1.1;
+    }
 
         .game-info {
-            background: linear-gradient(135deg, #2a2a2a, #333);
-            border: 2px solid var(--accent);
-            border-radius: 10px;
-            padding: 15px;
-            margin: 20px 0;
-            text-align: center;
-        }
+        background: linear-gradient(135deg, #2a2a2a, #333);
+        border: 2px solid var(--accent);
+        border-radius: clamp(10px, 2vw, 14px);
+        padding: clamp(14px, 3vw, 18px);
+        margin: clamp(14px, 3vw, 20px) 0;
+        text-align: center;
+    }
 
         .game-date {
-            font-size: 1.1rem;
+            font-size: clamp(0.95rem, 2.7vw, 1.1rem);
             color: #fff;
             margin-bottom: 5px;
             font-weight: bold;
         }
 
         .game-location {
-            font-size: 1.3rem;
+            font-size: clamp(1.2rem, 4vw, 1.7rem);
             font-weight: bold;
             color: var(--accent);
             margin-bottom: 5px;
@@ -104,22 +106,22 @@
         }
 
         .spots-container {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 15px;
-            margin: 20px 0;
-        }
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: clamp(12px, 2.5vw, 15px);
+        margin: clamp(16px, 3vw, 20px) 0;
+    }
 
         .spot-counter {
-            background: linear-gradient(135deg, #333, #444);
-            padding: 20px;
-            border-radius: 10px;
-            text-align: center;
-            border: 2px solid var(--accent);
-        }
+        background: linear-gradient(135deg, #333, #444);
+        padding: clamp(16px, 3.5vw, 20px);
+        border-radius: clamp(10px, 2vw, 12px);
+        text-align: center;
+        border: 2px solid var(--accent);
+    }
 
         .spot-number {
-            font-size: 3rem;
+            font-size: clamp(2.25rem, 10vw, 3.3rem);
             font-weight: bold;
             color: var(--accent);
         }
@@ -129,7 +131,7 @@
         }
 
         .spot-text { 
-            font-size: 0.9rem; 
+            font-size: clamp(0.82rem, 2.6vw, 0.95rem); 
             color: #ccc; 
             margin-top: 5px;
         }
@@ -145,13 +147,13 @@
         }
 
         .waitlist-mode {
-            background: linear-gradient(135deg, #3a1a1a, #4d2d2d);
-            border: 2px solid #ff6b00;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 15px 0;
-            text-align: center;
-        }
+        background: linear-gradient(135deg, #3a1a1a, #4d2d2d);
+        border: 2px solid #ff6b00;
+        border-radius: clamp(10px, 2vw, 14px);
+        padding: clamp(14px, 3vw, 18px);
+        margin: clamp(12px, 2.5vw, 15px) 0;
+        text-align: center;
+    }
 
         .waitlist-mode h3 {
             color: #ff6b00;
@@ -175,17 +177,17 @@
         }
 
         button {
-            width: 100%;
-            padding: 15px;
-            background: var(--accent);
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 1.1rem;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 10px;
-        }
+        width: 100%;
+        padding: clamp(12px, 3vw, 15px);
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: clamp(8px, 1.8vw, 10px);
+        font-size: clamp(0.98rem, 2.9vw, 1.1rem);
+        font-weight: bold;
+        cursor: pointer;
+        margin-top: 10px;
+    }
 
         button:hover { background: #ff8533; }
 
@@ -1642,6 +1644,59 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
         })();
     </script>
 
+
+<style id="game-card-lock-and-live-promo-v1">
+    .game-info.position-locked-after-release {
+        margin-top: 18px;
+    }
+    .player-item.live-promoted {
+        border-left-color: #5fa8ff;
+        background: linear-gradient(135deg, rgba(95,168,255,0.16), rgba(95,168,255,0.05));
+        animation: livePromotedPulse 1.4s ease 3;
+    }
+    .subbed-in-badge,
+    .you-were-subbed-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.66rem;
+        font-weight: 800;
+        letter-spacing: 0.25px;
+        text-transform: uppercase;
+        color: #fff;
+    }
+    .subbed-in-badge {
+        background: #1976d2;
+    }
+    .you-were-subbed-badge {
+        background: #2e7d32;
+        animation: livePromotedPulse 1.4s ease 3;
+    }
+    .subbed-in-note {
+        display: block;
+        width: 100%;
+        margin-top: 4px;
+        color: #a8d3ff;
+        font-size: 0.74rem;
+        line-height: 1.2;
+    }
+    .venue-waitlist-box.live-promotion-flash {
+        animation: waitlistPromotionFlash 1.1s ease 2;
+    }
+    @keyframes livePromotedPulse {
+        0% { box-shadow: 0 0 0 0 rgba(95, 168, 255, 0.48); transform: translateY(0); }
+        40% { box-shadow: 0 0 0 10px rgba(95, 168, 255, 0); transform: translateY(-2px); }
+        100% { box-shadow: 0 0 0 0 rgba(95, 168, 255, 0); transform: translateY(0); }
+    }
+    @keyframes waitlistPromotionFlash {
+        0% { box-shadow: 0 0 0 rgba(255,107,0,0); }
+        35% { box-shadow: 0 0 0 3px rgba(255,107,0,0.45), 0 0 22px rgba(255,107,0,0.32); }
+        100% { box-shadow: 0 0 0 rgba(255,107,0,0); }
+    }
+</style>
+
 </head>
 <body>
 
@@ -1662,7 +1717,8 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
     <div class="container" id="playerView">
         <h1 id="pageTitle">Phan's Hockey</h1>
         
-        <div class="game-info">
+        <div id="gameInfoHome"></div>
+        <div class="game-info" id="gameInfoCard">
             <div class="game-date" id="gameDate">Loading...</div>
             <div class="game-location" id="gameLocation">Loading...</div>
             <div class="game-time" id="gameTime">Loading...</div>
@@ -1678,6 +1734,7 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
                 </div>
             </div>
 
+            <div id="venueWaitlistHome"></div>
             <div class="venue-waitlist-box" id="venueWaitlistBox">
                 <div class="venue-waitlist-header">
                     <div class="venue-waitlist-title">Current Waitlist</div>
@@ -1713,6 +1770,7 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
                 </div>
             </div>
         </div>
+        <div id="rosterGameInfoMount"></div>
 
         <!-- Registered Players List -->
         <div class="registered-players-section" id="registeredPlayersSection">
@@ -1995,6 +2053,10 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
         let currentAnnouncementEnabled = false;
         let rosterCountdownTimer = null;
         let currentRosterReleaseAt = null;
+        let currentGameDateValue = '';
+        let previousVenueWaitlistIds = [];
+        let seenPromotedRosterIds = {};
+        const GAME_CARD_POSITION_LOCK_KEY = 'phansHockeyGameCardLockedUnderRosterV1';
 
         let playerToCancel = null;
         const QUICK_RETURN_STORAGE_KEY = 'phansHockeyQuickPlayersV1';
@@ -2648,16 +2710,26 @@ function updateCalculatedRating() {
                     if (!Array.isArray(team)) return;
                     team.forEach(player => {
                         const li = document.createElement('li');
-                        li.className = 'player-item' + (player.isGoalie ? ' goalie' : '') + (player.cancelled ? ' cancelled-player' : '');
+                        li.className = 'player-item' + (player.isGoalie ? ' goalie' : '') + (player.cancelled ? ' cancelled-player' : '') + (player.promotedFromWaitlist ? ' promoted-from-waitlist' : '');
                         const goalieBadge = player.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
                         const cancelBadge = player.cancelled ? '<span class="cancel-badge">CANCEL</span>' : '';
+                        const isViewer = isKnownViewerPlayer(player);
+                        const subBadge = player.promotedFromWaitlist
+                            ? (isViewer
+                                ? '<span class="you-were-subbed-badge">YOU WERE SUBBED IN</span>'
+                                : '<span class="subbed-in-badge">SUBBED IN</span>')
+                            : '';
+                        const subNote = player.promotedFromWaitlist && player.subbedInForName
+                            ? `<span class="subbed-in-note">for ${player.subbedInForName}</span>`
+                            : '';
                         const safeFirstName = String(player.firstName || '').replace(/'/g, "\'");
                         const safeLastName = String(player.lastName || '').replace(/'/g, "\'");
                         const buttonHtml = (!player.cancelled && player.canCancel !== false && player.id != null)
                             ? `<button class="cancel-btn" onclick="openCancelModal(${JSON.stringify(player.id)}, '${safeFirstName}', '${safeLastName}')">Cancel</button>`
                             : '';
-                        li.innerHTML = `<span class="player-name">${player.firstName || ''} ${player.lastName || ''} ${goalieBadge} ${cancelBadge}</span>${buttonHtml}`;
+                        li.innerHTML = `<span class="player-name">${player.firstName || ''} ${player.lastName || ''} ${goalieBadge} ${cancelBadge} ${subBadge}${subNote}</span>${buttonHtml}`;
                         listEl.appendChild(li);
+                        markPromotedRosterEntry(li, player);
                     });
                 };
 
@@ -2872,6 +2944,86 @@ function updateCalculatedRating() {
             }
         }
 
+
+        function getCurrentGameCardLockValue() {
+            return String(localStorage.getItem(GAME_CARD_POSITION_LOCK_KEY) || '').trim();
+        }
+
+        function getGameCardLockToken() {
+            return [String(currentGameDateValue || '').trim(), String(currentLocation || '').trim(), String(currentTime || '').trim()].filter(Boolean).join('|');
+        }
+
+        function clearGameCardPositionLockIfNeeded() {
+            const stored = getCurrentGameCardLockValue();
+            const token = getGameCardLockToken();
+            if (stored && token && stored !== token) {
+                localStorage.removeItem(GAME_CARD_POSITION_LOCK_KEY);
+            }
+        }
+
+        function lockGameCardUnderRoster() {
+            const token = getGameCardLockToken();
+            if (!token) return;
+            localStorage.setItem(GAME_CARD_POSITION_LOCK_KEY, token);
+        }
+
+        function isKnownViewerPlayer(player) {
+            const playerName = `${String(player?.firstName || '').trim().toLowerCase()} ${String(player?.lastName || '').trim().toLowerCase()}`.trim();
+            if (!playerName) return false;
+            const storedProfiles = getStoredQuickPlayers().map(sanitizeQuickPlayerProfile).filter(Boolean);
+            if (storedProfiles.some(profile => `${profile.firstName} ${profile.lastName}`.trim().toLowerCase() === playerName)) {
+                return true;
+            }
+            const formFirst = String(document.getElementById('firstName')?.value || '').trim().toLowerCase();
+            const formLast = String(document.getElementById('lastName')?.value || '').trim().toLowerCase();
+            return !!formFirst && !!formLast && `${formFirst} ${formLast}` === playerName;
+        }
+
+        function triggerWaitlistPromotionLiveAnimation() {
+            const wrap = document.getElementById('venueWaitlistBox');
+            if (!wrap) return;
+            wrap.classList.remove('live-promotion-flash');
+            void wrap.offsetWidth;
+            wrap.classList.add('live-promotion-flash');
+            setTimeout(() => wrap.classList.remove('live-promotion-flash'), 1800);
+        }
+
+        function markPromotedRosterEntry(li, player) {
+            if (!li || !player || !player.promotedFromWaitlist || player.id == null) return;
+            const playerId = String(player.id);
+            if (seenPromotedRosterIds[playerId]) return;
+            seenPromotedRosterIds[playerId] = true;
+            li.classList.add('live-promoted');
+            setTimeout(() => li.classList.remove('live-promoted'), 4200);
+        }
+
+        function syncVenueWaitlistPlacement(forceRosterReleased = null) {
+            const gameInfoCard = document.getElementById('gameInfoCard');
+            const home = document.getElementById('gameInfoHome');
+            const roster = document.getElementById('rosterDisplay');
+            const mount = document.getElementById('rosterGameInfoMount');
+            const releaseState = forceRosterReleased === null ? !!rosterReleased : !!forceRosterReleased;
+            const shouldPlaceUnderRoster = releaseState || getCurrentGameCardLockValue() === getGameCardLockToken();
+
+            if (!gameInfoCard || !home || !roster || !mount) return;
+
+            if (releaseState) {
+                lockGameCardUnderRoster();
+            }
+
+            if (shouldPlaceUnderRoster) {
+                gameInfoCard.classList.add('position-locked-after-release');
+                if (gameInfoCard.parentNode !== mount) {
+                    mount.appendChild(gameInfoCard);
+                }
+            } else {
+                gameInfoCard.classList.remove('position-locked-after-release');
+                if (gameInfoCard.parentNode !== home.parentNode || gameInfoCard.previousElementSibling !== home) {
+                    home.insertAdjacentElement('afterend', gameInfoCard);
+                }
+            }
+        }
+
         function renderVenueWaitlist(entries) {
             const wrap = document.getElementById('venueWaitlistBox');
             const countEl = document.getElementById('venueWaitlistCount');
@@ -2879,6 +3031,12 @@ function updateCalculatedRating() {
             if (!wrap || !countEl || !listEl) return;
 
             const safeEntries = Array.isArray(entries) ? entries : [];
+            const currentIds = safeEntries.map(entry => String(entry?.id ?? '')).filter(Boolean);
+            const removedIds = previousVenueWaitlistIds.filter(id => id && !currentIds.includes(id));
+            if (previousVenueWaitlistIds.length && removedIds.length) {
+                triggerWaitlistPromotionLiveAnimation();
+            }
+            previousVenueWaitlistIds = currentIds;
             countEl.innerText = safeEntries.length;
             listEl.innerHTML = '';
 
@@ -2954,6 +3112,8 @@ function updateCalculatedRating() {
                 currentLocation = data.location;
                 currentTime = data.time;
                 currentDate = data.formattedDate;
+                currentGameDateValue = data.date || '';
+                clearGameCardPositionLockIfNeeded();
                 playerSpotsAvailable = data.playerSpotsRemaining;
                 const openSpotsNoticeEl = document.getElementById('openSpotsNotice');
                 if (data.openSpotsNotice) {
@@ -2995,6 +3155,7 @@ function updateCalculatedRating() {
                 } else {
                     document.getElementById('rosterDisplay').classList.remove('active');
                 }
+                syncVenueWaitlistPlacement(rosterReleased);
                 
                 document.getElementById('spotsLeft').innerText = playerSpotsAvailable;
                 const heroJoinBtn = document.getElementById('heroJoinBtn');

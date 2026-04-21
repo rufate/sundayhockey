@@ -3482,8 +3482,9 @@ function extractWaitlistPlayerToPromote(options = {}) {
     return player || null;
 }
 
-function buildPromotedRosterPlayer(waitlistPlayer, team = null) {
+function buildPromotedRosterPlayer(waitlistPlayer, team = null, metadata = {}) {
     if (!waitlistPlayer) return null;
+    const subbedInForName = String(metadata.subbedInForName || '').trim();
     return hydratePlayerRatingProfile({
         id: waitlistPlayer.id,
         firstName: waitlistPlayer.firstName,
@@ -3507,7 +3508,11 @@ function buildPromotedRosterPlayer(waitlistPlayer, team = null) {
         isGoalie: waitlistPlayer.isGoalie,
         bypassAutoPromote: false,
         team: team || null,
-        rulesAgreed: true
+        rulesAgreed: true,
+        promotedFromWaitlist: !!metadata.promotedFromWaitlist,
+        subbedInForPlayerId: metadata.subbedInForPlayerId ?? null,
+        subbedInForName: subbedInForName || null,
+        subbedInAt: metadata.subbedInAt || new Date().toISOString()
     });
 }
 
@@ -4213,7 +4218,11 @@ function buildPublicRosterPayload() {
             isGoalie: !!p.isGoalie,
             cancelled,
             owes: cancelled,
-            canCancel: !cancelled && !p.isGoalie && !(String(p.firstName || '').toLowerCase() === 'phan' && String(p.lastName || '').toLowerCase() === 'ly')
+            canCancel: !cancelled && !p.isGoalie && !(String(p.firstName || '').toLowerCase() === 'phan' && String(p.lastName || '').toLowerCase() === 'ly'),
+            promotedFromWaitlist: !!p.promotedFromWaitlist,
+            subbedInForName: p.subbedInForName || null,
+            subbedInForPlayerId: p.subbedInForPlayerId ?? null,
+            subbedInAt: p.subbedInAt || null
         };
     };
 
@@ -4794,30 +4803,11 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
                 if (waitlistPlayer) {
                     const assignedTeam = rosterWasReleased && removedPlayerTeam ? removedPlayerTeam : null;
 
-                    promotedPlayer = hydratePlayerRatingProfile({
-                        id: waitlistPlayer.id,
-                        firstName: waitlistPlayer.firstName,
-                        lastName: waitlistPlayer.lastName,
-                        phone: waitlistPlayer.phone,
-                        paymentMethod: waitlistPlayer.paymentMethod,
-                        paid: false,
-                        paidAmount: null,
-                        rating: parseInt(waitlistPlayer.rating) || 5,
-                        skatingRating: waitlistPlayer.skatingRating,
-                        puckSkillsRating: waitlistPlayer.puckSkillsRating,
-                        hockeySenseRating: waitlistPlayer.hockeySenseRating,
-                        conditioningRating: waitlistPlayer.conditioningRating,
-                        effortRating: waitlistPlayer.effortRating,
-                        levelPlayed: waitlistPlayer.levelPlayed,
-                        peerComparison: waitlistPlayer.peerComparison,
-                        confidenceLevel: waitlistPlayer.confidenceLevel,
-                        selfRatingRaw: waitlistPlayer.selfRatingRaw,
-                        derivedRating: waitlistPlayer.derivedRating,
-                        finalRating: waitlistPlayer.finalRating,
-                        isGoalie: waitlistPlayer.isGoalie,
-                        team: assignedTeam,
-                        registeredAt: new Date().toISOString(),
-                        rulesAgreed: true
+                    promotedPlayer = buildPromotedRosterPlayer(waitlistPlayer, assignedTeam, {
+                        promotedFromWaitlist: true,
+                        subbedInForPlayerId: player.id,
+                        subbedInForName: `${player.firstName || ''} ${player.lastName || ''}`.trim(),
+                        subbedInAt: new Date().toISOString()
                     });
 
                     players.push(promotedPlayer);
@@ -6059,7 +6049,16 @@ app.post('/api/admin/remove-player', async (req, res) => {
             if (rosterReleased) {
                 const replacement = extractWaitlistPlayerToPromote({ preferGoalie: !!removedPlayer.isGoalie });
                 if (replacement) {
-                    autoPromotedPlayer = buildPromotedRosterPlayer(replacement, removedPlayer.team === 'White' || removedPlayer.team === 'Dark' ? removedPlayer.team : null);
+                    autoPromotedPlayer = buildPromotedRosterPlayer(
+                        replacement,
+                        removedPlayer.team === 'White' || removedPlayer.team === 'Dark' ? removedPlayer.team : null,
+                        {
+                            promotedFromWaitlist: true,
+                            subbedInForPlayerId: removedPlayer.id,
+                            subbedInForName: `${removedPlayer.firstName || ''} ${removedPlayer.lastName || ''}`.trim(),
+                            subbedInAt: new Date().toISOString()
+                        }
+                    );
                     players.push(autoPromotedPlayer);
                     if (!autoPromotedPlayer.isGoalie && playerSpots > 0) playerSpots--;
                 }

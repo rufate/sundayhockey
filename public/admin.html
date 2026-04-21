@@ -340,6 +340,24 @@
             border-bottom: 2px solid #444;
         }
 
+
+        .registered-players-box {
+            background: linear-gradient(135deg, #2a1a1a, #332222);
+            border: 2px solid var(--accent);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+
+        .registered-players-box .section-header {
+            margin: 0 0 15px 0;
+            padding-bottom: 10px;
+        }
+
+        .registered-players-box table {
+            margin-top: 0;
+        }
+
         .waitlist-section {
             background: linear-gradient(135deg, #3a1a1a, #2d1a1a);
             border: 2px solid #ff4444;
@@ -1718,13 +1736,9 @@ button {
 
 <style>
 .compact-pay{
-    display:inline-grid;
-    grid-template-columns: 1fr 20px;
-    grid-template-areas:
-        "main plus"
-        "main minus";
-    align-items:stretch;
-    justify-items:stretch;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
     border-radius:8px;
     overflow:hidden;
     white-space:nowrap;
@@ -1750,32 +1764,14 @@ button {
     border-radius:0 !important;
 }
 .compact-pay-main{
-    grid-area:main;
     padding:0 8px !important;
     min-width:0;
     min-height:28px;
+    width:100%;
     display:flex;
     align-items:center;
     justify-content:center;
     font-size:0.82rem !important;
-}
-.compact-pay-plus,
-.compact-pay-minus{
-    min-width:20px;
-    width:20px;
-    padding:0 !important;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:0.74rem !important;
-    border-left:1px solid rgba(255,255,255,0.22);
-}
-.compact-pay-plus{
-    grid-area:plus;
-    border-bottom:1px solid rgba(255,255,255,0.22);
-}
-.compact-pay-minus{
-    grid-area:minus;
 }
 .compact-pay-btn:hover{
     background:rgba(255,255,255,0.08);
@@ -1809,6 +1805,74 @@ button {
     outline:none;
     border-color:#ff6b00 !important;
     box-shadow:0 0 0 1px rgba(255,107,0,0.35);
+}
+
+/* payment slider modal */
+.payment-slider-modal{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.7);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:10000;
+    padding:20px;
+}
+.payment-slider-modal.active{ display:flex; }
+.payment-slider-card{
+    width:min(360px,100%);
+    background:linear-gradient(135deg,#222,#2f2f2f);
+    border:2px solid var(--accent);
+    border-radius:16px;
+    padding:18px;
+    box-shadow:0 18px 40px rgba(0,0,0,0.45);
+}
+.payment-slider-title{
+    color:var(--accent);
+    font-weight:bold;
+    text-align:center;
+    margin-bottom:12px;
+}
+.payment-slider-amount{
+    text-align:center;
+    font-size:1.8rem;
+    font-weight:bold;
+    color:#fff;
+    margin-bottom:14px;
+}
+.payment-slider-input{
+    width:100%;
+    margin:0 0 14px 0 !important;
+    accent-color:#ff6b00;
+}
+.payment-slider-presets{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:8px;
+    margin-bottom:14px;
+}
+.payment-slider-preset{
+    padding:8px 0 !important;
+    margin:0 !important;
+    border-radius:10px !important;
+    font-size:0.85rem !important;
+}
+.payment-slider-actions{
+    display:flex;
+    gap:10px;
+}
+.payment-slider-actions button{
+    flex:1;
+    margin:0 !important;
+}
+.payment-slider-clear{
+    background:#b71c1c !important;
+}
+.payment-slider-cancel{
+    background:#666 !important;
+}
+.payment-slider-save{
+    background:#2e7d32 !important;
 }
 </style>
 
@@ -2138,6 +2202,23 @@ button {
     color:#8f8f8f;
     font-size:0.62rem !important;
     line-height:1 !important;
+}
+#playerList .locked-time-chip,
+#waitlistList .locked-time-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    color:#9aa0a6;
+    font-size:0.62rem !important;
+    line-height:1 !important;
+    white-space:nowrap;
+}
+#playerList .locked-time-chip::before,
+#waitlistList .locked-time-chip::before{
+    content:"🔒";
+    font-size:0.62rem;
+    line-height:1;
+    opacity:.9;
 }
 table thead tr th.phone-col-hidden,
 #playerList td.phone-col-hidden{display:none !important;}
@@ -3354,7 +3435,7 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
 }
 
 /* Make payment text column match paid pill text size better */
-#playerList td:nth-child(5){
+#playerList td:nth-child(4){
     font-size: 0.76rem !important;
     line-height: 1 !important;
     color:#fff !important;
@@ -3362,7 +3443,7 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
 }
 
 @media (min-width: 601px){
-    #playerList td:nth-child(5){
+    #playerList td:nth-child(4){
         font-size: 0.78rem !important;
     }
 }
@@ -3509,6 +3590,232 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
     .waitlist-section .bypass-btn {
         min-height: 17px !important;
         height: 17px !important;
+    }
+}
+</style>
+
+
+<style id="registered-waitlist-visibility-mobile-fix-v1">
+/* Hard reset so rows always render */
+#playerList,
+#waitlistList,
+#playerList tr,
+#waitlistList tr,
+#playerList td,
+#waitlistList td,
+#playerList .player-name-cell,
+#waitlistList .player-name-cell,
+#playerList .player-name-main,
+#waitlistList .player-name-main,
+#playerList .player-phone-sub,
+#waitlistList .player-phone-sub,
+#playerList .player-time-sub,
+#waitlistList .player-time-sub {
+    display: revert !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+#playerList .player-name-cell,
+#waitlistList .player-name-cell {
+    display:flex !important;
+    flex-direction:column !important;
+    align-items:flex-start !important;
+    justify-content:center !important;
+    line-height:1.05 !important;
+    gap:2px !important;
+    min-width:0 !important;
+}
+#playerList .player-name-main,
+#waitlistList .player-name-main {
+    display:block !important;
+    color:#fff !important;
+    font-weight:700 !important;
+}
+#playerList .player-phone-sub,
+#waitlistList .player-phone-sub,
+#playerList .player-time-sub,
+#waitlistList .player-time-sub {
+    display:block !important;
+    color:#aaa !important;
+}
+
+/* Registered Players: keep static box, no horizontal scroll */
+#playerList td.phone-col-hidden,
+#playerList th.phone-col-hidden {
+    display:none !important;
+}
+
+@media (max-width: 700px) {
+    table {
+        width:100% !important;
+    }
+    #playerList td,
+    #playerList th,
+    #waitlistList td,
+    #waitlistList th {
+        padding:3px 3px !important;
+        font-size:0.72rem !important;
+        white-space:nowrap !important;
+        vertical-align:middle !important;
+    }
+    #playerList td:nth-child(1),
+    #playerList th:nth-child(1) {
+        width:auto !important;
+        white-space:normal !important;
+    }
+    #playerList td:nth-child(3),
+    #playerList th:nth-child(3) {
+        width:44px !important;
+        text-align:center !important;
+    }
+    #playerList td:nth-child(4),
+    #playerList th:nth-child(4) {
+        width:52px !important;
+        text-align:center !important;
+    }
+    #playerList td:nth-child(5),
+    #playerList th:nth-child(5) {
+        width:48px !important;
+        text-align:center !important;
+    }
+    #playerList .player-name-main {
+        font-size:0.76rem !important;
+        line-height:1.05 !important;
+    }
+    #playerList .player-phone-sub {
+        font-size:0.60rem !important;
+        line-height:1 !important;
+    }
+    #playerList .player-time-sub {
+        font-size:0.54rem !important;
+        line-height:1 !important;
+    }
+    #playerList .rating-pill-input {
+        width:34px !important;
+        height:24px !important;
+        padding:0 4px !important;
+        font-size:0.76rem !important;
+    }
+    #playerList .compact-pay {
+        width:54px !important;
+        min-width:54px !important;
+        grid-template-columns:1fr 15px !important;
+        min-height:24px !important;
+    }
+    #playerList .compact-pay-main {
+        min-height:24px !important;
+        font-size:0.66rem !important;
+        padding:0 2px !important;
+    }
+    #playerList .compact-pay-plus,
+    #playerList .compact-pay-minus {
+        width:15px !important;
+        min-width:15px !important;
+        font-size:0.62rem !important;
+    }
+    #playerList .regular-toggle-btn,
+    #playerList .remove-btn,
+    #waitlistList .promote-btn,
+    #waitlistList .remove-btn,
+    #waitlistList .bypass-btn {
+        padding:3px 4px !important;
+        font-size:0.58rem !important;
+        line-height:1 !important;
+        min-height:18px !important;
+        border-radius:6px !important;
+        margin:0 !important;
+    }
+    #waitlistList td:nth-child(1),
+    #waitlistList th:nth-child(1) { width:24px !important; text-align:center !important; }
+    #waitlistList td:nth-child(3),
+    #waitlistList th:nth-child(3) { width:44px !important; text-align:center !important; }
+    #waitlistList td:nth-child(4),
+    #waitlistList th:nth-child(4) { width:96px !important; text-align:center !important; }
+    #waitlistList .player-name-main {
+        font-size:0.76rem !important;
+        line-height:1.05 !important;
+    }
+    #waitlistList .player-phone-sub { font-size:0.60rem !important; line-height:1 !important; }
+    #waitlistList .player-time-sub { font-size:0.54rem !important; line-height:1 !important; }
+}
+</style>
+
+
+<style id="admin-registered-action-stack-v2">
+#playerList .registered-action-stack {
+    display:flex !important;
+    flex-direction:column !important;
+    gap:2px !important;
+    align-items:center !important;
+    justify-content:center !important;
+}
+#playerList .registered-action-stack .regular-toggle-btn,
+#playerList .registered-action-stack .remove-btn {
+    width:46px !important;
+    min-width:46px !important;
+    height:17px !important;
+    min-height:17px !important;
+    margin:0 !important;
+    padding:0 4px !important;
+    text-align:center !important;
+    white-space:nowrap !important;
+    line-height:1 !important;
+    border-radius:10px !important;
+    font-size:0.56rem !important;
+}
+#playerList .registered-action-stack .regular-toggle-btn { background:#607d8b !important; }
+#playerList .registered-action-stack .regular-toggle-btn.active { background:#2e7d32 !important; }
+#playerList .registered-action-stack .remove-btn { background:#e53935 !important; }
+@media (max-width:600px){
+    #playerList .registered-action-stack {
+        gap:2px !important;
+    }
+    #playerList .registered-action-stack .regular-toggle-btn,
+    #playerList .registered-action-stack .remove-btn {
+        width:44px !important;
+        min-width:44px !important;
+        height:16px !important;
+        min-height:16px !important;
+        font-size:0.54rem !important;
+        padding:0 3px !important;
+        border-radius:9px !important;
+    }
+}
+</style>
+
+
+<style id="admin-registered-name-room-v1">
+#playerList .player-name-cell {
+    gap:1px !important;
+    line-height:1 !important;
+}
+#playerList tr td {
+    padding-top:2px !important;
+    padding-bottom:2px !important;
+}
+#playerList .player-name-main {
+    font-size:0.84rem !important;
+}
+#playerList .player-phone-sub {
+    font-size:0.64rem !important;
+}
+#playerList .player-time-sub {
+    font-size:0.52rem !important;
+}
+@media (max-width:600px){
+    #playerList td:first-child,
+    #playerList th:first-child {
+        width:auto !important;
+        max-width:none !important;
+    }
+    #playerList .player-name-main {
+        font-size:0.80rem !important;
+    }
+    #playerList .player-phone-sub {
+        font-size:0.62rem !important;
+    }
+    #playerList .player-time-sub {
+        font-size:0.50rem !important;
     }
 }
 </style>
@@ -4001,21 +4308,21 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
             <button class="add-btn" onclick="addPlayer()">Add Player</button>
         </div>
 
-        <h3 class="section-header">🏒 Registered Players (<span id="playerCount">0</span> Players, <span id="goalieCountDisplay">0</span> Goalies)</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th class="phone-col-hidden">Phone</th>
-                    <th>Rating</th>
-                    <th>Paid ($) <span id="totalPaidDisplay" class="total-paid-display" style="display:none;">($15.00)</span></th>
-                    <th>Payment</th>
-                    <th>Regular</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody id="playerList"></tbody>
-        </table>
+        <div class="registered-players-box">
+            <h3 class="section-header">🏒 Registered Players (<span id="playerCount">0</span> Players, <span id="goalieCountDisplay">0</span> Goalies)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th class="phone-col-hidden">Phone</th>
+                        <th>Rating</th>
+                        <th>Paid ($) <span id="totalPaidDisplay" class="total-paid-display" style="display:none;">($15.00)</span></th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="playerList"></tbody>
+            </table>
+        </div>
 
         <!-- Payment Summary -->
         <div class="payment-summary-box">
@@ -4655,6 +4962,13 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
             const d = new Date(value);
             if (Number.isNaN(d.getTime())) return value;
             return d.toLocaleString([], { year:'numeric', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+        }
+
+        function formatLockedSignupTime(value) {
+            if (!value) return '';
+            const d = new Date(value);
+            if (Number.isNaN(d.getTime())) return String(value);
+            return d.toLocaleString([], { month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit' });
         }
 
         async function loadSessionInfo() {
@@ -6085,7 +6399,7 @@ Date: ${selectedGameDate}`);
                 tbody.innerHTML = '';
 
                 if (data.players.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#666; padding:30px;">No players registered</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#666; padding:30px;">No players registered</td></tr>';
                 } else {
                     const sortedPlayers = [...data.players].sort((a, b) => {
                         const aIsPhan = String(a.firstName || '').trim().toLowerCase() === 'phan';
@@ -6117,28 +6431,30 @@ Date: ${selectedGameDate}`);
                                 : 15;
                             paidInput = `
                                 <div class="compact-pay ${isPaid ? 'is-paid' : 'is-unpaid'}" data-player-id="${p.id}">
-                                    <button class="compact-pay-btn compact-pay-minus" onclick="event.stopPropagation(); compactPayAdjust(${p.id}, -1)">−</button>
-                                    <button class="compact-pay-btn compact-pay-main" title="Tap to mark paid/unpaid" onclick="compactPayToggle(${p.id})" data-amount="${compactAmount}">
+                                    <button class="compact-pay-btn compact-pay-main" title="Tap to mark paid/unpaid. Tap again to change amount." onclick="compactPayToggle(${p.id})" data-amount="${compactAmount}">
                                         $${compactAmount}
                                     </button>
-                                    <button class="compact-pay-btn compact-pay-plus" onclick="event.stopPropagation(); compactPayAdjust(${p.id}, 1)">+</button>
                                 </div>
                             `;
                         }
 
-                        const paymentText = hideAdminPaymentUi
-                            ? ''
-                            : (p.paymentMethod === 'E-Transfer' ? 'ET' : (p.paymentMethod || ''));
-
                         const regularCell = hideAdminPaymentUi
                             ? ''
                             : `<button class="control-btn ${regularClass}" onclick="togglePlayerRegular(${p.id})">${regularLabel}</button>`;
+                        const actionCell = hideAdminPaymentUi
+                            ? `<div class="action-stack registered-action-stack">
+                                    <button class="remove-btn" onclick="removePlayer(${p.id})">Remove</button>
+                               </div>`
+                            : `<div class="action-stack registered-action-stack">
+                                    ${regularCell}
+                                    <button class="remove-btn" onclick="removePlayer(${p.id})">Remove</button>
+                               </div>`;
 
                         tr.innerHTML = `
                             <td class="player-name-cell">
                                 <span class="player-name-main">${p.firstName} ${p.lastName}</span>
                                 <span class="player-phone-sub">${p.phone}</span>
-                                ${p.registeredAt ? `<span class="player-time-sub">${new Date(p.registeredAt).toLocaleString([], { month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit' })}</span>` : ``}
+                                ${p.registeredAt ? `<span class="player-time-sub"><span class="locked-time-chip" title="Locked signup timestamp — saved when the player registered and does not change">${formatLockedSignupTime(p.registeredAt)}</span></span>` : ``}
                             </td>
                             <td class="phone-col-hidden">${p.phone}</td>
                             <td>
@@ -6149,11 +6465,7 @@ Date: ${selectedGameDate}`);
                                 </div>
                             </td>
                             <td>${paidInput}</td>
-                            <td>${paymentText}</td>
-                            <td>${regularCell}</td>
-                            <td>
-                                <button class="remove-btn" onclick="removePlayer(${p.id})">Remove</button>
-                            </td>
+                            <td>${actionCell}</td>
                         `;
                         tbody.appendChild(tr);
                     });
@@ -6175,7 +6487,7 @@ Date: ${selectedGameDate}`);
                                 <span class="player-name-main">${p.firstName} ${p.lastName}</span>
                                 <span class="player-badge-row">${goalieBadge}${bypassBadge}</span>
                                 <span class="player-phone-sub">${p.phone}</span>
-                                ${p.joinedAt ? `<span class="player-time-sub">${new Date(p.joinedAt).toLocaleString([], { month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit' })}</span>` : ``}
+                                ${p.joinedAt ? `<span class="player-time-sub"><span class="locked-time-chip" title="Locked signup timestamp — saved when the player joined the waitlist and does not change">${formatLockedSignupTime(p.joinedAt)}</span></span>` : ``}
                             </td>
                             <td>
                                 <div class="waitlist-rating-wrap">
@@ -7657,6 +7969,8 @@ This backup has fewer records than live data.
 
 
 <script>
+let activePaymentSliderPlayerId = null;
+
 function compactPayFind(playerId){
     return document.querySelector('.compact-pay[data-player-id="' + playerId + '"]');
 }
@@ -7664,25 +7978,54 @@ function compactPayMain(playerId){
     const wrap = compactPayFind(playerId);
     return wrap ? wrap.querySelector('.compact-pay-main') : null;
 }
-async function compactPayAdjust(playerId, delta){
+function getCompactPayAmount(playerId){
     const main = compactPayMain(playerId);
-    const wrap = compactPayFind(playerId);
-    if(!main || !wrap || wrap.dataset.busy === '1') return;
+    let amount = parseFloat(main?.dataset.amount || '15');
+    if(!Number.isFinite(amount) || amount < 0) amount = 15;
+    return amount;
+}
+function setPaymentSliderAmount(amount){
+    const slider = document.getElementById('paymentSliderInput');
+    const valueLabel = document.getElementById('paymentSliderAmount');
+    const numberInput = document.getElementById('paymentSliderNumber');
+    const safe = Math.max(0, Math.min(50, Number(amount) || 0));
+    if(slider) slider.value = String(safe);
+    if(numberInput) numberInput.value = String(safe);
+    if(valueLabel) valueLabel.textContent = '$' + safe;
+}
+function openPaymentSlider(playerId){
+    activePaymentSliderPlayerId = playerId;
+    setPaymentSliderAmount(getCompactPayAmount(playerId));
+    const modal = document.getElementById('paymentSliderModal');
+    if(modal) modal.classList.add('active');
+}
+function closePaymentSlider(){
+    const modal = document.getElementById('paymentSliderModal');
+    if(modal) modal.classList.remove('active');
+    activePaymentSliderPlayerId = null;
+}
+function paymentSliderPreset(amount){
+    setPaymentSliderAmount(amount);
+}
+function handlePaymentSliderInput(value){
+    setPaymentSliderAmount(value);
+}
+async function savePaymentSlider(){
+    if(activePaymentSliderPlayerId == null) return;
+    const wrap = compactPayFind(activePaymentSliderPlayerId);
+    if(wrap && wrap.dataset.busy === '1') return;
 
-    let amount = parseFloat(main.dataset.amount || '15');
-    if(!Number.isFinite(amount) || amount <= 0) amount = 15;
-    amount = Math.max(1, Math.min(99, amount + delta));
-
-    main.dataset.amount = String(amount);
-    main.textContent = '$' + amount;
-
-    if(wrap.classList.contains('is-paid')){
+    const amount = Number(document.getElementById('paymentSliderInput')?.value || 0);
+    if(wrap){
         wrap.dataset.busy = '1';
         wrap.style.opacity = '0.7';
-        try {
-            await updatePaidAmount(playerId, amount);
-            await loadData();
-        } finally {
+    }
+    try {
+        await updatePaidAmount(activePaymentSliderPlayerId, amount);
+        closePaymentSlider();
+        await loadData();
+    } finally {
+        if(wrap){
             delete wrap.dataset.busy;
             wrap.style.opacity = '';
         }
@@ -7693,24 +8036,49 @@ async function compactPayToggle(playerId){
     const wrap = compactPayFind(playerId);
     if(!main || !wrap || wrap.dataset.busy === '1') return;
 
-    const amount = 15;
+    if(wrap.classList.contains('is-paid')){
+        openPaymentSlider(playerId);
+        return;
+    }
+
     wrap.dataset.busy = '1';
     wrap.style.opacity = '0.7';
-
     try {
-        if(wrap.classList.contains('is-paid')){
-            await updatePaidAmount(playerId, 0);
-        } else {
-            await updatePaidAmount(playerId, amount);
-        }
+        await updatePaidAmount(playerId, 15);
         await loadData();
     } finally {
         delete wrap.dataset.busy;
         wrap.style.opacity = '';
     }
 }
+document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){
+        closePaymentSlider();
+    }
+});
 </script>
 
+
+
+    <div class="payment-slider-modal" id="paymentSliderModal" onclick="if(event.target === this) closePaymentSlider()">
+        <div class="payment-slider-card">
+            <div class="payment-slider-title">Set Payment Amount</div>
+            <div class="payment-slider-amount" id="paymentSliderAmount">$15</div>
+            <input type="range" id="paymentSliderInput" class="payment-slider-input" min="0" max="50" step="1" value="15" oninput="handlePaymentSliderInput(this.value)">
+            <input type="number" id="paymentSliderNumber" min="0" max="50" step="1" value="15" oninput="handlePaymentSliderInput(this.value)">
+            <div class="payment-slider-presets">
+                <button type="button" class="payment-slider-preset" onclick="paymentSliderPreset(10)">$10</button>
+                <button type="button" class="payment-slider-preset" onclick="paymentSliderPreset(15)">$15</button>
+                <button type="button" class="payment-slider-preset" onclick="paymentSliderPreset(20)">$20</button>
+                <button type="button" class="payment-slider-preset" onclick="paymentSliderPreset(0)">$0</button>
+            </div>
+            <div class="payment-slider-actions">
+                <button type="button" class="payment-slider-cancel" onclick="closePaymentSlider()">Cancel</button>
+                <button type="button" class="payment-slider-clear" onclick="paymentSliderPreset(0)">Clear</button>
+                <button type="button" class="payment-slider-save" onclick="savePaymentSlider()">Save</button>
+            </div>
+        </div>
+    </div>
 
 <script id="android-mobile-collapsible-sections-script-v3">
 (function() {
