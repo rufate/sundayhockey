@@ -169,6 +169,11 @@ function shouldTriggerSchedulerOnRequest(req) {
     return true;
 }
 
+function isLightweightHealthRoute(req) {
+    const url = String(req?.path || req?.originalUrl || '').split('?')[0].toLowerCase();
+    return url === '/health' || url === '/api/health' || url === '/api/cron/heartbeat';
+}
+
 
 async function durableMutationGuardMiddleware(req, res, next) {
     if (!shouldEnforceDurableMutation(req)) {
@@ -207,8 +212,10 @@ async function schedulerCatchupMiddleware(req, res, next) {
 
     try {
         await runSchedulerTick();
-        maybeRunRequestSelfHeal(req);
-        maybeSnapshotOnRequest(req);
+        if (!isLightweightHealthRoute(req)) {
+            maybeRunRequestSelfHeal(req);
+            maybeSnapshotOnRequest(req);
+        }
     } catch (err) {
         console.error('Request scheduler catch-up error:', err);
     }
@@ -960,13 +967,6 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime()) {
         };
     }
 
-    if (!rosterReleased) {
-        return {
-            ok: false,
-            reason: 'Blocked weekly reset because roster has not been released yet.'
-        };
-    }
-
     if (registeredPlayerCount > 0) {
         return {
             ok: false,
@@ -981,7 +981,7 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime()) {
         };
     }
 
-    return { ok: true, reason: 'Reset arm is ON, roster is released, and there are no registered players or waitlist entries to reset.' };
+    return { ok: true, reason: 'Reset arm is ON and there are no registered players or waitlist entries to reset.' };
 }
 
 function getNextOccurrenceEtParts(scheduleAt, etDate = getCurrentETTime()) {
@@ -1466,11 +1466,6 @@ async function checkWeeklyReset() {
         Number(process.env.WEEKLY_RESET_CATCHUP_MINUTES || (18 * 60))
     );
     if (!resetCheck.shouldRun) return false;
-
-    if (resetCheck.reason !== 'exact_minute') {
-        console.warn(`[SCHEDULER] Weekly reset skipped because the scheduled minute was missed. Expected exact trigger at ${formatScheduleDowTime(resetWeekSchedule.at)}.`);
-        return false;
-    }
 
     const resetSafety = canSafelyRunWeeklyReset(etTime);
     if (!resetSafety.ok) {
@@ -6420,72 +6415,78 @@ app.get('/api/admin/system-status', async (req, res) => {
     });
 });
 
-app.get('/api/cron/heartbeat', async (req, res) => {
-    lastCronHeartbeatAt = new Date().toISOString();
-    lastCronUserAgent = req.headers['user-agent'] || '';
-    await runSchedulerTick();
-    const db = await pingDatabase();
-    res.status(db.ok || db.mode === 'file' ? 200 : 503).json({
-        ok: db.ok || db.mode === 'file',
-        scheduler: 'ran',
-        database: db,
+function shouldIncludeDatabaseInHealthResponse(req) {
+    const raw = String(req?.query?.db ?? req?.query?.full ?? '').trim().toLowerCase();
+    return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
+function buildHealthPayload(extra = {}) {
+    return {
+        ok: true,
+        service: process.env.LEAGUE_NAME || 'hockey',
+        uptime: process.uptime(),
+        schedulerRunning,
+        lastSchedulerMinuteKey,
         gameDay: getGameDayName(),
         rosterReleased,
         playerCount: players.length,
         waitlistCount: waitlist.length,
-        timestamp: new Date().toISOString()
-    });
+        timestamp: new Date().toISOString(),
+        ...extra
+    };
+}
+
+async function respondWithHealthPayload(req, res, extra = {}) {
+    if (shouldIncludeDatabaseInHealthResponse(req)) {
+        const db = await pingDatabase();
+        return res
+            .status(db.ok || db.mode === 'file' ? 200 : 503)
+            .json(buildHealthPayload({
+                ...extra,
+                ok: db.ok || db.mode === 'file',
+                database: db
+            }));
+    }
+
+    return res.status(200).json(buildHealthPayload({
+        ...extra,
+        database: {
+            skipped: true,
+            reason: 'lightweight_healthcheck'
+        }
+    }));
+}
+
+app.get('/api/cron/heartbeat', async (req, res) => {
+    lastCronHeartbeatAt = new Date().toISOString();
+    lastCronUserAgent = req.headers['user-agent'] || '';
+    return respondWithHealthPayload(req, res, { scheduler: 'ran' });
 });
 
 app.head('/api/cron/heartbeat', async (req, res) => {
     lastCronHeartbeatAt = new Date().toISOString();
     lastCronUserAgent = req.headers['user-agent'] || '';
-    await runSchedulerTick();
     res.sendStatus(200);
 });
 
 // Health check endpoint (for Render + cron-job.org)
 app.get('/health', async (req, res) => {
     lastHealthPingAt = new Date().toISOString();
-    await runSchedulerTick();
-    const db = await pingDatabase();
-    res.status(db.ok || db.mode === 'file' ? 200 : 503).json({
-        ok: db.ok || db.mode === 'file',
-        service: process.env.LEAGUE_NAME || 'hockey',
-        uptime: process.uptime(),
-        database: db,
-        schedulerRunning,
-        lastSchedulerMinuteKey,
-        gameDay: getGameDayName(),
-        timestamp: new Date().toISOString()
-    });
+    return respondWithHealthPayload(req, res);
 });
 
 app.head('/health', async (req, res) => {
     lastHealthPingAt = new Date().toISOString();
-    await runSchedulerTick();
     res.sendStatus(200);
 });
 
 app.get('/api/health', async (req, res) => {
     lastHealthPingAt = new Date().toISOString();
-    await runSchedulerTick();
-    const db = await pingDatabase();
-    res.status(db.ok || db.mode === 'file' ? 200 : 503).json({
-        ok: db.ok || db.mode === 'file',
-        service: process.env.LEAGUE_NAME || 'hockey',
-        uptime: process.uptime(),
-        database: db,
-        schedulerRunning,
-        lastSchedulerMinuteKey,
-        gameDay: getGameDayName(),
-        timestamp: new Date().toISOString()
-    });
+    return respondWithHealthPayload(req, res);
 });
 
 app.head('/api/health', async (req, res) => {
     lastHealthPingAt = new Date().toISOString();
-    await runSchedulerTick();
     res.sendStatus(200);
 });
 
@@ -6523,7 +6524,7 @@ initDatabase().then(async () => {
     await runSchedulerTick();
 
     if (BACKGROUND_SCHEDULER_ENABLED && ENABLE_INTERNAL_SCHEDULER_CRON) {
-        cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '* * * * *', async () => {
+        cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '*/15 7-23 * * *', async () => {
             await runSchedulerTick();
         }, {
             timezone: 'America/New_York'
@@ -6545,6 +6546,8 @@ initDatabase().then(async () => {
         console.log(`Auto-add goalies for ${getGameDayName()}: ${getWeeklyAutoAddPlayers().filter(p => p.isGoalie).map(p => `${p.firstName} ${p.lastName}`).join(', ')}`);
         console.log(`Current players registered: ${players.length}`);
         console.log(`Background scheduler: ${BACKGROUND_SCHEDULER_ENABLED ? 'enabled' : 'disabled (request-driven mode)'}`);
+        console.log(`Recommended external keepalive cron: */15 7-23 * * * -> /health (lightweight, add ?db=1 only for full checks)`);
+        console.log(`Recommended external keepalive cron: */15 7-23 * * * -> /health (lightweight, add ?db=1 only for full checks)`);
     });
 }).catch(err => {
     console.error('Failed to initialize database, starting with file fallback:', err);
@@ -6555,7 +6558,7 @@ initDatabase().then(async () => {
     runSchedulerTick();
     
     if (BACKGROUND_SCHEDULER_ENABLED && ENABLE_INTERNAL_SCHEDULER_CRON) {
-        cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '* * * * *', async () => {
+        cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '*/15 7-23 * * *', async () => {
             await runSchedulerTick();
         }, {
             timezone: 'America/New_York'
