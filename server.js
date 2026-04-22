@@ -960,6 +960,13 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime()) {
         };
     }
 
+    if (!rosterReleased) {
+        return {
+            ok: false,
+            reason: 'Blocked weekly reset because roster has not been released yet.'
+        };
+    }
+
     if (registeredPlayerCount > 0) {
         return {
             ok: false,
@@ -974,7 +981,7 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime()) {
         };
     }
 
-    return { ok: true, reason: 'Reset arm is ON and there are no registered players or waitlist entries to reset.' };
+    return { ok: true, reason: 'Reset arm is ON, roster is released, and there are no registered players or waitlist entries to reset.' };
 }
 
 function getNextOccurrenceEtParts(scheduleAt, etDate = getCurrentETTime()) {
@@ -1459,6 +1466,11 @@ async function checkWeeklyReset() {
         Number(process.env.WEEKLY_RESET_CATCHUP_MINUTES || (18 * 60))
     );
     if (!resetCheck.shouldRun) return false;
+
+    if (resetCheck.reason !== 'exact_minute') {
+        console.warn(`[SCHEDULER] Weekly reset skipped because the scheduled minute was missed. Expected exact trigger at ${formatScheduleDowTime(resetWeekSchedule.at)}.`);
+        return false;
+    }
 
     const resetSafety = canSafelyRunWeeklyReset(etTime);
     if (!resetSafety.ok) {
