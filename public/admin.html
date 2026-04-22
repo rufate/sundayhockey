@@ -3820,6 +3820,78 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
 }
 </style>
 
+
+<style id="admin-header-box-wrap-v1">
+.admin-header-box{
+    border:3px solid #ff6b00;
+    border-radius:20px;
+    padding:22px 22px 16px 22px;
+    margin-bottom:20px;
+    background:linear-gradient(135deg,#2a2a2a,#1f1f1f);
+    box-shadow:0 0 25px rgba(255,107,0,0.18);
+}
+.admin-header-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+}
+.admin-header-top > div{
+    width:100%;
+}
+.admin-header-top h1{
+    margin:0 !important;
+    text-align:left !important;
+}
+.admin-header-top > div{
+    display:flex !important;
+    justify-content:space-between !important;
+    align-items:center !important;
+    gap:10px !important;
+    flex-wrap:wrap !important;
+}
+.admin-header-top > div > div{
+    display:flex !important;
+    gap:10px !important;
+    flex-wrap:wrap !important;
+    align-items:center !important;
+    justify-content:flex-end !important;
+}
+.admin-header-box .logout-btn{
+    float:none !important;
+}
+.admin-header-bottom{
+    margin-top:14px;
+}
+.admin-header-box .maintenance-control{
+    margin:0 !important;
+    padding:0 !important;
+}
+.admin-header-box .maintenance-toggle{
+    justify-content:flex-start !important;
+}
+.admin-header-box .maintenance-label{
+    margin:0 !important;
+}
+@media (max-width:700px){
+    .admin-header-box{
+        padding:16px 14px 12px 14px;
+    }
+    .admin-header-top > div{
+        flex-direction:column !important;
+        align-items:flex-start !important;
+    }
+    .admin-header-top > div > div{
+        width:100%;
+        justify-content:flex-start !important;
+    }
+    .admin-header-box .maintenance-toggle{
+        justify-content:flex-start !important;
+    }
+}
+</style>
+
 </head>
 <body class="admin-layout-option-1">
 
@@ -3844,7 +3916,9 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
     </div>
 
     <div class="container admin-panel" id="adminPanel">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:10px; flex-wrap:wrap;">
+                <div class="admin-header-box">
+            <div class="admin-header-top">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:10px; flex-wrap:wrap;">
             <h1 style="margin:0;">Admin Dashboard</h1>
             <div style="display:flex; gap:10px; flex-wrap:wrap;">
                 <button class="control-btn" onclick="downloadBackup()" style="background:#2e7d32;">⬇ Download Backup</button>
@@ -3856,20 +3930,19 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
                 <button class="logout-btn" onclick="logout()">Logout</button>
             </div>
         </div>
-
-
-
-
-        
-
-        <!-- MAINTENANCE MODE CONTROL -->
-        <div class="maintenance-control">
+            </div>
+            <div class="admin-header-bottom">
+<div class="maintenance-control">
             <div class="maintenance-toggle">
                 <input type="checkbox" id="maintenanceCheckbox" class="maintenance-checkbox" onchange="toggleMaintenance()">
                 <label for="maintenanceCheckbox" class="maintenance-label" id="maintenanceLabel">Maintenance Mode Off</label>
                 <div class="maintenance-status inactive" id="maintenanceStatus">PORTAL ACTIVE</div>
             </div>
 </div>
+            </div>
+        </div>
+
+
 
         <div class="snapshot-pro-section">
             <h3>🧠 Quick Restore</h3>
