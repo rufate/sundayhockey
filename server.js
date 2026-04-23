@@ -967,6 +967,13 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime()) {
         };
     }
 
+    if (!rosterReleased) {
+        return {
+            ok: false,
+            reason: 'Blocked weekly reset because roster has not been released yet.'
+        };
+    }
+
     if (registeredPlayerCount > 0) {
         return {
             ok: false,
@@ -981,7 +988,7 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime()) {
         };
     }
 
-    return { ok: true, reason: 'Reset arm is ON and there are no registered players or waitlist entries to reset.' };
+    return { ok: true, reason: 'Reset arm is ON, roster has been released, and there are no registered players or waitlist entries to reset.' };
 }
 
 function getNextOccurrenceEtParts(scheduleAt, etDate = getCurrentETTime()) {
@@ -1079,11 +1086,12 @@ function minutesSinceEtParts(occurrenceParts, etDate = getCurrentETTime()) {
     return Math.floor((etDate.getTime() - occurrence.getTime()) / 60000);
 }
 
-function shouldRunScheduledAction(scheduleAt, lastRunOccurrenceKey, etDate = getCurrentETTime(), maxCatchUpMinutes = 360) {
+function shouldRunScheduledAction(scheduleAt, lastRunOccurrenceKey, etDate = getCurrentETTime(), maxCatchUpMinutes = 360, options = {}) {
     if (!scheduleAt) {
         return { shouldRun: false, reason: 'missing_schedule', occurrenceKey: '', minuteKey: '', lagMinutes: null };
     }
 
+    const exactMinuteOnly = !!options.exactMinuteOnly;
     const occurrenceParts = getLatestOccurrenceEtParts(scheduleAt, etDate);
     const occurrenceKey = getOccurrenceKeyFromEtParts(scheduleAt, occurrenceParts);
     const minuteKey = String(nowETMinuteKey(etDate));
@@ -1091,6 +1099,10 @@ function shouldRunScheduledAction(scheduleAt, lastRunOccurrenceKey, etDate = get
 
     if (!Number.isFinite(lagMinutes) || lagMinutes < 0) {
         return { shouldRun: false, reason: 'before_schedule', occurrenceKey, minuteKey, lagMinutes };
+    }
+
+    if (exactMinuteOnly && lagMinutes !== 0) {
+        return { shouldRun: false, reason: 'not_exact_minute', occurrenceKey, minuteKey, lagMinutes };
     }
 
     if (lagMinutes > maxCatchUpMinutes) {
@@ -1463,7 +1475,8 @@ async function checkWeeklyReset() {
         resetWeekSchedule.at,
         lastExactResetRunAt,
         etTime,
-        Number(process.env.WEEKLY_RESET_CATCHUP_MINUTES || (18 * 60))
+        Number(process.env.WEEKLY_RESET_CATCHUP_MINUTES || 0),
+        { exactMinuteOnly: true }
     );
     if (!resetCheck.shouldRun) return false;
 
