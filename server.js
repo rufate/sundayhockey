@@ -1740,6 +1740,11 @@ async function initDatabase() {
                 hockey_sense_rating NUMERIC(4,1),
                 conditioning_rating NUMERIC(4,1),
                 effort_rating NUMERIC(4,1),
+                passing_rating NUMERIC(4,1),
+                shooting_rating NUMERIC(4,1),
+                defensive_rating NUMERIC(4,1),
+                speed_burst_rating NUMERIC(4,1),
+                position_played VARCHAR(30),
                 level_played VARCHAR(30),
                 peer_comparison VARCHAR(20),
                 confidence_level VARCHAR(20),
@@ -1759,6 +1764,11 @@ async function initDatabase() {
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS hockey_sense_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS conditioning_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS effort_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS passing_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS shooting_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS defensive_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS speed_burst_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS position_played VARCHAR(30)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS level_played VARCHAR(30)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS peer_comparison VARCHAR(20)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS confidence_level VARCHAR(20)`);
@@ -1781,6 +1791,11 @@ async function initDatabase() {
                 hockey_sense_rating NUMERIC(4,1),
                 conditioning_rating NUMERIC(4,1),
                 effort_rating NUMERIC(4,1),
+                passing_rating NUMERIC(4,1),
+                shooting_rating NUMERIC(4,1),
+                defensive_rating NUMERIC(4,1),
+                speed_burst_rating NUMERIC(4,1),
+                position_played VARCHAR(30),
                 level_played VARCHAR(30),
                 peer_comparison VARCHAR(20),
                 confidence_level VARCHAR(20),
@@ -1796,6 +1811,11 @@ async function initDatabase() {
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS hockey_sense_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS conditioning_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS effort_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS passing_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS shooting_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS defensive_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS speed_burst_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS position_played VARCHAR(30)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS level_played VARCHAR(30)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS peer_comparison VARCHAR(20)`);
         await pool.query(`ALTER TABLE waitlist ADD COLUMN IF NOT EXISTS confidence_level VARCHAR(20)`);
@@ -1958,7 +1978,12 @@ async function loadDataFromDB() {
             hockeySenseRating: p.hockey_sense_rating == null ? null : Number(p.hockey_sense_rating),
             conditioningRating: p.conditioning_rating == null ? null : Number(p.conditioning_rating),
             effortRating: p.effort_rating == null ? null : Number(p.effort_rating),
+            passingRating: p.passing_rating == null ? null : Number(p.passing_rating),
+            shootingRating: p.shooting_rating == null ? null : Number(p.shooting_rating),
+            defensiveRating: p.defensive_rating == null ? null : Number(p.defensive_rating),
+            speedBurstRating: p.speed_burst_rating == null ? null : Number(p.speed_burst_rating),
             levelPlayed: p.level_played,
+            positionPlayed: p.position_played,
             peerComparison: p.peer_comparison,
             confidenceLevel: p.confidence_level,
             selfRatingRaw: p.self_rating_raw == null ? null : Number(p.self_rating_raw),
@@ -1989,7 +2014,12 @@ async function loadDataFromDB() {
             hockeySenseRating: p.hockey_sense_rating == null ? null : Number(p.hockey_sense_rating),
             conditioningRating: p.conditioning_rating == null ? null : Number(p.conditioning_rating),
             effortRating: p.effort_rating == null ? null : Number(p.effort_rating),
+            passingRating: p.passing_rating == null ? null : Number(p.passing_rating),
+            shootingRating: p.shooting_rating == null ? null : Number(p.shooting_rating),
+            defensiveRating: p.defensive_rating == null ? null : Number(p.defensive_rating),
+            speedBurstRating: p.speed_burst_rating == null ? null : Number(p.speed_burst_rating),
             levelPlayed: p.level_played,
+            positionPlayed: p.position_played,
             peerComparison: p.peer_comparison,
             confidenceLevel: p.confidence_level,
             selfRatingRaw: p.self_rating_raw == null ? null : Number(p.self_rating_raw),
@@ -2897,15 +2927,17 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
                 `INSERT INTO players (
                     id, first_name, last_name, phone, payment_method, paid, paid_amount, rating,
                     skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating, effort_rating,
+                    passing_rating, shooting_rating, defensive_rating, speed_burst_rating, position_played,
                     level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating,
                     admin_rating, admin_adjustment, final_rating, is_goalie, team, registered_at, rules_agreed
                 ) VALUES (
-                    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25
+                    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30
                 )`,
                 [
                     player.id, player.firstName, player.lastName, player.phone, player.paymentMethod || null, !!player.paid,
                     toNumericOrNull(player.paidAmount), toNumericOrNull(player.rating),
                     toNumericOrNull(player.skatingRating), toNumericOrNull(player.puckSkillsRating), toNumericOrNull(player.hockeySenseRating), toNumericOrNull(player.conditioningRating), toNumericOrNull(player.effortRating),
+                    toNumericOrNull(player.passingRating), toNumericOrNull(player.shootingRating), toNumericOrNull(player.defensiveRating), toNumericOrNull(player.speedBurstRating), player.positionPlayed || null,
                     player.levelPlayed || null, player.peerComparison || null, player.confidenceLevel || null, toNumericOrNull(player.selfRatingRaw), toNumericOrNull(player.derivedRating),
                     toNumericOrNull(player.adminRating), toNumericOrNull(player.adminAdjustment), toNumericOrNull(player.finalRating), !!player.isGoalie, player.team || null, player.registeredAt || new Date().toISOString(), !!player.rulesAgreed
                 ]
@@ -2918,13 +2950,15 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
                 `INSERT INTO waitlist (
                     id, first_name, last_name, phone, payment_method, rating,
                     skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating, effort_rating,
+                    passing_rating, shooting_rating, defensive_rating, speed_burst_rating, position_played,
                     level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating, final_rating, is_goalie, bypass_auto_promote, joined_at
                 ) VALUES (
-                    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20
+                    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25
                 )`,
                 [
                     player.id, player.firstName, player.lastName, player.phone, player.paymentMethod || null, toNumericOrNull(player.rating),
                     toNumericOrNull(player.skatingRating), toNumericOrNull(player.puckSkillsRating), toNumericOrNull(player.hockeySenseRating), toNumericOrNull(player.conditioningRating), toNumericOrNull(player.effortRating),
+                    toNumericOrNull(player.passingRating), toNumericOrNull(player.shootingRating), toNumericOrNull(player.defensiveRating), toNumericOrNull(player.speedBurstRating), player.positionPlayed || null,
                     player.levelPlayed || null, player.peerComparison || null, player.confidenceLevel || null, toNumericOrNull(player.selfRatingRaw), toNumericOrNull(player.derivedRating), toNumericOrNull(player.finalRating), !!player.isGoalie, !!player.bypassAutoPromote, player.joinedAt || new Date().toISOString()
                 ]
             );
@@ -3464,7 +3498,13 @@ function normalizeSkillProfile(input = {}) {
             hockeySenseRating: null,
             conditioningRating: null,
             effortRating: null,
+            passingRating: null,
+            shootingRating: null,
+            defensiveRating: null,
+            shiftDisciplineRating: null,
+            speedBurstRating: null,
             levelPlayed: '',
+            positionPlayed: '',
             peerComparison: '',
             confidenceLevel: '',
             selfRatingRaw: directRating,
@@ -3481,28 +3521,47 @@ function normalizeSkillProfile(input = {}) {
     const hockeySense = clampRating(input.hockeySenseRating);
     const conditioning = clampRating(input.conditioningRating);
     const effort = clampRating(input.effortRating);
+    const passing = clampRating(input.passingRating);
+    const shooting = clampRating(input.shootingRating);
+    const speedBurst = clampRating(input.speedBurstRating);
+    const shiftDiscipline = clampRating(input.shiftDisciplineRating);
 
     const levelPlayed = ['beginner', 'intermediate', 'competitive', 'junior'].includes(String(input.levelPlayed || '').toLowerCase())
         ? String(input.levelPlayed).toLowerCase()
         : '';
+    const positionPlayed = '';
 
     const missing = [];
     if (!Number.isFinite(Number(input.skatingRating))) missing.push('skating');
     if (!Number.isFinite(Number(input.puckSkillsRating))) missing.push('puck control');
     if (!Number.isFinite(Number(input.hockeySenseRating))) missing.push('hockey IQ');
+    if (!Number.isFinite(Number(input.passingRating))) missing.push('passing / playmaking');
+    if (!Number.isFinite(Number(input.shootingRating))) missing.push('shooting / finishing');
+    if (!Number.isFinite(Number(input.speedBurstRating))) missing.push('first 3 strides / speed burst');
     if (!Number.isFinite(Number(input.conditioningRating))) missing.push('conditioning');
     if (!Number.isFinite(Number(input.effortRating))) missing.push('compete / effort');
+    if (!Number.isFinite(Number(input.shiftDisciplineRating))) missing.push('shift discipline / line changes');
     if (!levelPlayed) missing.push('highest recent level played');
 
-    const weightedSkill = roundRating(
-        (skating * 0.24) +
-        (puckSkills * 0.20) +
-        (hockeySense * 0.28) +
-        (conditioning * 0.08) +
-        (effort * 0.14)
-    );
-    const levelMapped = LEVEL_PLAY_RATING_MAP[levelPlayed] || 5.5;
-    const derivedRating = roundRating((weightedSkill * 0.94) + (levelMapped * 0.06));
+    // Phan Friday 1-10 formula: inputs are 1-5, converted to 3.0-9.8.
+    // Weights: skating 17, speed burst 8, conditioning 15, puck 14, IQ 14, passing 10, shooting 8, compete 9, shift discipline 5.
+    const weightedFivePointScore = (
+        (skating * 17) +
+        (speedBurst * 8) +
+        (conditioning * 15) +
+        (puckSkills * 14) +
+        (hockeySense * 14) +
+        (passing * 10) +
+        (shooting * 8) +
+        (effort * 9) +
+        (shiftDiscipline * 5)
+    ) / 100;
+
+    const levelMinimums = { beginner: 3.0, intermediate: 5.0, competitive: 7.0, junior: 8.0 };
+    let derivedRating = roundRating(weightedFivePointScore * 2);
+    if (levelMinimums[levelPlayed]) derivedRating = Math.max(derivedRating, levelMinimums[levelPlayed]);
+    derivedRating = roundRating(Math.max(3.0, Math.min(9.8, derivedRating)));
+    const weightedSkill = derivedRating;
 
     return {
         ratingMode: 'profile',
@@ -3512,7 +3571,13 @@ function normalizeSkillProfile(input = {}) {
         hockeySenseRating: hockeySense,
         conditioningRating: conditioning,
         effortRating: effort,
+        passingRating: passing,
+        shootingRating: shooting,
+        defensiveRating: null,
+        shiftDisciplineRating: shiftDiscipline,
+        speedBurstRating: speedBurst,
         levelPlayed,
+        positionPlayed: '',
         peerComparison: '',
         confidenceLevel: '',
         selfRatingRaw: weightedSkill,
@@ -3538,7 +3603,13 @@ function hydratePlayerRatingProfile(player = {}) {
         hockeySenseRating: clampRating(player.hockeySenseRating ?? derivedRating),
         conditioningRating: clampRating(player.conditioningRating ?? derivedRating),
         effortRating: clampRating(player.effortRating ?? derivedRating),
+        passingRating: clampRating(player.passingRating ?? player.puckSkillsRating ?? derivedRating),
+        shootingRating: clampRating(player.shootingRating ?? derivedRating),
+        defensiveRating: clampRating(player.defensiveRating ?? player.hockeySenseRating ?? derivedRating),
+        shiftDisciplineRating: clampRating(player.shiftDisciplineRating ?? player.hockeySenseRating ?? player.conditioningRating ?? derivedRating),
+        speedBurstRating: clampRating(player.speedBurstRating ?? player.skatingRating ?? derivedRating),
         levelPlayed: player.levelPlayed || '',
+        positionPlayed: player.positionPlayed || '',
         peerComparison: player.peerComparison || '',
         confidenceLevel: player.confidenceLevel || '',
         selfRatingRaw: roundRating(player.selfRatingRaw ?? derivedRating),
@@ -3559,7 +3630,13 @@ function buildPlayerFromSkillProfile(basePlayer, skillProfile = {}) {
         hockeySenseRating: profile.hockeySenseRating,
         conditioningRating: profile.conditioningRating,
         effortRating: profile.effortRating,
+        passingRating: profile.passingRating,
+        shootingRating: profile.shootingRating,
+        defensiveRating: profile.defensiveRating,
+        shiftDisciplineRating: profile.shiftDisciplineRating,
+        speedBurstRating: profile.speedBurstRating,
         levelPlayed: profile.levelPlayed,
+        positionPlayed: profile.positionPlayed,
         peerComparison: profile.peerComparison,
         confidenceLevel: profile.confidenceLevel,
         selfRatingRaw: profile.selfRatingRaw,
@@ -3605,7 +3682,13 @@ function buildPromotedRosterPlayer(waitlistPlayer, team = null, metadata = {}) {
         hockeySenseRating: waitlistPlayer.hockeySenseRating,
         conditioningRating: waitlistPlayer.conditioningRating,
         effortRating: waitlistPlayer.effortRating,
+        passingRating: waitlistPlayer.passingRating,
+        shootingRating: waitlistPlayer.shootingRating,
+        defensiveRating: waitlistPlayer.defensiveRating,
+        shiftDisciplineRating: waitlistPlayer.shiftDisciplineRating,
+        speedBurstRating: waitlistPlayer.speedBurstRating,
         levelPlayed: waitlistPlayer.levelPlayed,
+        positionPlayed: waitlistPlayer.positionPlayed,
         peerComparison: waitlistPlayer.peerComparison,
         confidenceLevel: waitlistPlayer.confidenceLevel,
         selfRatingRaw: waitlistPlayer.selfRatingRaw,
@@ -3670,11 +3753,14 @@ function getLevelPlayedBoost(levelPlayed) {
 function getPlayerProfileScore(player) {
     const profile = hydratePlayerRatingProfile(player);
     return roundRating(
-        (profile.skatingRating * 0.24) +
-        (profile.puckSkillsRating * 0.20) +
-        (profile.hockeySenseRating * 0.28) +
-        (profile.conditioningRating * 0.08) +
-        (profile.effortRating * 0.14) +
+        (profile.skatingRating * 0.17) +
+        (profile.speedBurstRating * 0.09) +
+        (profile.puckSkillsRating * 0.13) +
+        (profile.passingRating * 0.15) +
+        (profile.shootingRating * 0.11) +
+        (profile.hockeySenseRating * 0.22) +
+        (profile.conditioningRating * 0.05) +
+        (profile.effortRating * 0.08) +
         (getLevelPlayedBoost(profile.levelPlayed) * 0.06)
     );
 }
@@ -3701,6 +3787,11 @@ function summarizeTeamMetrics(team = []) {
         hockeySense: sumField(skaters, p => p.hockeySenseRating),
         conditioning: sumField(skaters, p => p.conditioningRating),
         effort: sumField(skaters, p => p.effortRating),
+        passing: sumField(skaters, p => p.passingRating),
+        shooting: sumField(skaters, p => p.shootingRating),
+        speedBurst: sumField(skaters, p => p.speedBurstRating),
+        defenceCount: skaters.filter(p => ['defence','both','utility'].includes(String(p.positionPlayed || '').toLowerCase())).length,
+        forwardCount: skaters.filter(p => ['forward','both','utility'].includes(String(p.positionPlayed || '').toLowerCase())).length,
         goalieImpact,
         averageFinalRating: team.length ? roundRating(sumField(team, p => p.finalRating ?? p.rating ?? 5) / team.length) : 0
     };
@@ -3716,7 +3807,12 @@ function computeTeamBalanceObjective(whiteTeam = [], darkTeam = []) {
         Math.abs(white.hockeySense - dark.hockeySense) * 1.1 +
         Math.abs(white.effort - dark.effort) * 0.7 +
         Math.abs(white.puckSkills - dark.puckSkills) * 0.45 +
+        Math.abs(white.passing - dark.passing) * 0.65 +
+        Math.abs(white.shooting - dark.shooting) * 0.6 +
+        Math.abs(white.speedBurst - dark.speedBurst) * 0.55 +
         Math.abs(white.conditioning - dark.conditioning) * 0.35 +
+        Math.abs(white.defenceCount - dark.defenceCount) * 1.25 +
+        Math.abs(white.forwardCount - dark.forwardCount) * 0.75 +
         Math.abs(white.goalieImpact - dark.goalieImpact) * 1.1 +
         Math.abs(white.skaterCount - dark.skaterCount) * 2.0
     );
@@ -4609,7 +4705,13 @@ app.post('/api/register-init', registrationLimiter, async (req, res) => {
         hockeySenseRating,
         conditioningRating,
         effortRating,
+        passingRating,
+        shootingRating,
+        defensiveRating,
+        speedBurstRating,
+        shiftDisciplineRating,
         levelPlayed,
+        positionPlayed,
         peerComparison,
         confidenceLevel,
         ratingMode,
@@ -4641,7 +4743,13 @@ app.post('/api/register-init', registrationLimiter, async (req, res) => {
         hockeySenseRating,
         conditioningRating,
         effortRating,
+        passingRating,
+        shootingRating,
+        defensiveRating,
+        speedBurstRating,
+        shiftDisciplineRating,
         levelPlayed,
+        positionPlayed,
         peerComparison,
         confidenceLevel,
         ratingMode,
@@ -4674,7 +4782,13 @@ app.post('/api/register-init', registrationLimiter, async (req, res) => {
             hockeySenseRating: skillProfile.hockeySenseRating,
             conditioningRating: skillProfile.conditioningRating,
             effortRating: skillProfile.effortRating,
+            passingRating: skillProfile.passingRating,
+            shootingRating: skillProfile.shootingRating,
+            defensiveRating: skillProfile.defensiveRating,
+            speedBurstRating: skillProfile.speedBurstRating,
+            shiftDisciplineRating: skillProfile.shiftDisciplineRating,
             levelPlayed: skillProfile.levelPlayed,
+            positionPlayed: skillProfile.positionPlayed,
             peerComparison: skillProfile.peerComparison,
             confidenceLevel: skillProfile.confidenceLevel,
             isGoalie: false,
@@ -4691,13 +4805,15 @@ app.post('/api/register-init', registrationLimiter, async (req, res) => {
                     `INSERT INTO waitlist (
                         id, first_name, last_name, phone, payment_method, rating,
                         skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating, effort_rating,
+                        passing_rating, shooting_rating, defensive_rating, speed_burst_rating, position_played,
                         level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating, final_rating, is_goalie, bypass_auto_promote, joined_at
                     )
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)`,
                     [
                         waitlistPlayer.id, waitlistPlayer.firstName, waitlistPlayer.lastName,
                         waitlistPlayer.phone, waitlistPlayer.paymentMethod, waitlistPlayer.rating,
                         waitlistPlayer.skatingRating, waitlistPlayer.puckSkillsRating, waitlistPlayer.hockeySenseRating, waitlistPlayer.conditioningRating, waitlistPlayer.effortRating,
+                        waitlistPlayer.passingRating, waitlistPlayer.shootingRating, waitlistPlayer.defensiveRating, waitlistPlayer.speedBurstRating, waitlistPlayer.positionPlayed,
                         waitlistPlayer.levelPlayed, waitlistPlayer.peerComparison, waitlistPlayer.confidenceLevel,
                         waitlistPlayer.selfRatingRaw, waitlistPlayer.derivedRating, waitlistPlayer.finalRating, false, false, waitlistPlayer.joinedAt
                     ]
@@ -4739,7 +4855,13 @@ app.post('/api/register-init', registrationLimiter, async (req, res) => {
             hockeySenseRating: skillProfile.hockeySenseRating,
             conditioningRating: skillProfile.conditioningRating,
             effortRating: skillProfile.effortRating,
+            passingRating: skillProfile.passingRating,
+            shootingRating: skillProfile.shootingRating,
+            defensiveRating: skillProfile.defensiveRating,
+            speedBurstRating: skillProfile.speedBurstRating,
+            shiftDisciplineRating: skillProfile.shiftDisciplineRating,
             levelPlayed: skillProfile.levelPlayed,
+            positionPlayed: skillProfile.positionPlayed,
             peerComparison: skillProfile.peerComparison,
             confidenceLevel: skillProfile.confidenceLevel,
             ratingMode: skillProfile.ratingMode,
@@ -4778,7 +4900,12 @@ app.post('/api/register-final', async (req, res) => {
         hockeySenseRating: tempData.hockeySenseRating,
         conditioningRating: tempData.conditioningRating,
         effortRating: tempData.effortRating,
+        passingRating: tempData.passingRating,
+        shootingRating: tempData.shootingRating,
+        defensiveRating: tempData.defensiveRating,
+        speedBurstRating: tempData.speedBurstRating,
         levelPlayed: tempData.levelPlayed,
+        positionPlayed: tempData.positionPlayed,
         peerComparison: tempData.peerComparison,
         confidenceLevel: tempData.confidenceLevel,
         selfRatingRaw: tempData.selfRatingRaw,

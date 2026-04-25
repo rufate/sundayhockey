@@ -1870,50 +1870,99 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
                         <label for="skatingRating">Skating ability</label>
                         <select id="skatingRating" required style="margin:0;">
                             <option value="">Select one</option>
-                            <option value="3">I struggle to keep up with the play</option>
-                            <option value="5">I can keep pace but not a standout skater</option>
-                            <option value="7">I’m one of the faster skaters most games</option>
-                            <option value="9">I’m among the fastest players on the ice</option>
+                            <option value="1">Slow / struggle to keep up</option>
+                            <option value="2">Below-average skating</option>
+                            <option value="3">Average pickup skating</option>
+                            <option value="4">Fast, strong skater</option>
+                            <option value="5">Elite speed / skating</option>
                         </select>
                     </div>
                     <div class="rating-card">
                         <label for="puckSkillsRating">Puck control under pressure</label>
                         <select id="puckSkillsRating" required style="margin:0;">
                             <option value="">Select one</option>
-                            <option value="3">I often lose control under pressure</option>
-                            <option value="5">I can make simple plays but struggle under pressure</option>
-                            <option value="7">I’m confident controlling and passing under pressure</option>
-                            <option value="9">I can create plays and beat defenders consistently</option>
+                            <option value="1">Lose the puck quickly under pressure</option>
+                            <option value="2">Basic puck control</option>
+                            <option value="3">Average puck control</option>
+                            <option value="4">Strong puck control under pressure</option>
+                            <option value="5">Elite puck possession / creates space</option>
                         </select>
                     </div>
                     <div class="rating-card">
                         <label for="hockeySenseRating">Hockey IQ / positioning</label>
                         <select id="hockeySenseRating" required style="margin:0;">
                             <option value="">Select one</option>
-                            <option value="3">I’m often out of position or reacting late</option>
-                            <option value="5">I understand basic positioning</option>
-                            <option value="7">I read plays well and anticipate</option>
-                            <option value="9">I consistently make smart, high-level decisions</option>
+                            <option value="1">Often out of position or reacting late</option>
+                            <option value="2">Basic hockey awareness</option>
+                            <option value="3">Average hockey IQ</option>
+                            <option value="4">Reads plays well and anticipates</option>
+                            <option value="5">Elite decision-maker / controls the game</option>
+                        </select>
+                    </div>
+                    <div class="rating-card">
+                        <label for="passingRating">Passing / playmaking</label>
+                        <select id="passingRating" required style="margin:0;">
+                            <option value="">Select one</option>
+                            <option value="1">Struggle with simple passes</option>
+                            <option value="2">Basic passes only</option>
+                            <option value="3">Reliable average passer</option>
+                            <option value="4">Creates chances and finds teammates</option>
+                            <option value="5">Elite playmaker</option>
+                        </select>
+                    </div>
+                    <div class="rating-card">
+                        <label for="shootingRating">Shooting / finishing</label>
+                        <select id="shootingRating" required style="margin:0;">
+                            <option value="">Select one</option>
+                            <option value="1">Rarely create or finish chances</option>
+                            <option value="2">Can finish easy chances</option>
+                            <option value="3">Average offensive threat</option>
+                            <option value="4">Dangerous scorer / accurate shot</option>
+                            <option value="5">Game-breaking finisher</option>
+                        </select>
+                    </div>
+                    <div class="rating-card">
+                        <label for="speedBurstRating">First 3 strides / speed burst</label>
+                        <select id="speedBurstRating" required style="margin:0;">
+                            <option value="">Select one</option>
+                            <option value="1">Slow first steps</option>
+                            <option value="2">Below-average acceleration</option>
+                            <option value="3">Average first 3 strides</option>
+                            <option value="4">Fast first 3 strides</option>
+                            <option value="5">Explosive acceleration</option>
                         </select>
                     </div>
                     <div class="rating-card">
                         <label for="conditioningRating">Conditioning / pace</label>
                         <select id="conditioningRating" required style="margin:0;">
                             <option value="">Select one</option>
-                            <option value="3">I get tired quickly and need long shifts off</option>
-                            <option value="5">I can keep up but fade late</option>
-                            <option value="7">I maintain a strong pace all game</option>
-                            <option value="9">I push the pace and rarely slow down</option>
+                            <option value="1">Out of shape / fade quickly</option>
+                            <option value="2">Below-average conditioning</option>
+                            <option value="3">Average game fitness</option>
+                            <option value="4">Strong conditioning</option>
+                            <option value="5">Elite motor / rarely slows down</option>
                         </select>
                     </div>
                     <div class="rating-card">
                         <label for="effortRating">Compete / effort level</label>
                         <select id="effortRating" required style="margin:0;">
                             <option value="">Select one</option>
-                            <option value="3">I play casually, minimal battle level</option>
-                            <option value="5">I give average effort</option>
-                            <option value="7">I work hard most shifts</option>
-                            <option value="9">I compete hard every shift, high intensity</option>
+                            <option value="1">Casual effort</option>
+                            <option value="2">Below-average compete</option>
+                            <option value="3">Average effort</option>
+                            <option value="4">Works hard most shifts</option>
+                            <option value="5">High compete every shift</option>
+                        </select>
+                    </div>
+                    <div class="rating-card">
+                        <label for="shiftDisciplineRating">Shift discipline / line changes</label>
+                        <select id="shiftDisciplineRating" required style="margin:0;">
+                            <option value="">Select one</option>
+                            <option value="1">Stay out way too long / late changes</option>
+                            <option value="2">Sometimes overstay shifts</option>
+                            <option value="3">Average shift discipline</option>
+                            <option value="4">Usually short smart shifts</option>
+                            <option value="5">Excellent changes / team-first shifts</option>
                         </select>
                     </div>
                     <div class="rating-card">
@@ -1930,8 +1979,8 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
                 </div>
 
                 <div class="direct-rating-box hidden" id="directRatingBox">
-                    <label for="directRating" style="display:block; margin-bottom:6px; color:#d6ffd6; font-weight:600;">Enter your known rating (1-10)</label>
-                    <input type="number" id="directRating" min="1" max="10" step="0.1" placeholder="Example: 6.5" style="margin:0; background:#182118; border:1px solid #4CAF50;">
+                    <label for="directRating" style="display:block; margin-bottom:6px; color:#d6ffd6; font-weight:600;">Enter your known rating (3.0-9.8)</label>
+                    <input type="number" id="directRating" min="3" max="9.8" step="0.1" placeholder="Example: 6.5" style="margin:0; background:#182118; border:1px solid #4CAF50;">
                     <div class="small-note">Use this only if you already know your true rating and are confident in it.</div>
                 </div>
 
@@ -2097,6 +2146,10 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
                 hockeySenseRating: profile.hockeySenseRating || '',
                 conditioningRating: profile.conditioningRating || '',
                 effortRating: profile.effortRating || '',
+                passingRating: profile.passingRating || '',
+                shootingRating: profile.shootingRating || '',
+                speedBurstRating: profile.speedBurstRating || '',
+                shiftDisciplineRating: profile.shiftDisciplineRating || '',
                 levelPlayed: profile.levelPlayed || '',
                 peerComparison: profile.peerComparison || '',
                 confidenceLevel: profile.confidenceLevel || '',
@@ -2140,6 +2193,10 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
             document.getElementById('hockeySenseRating').value = sanitized.hockeySenseRating || '';
             document.getElementById('conditioningRating').value = sanitized.conditioningRating || '';
             document.getElementById('effortRating').value = sanitized.effortRating || '';
+            document.getElementById('passingRating').value = sanitized.passingRating || '';
+            document.getElementById('shootingRating').value = sanitized.shootingRating || '';
+            document.getElementById('speedBurstRating').value = sanitized.speedBurstRating || '';
+            document.getElementById('shiftDisciplineRating').value = sanitized.shiftDisciplineRating || '';
             document.getElementById('levelPlayed').value = sanitized.levelPlayed || '';
             document.getElementById('rating').value = sanitized.rating || '';
 
@@ -2426,9 +2483,13 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
                 'skatingRating',
                 'puckSkillsRating',
                 'hockeySenseRating',
+                'passingRating',
+                'shootingRating',
+                'speedBurstRating',
                 'conditioningRating',
                 'effortRating',
-                'levelPlayed'
+                'shiftDisciplineRating',
+                'levelPlayed',
             ];
 
             profileFields.forEach(id => {
@@ -2450,7 +2511,7 @@ function buildRatingProfilePayload() {
     if (ratingMode === 'direct') {
         const directRating = clampRatingInput(document.getElementById('directRating')?.value);
         if (directRating === null) return null;
-        const rounded = roundRatingValue(directRating);
+        const rounded = roundRatingValue(Math.max(3, Math.min(9.8, directRating)));
         return {
             ratingMode: 'direct',
             directRating: rounded,
@@ -2459,7 +2520,13 @@ function buildRatingProfilePayload() {
             hockeySenseRating: null,
             conditioningRating: null,
             effortRating: null,
+            passingRating: null,
+            shootingRating: null,
+            defensiveRating: null,
+            shiftDisciplineRating: null,
+            speedBurstRating: null,
             levelPlayed: '',
+            positionPlayed: '',
             peerComparison: '',
             confidenceLevel: '',
             selfRatingRaw: rounded,
@@ -2473,21 +2540,35 @@ function buildRatingProfilePayload() {
     const sense = clampRatingInput(document.getElementById('hockeySenseRating')?.value);
     const conditioning = clampRatingInput(document.getElementById('conditioningRating')?.value);
     const effort = clampRatingInput(document.getElementById('effortRating')?.value);
+    const passing = clampRatingInput(document.getElementById('passingRating')?.value);
+    const shooting = clampRatingInput(document.getElementById('shootingRating')?.value);
+    const speedBurst = clampRatingInput(document.getElementById('speedBurstRating')?.value);
+    const shiftDiscipline = clampRatingInput(document.getElementById('shiftDisciplineRating')?.value);
     const levelPlayed = document.getElementById('levelPlayed')?.value || '';
 
-    if ([skating, puck, sense, conditioning, effort].some(v => v === null) || !levelPlayed) {
+    if ([skating, puck, sense, conditioning, effort, passing, shooting, speedBurst, shiftDiscipline].some(v => v === null) || !levelPlayed) {
         return null;
     }
 
-    const weightedSkill = roundRatingValue(
-        (skating * 0.24) +
-        (puck * 0.20) +
-        (sense * 0.28) +
-        (conditioning * 0.08) +
-        (effort * 0.14)
-    );
-    const levelMapped = LEVEL_PLAY_RATING_MAP[levelPlayed] || 5.5;
-    const derivedRating = roundRatingValue((weightedSkill * 0.94) + (levelMapped * 0.06));
+    // Phan Friday 1-10 formula: answers are 1-5, converted to 3.0-9.8.
+    // Weights: skating 17, speed burst 8, conditioning 15, puck 14, IQ 14, passing 10, shooting 8, compete 9, shift discipline 5.
+    const weightedFivePointScore = (
+        (skating * 17) +
+        (speedBurst * 8) +
+        (conditioning * 15) +
+        (puck * 14) +
+        (sense * 14) +
+        (passing * 10) +
+        (shooting * 8) +
+        (effort * 9) +
+        (shiftDiscipline * 5)
+    ) / 100;
+
+    let derivedRating = roundRatingValue(weightedFivePointScore * 2);
+    const levelMinimums = { beginner: 3.0, intermediate: 5.0, competitive: 7.0, junior: 8.0 };
+    if (levelMinimums[levelPlayed]) derivedRating = Math.max(derivedRating, levelMinimums[levelPlayed]);
+    derivedRating = Math.max(3.0, Math.min(9.8, derivedRating));
+    const weightedSkill = derivedRating;
 
     return {
         ratingMode: 'profile',
@@ -2497,7 +2578,13 @@ function buildRatingProfilePayload() {
         hockeySenseRating: sense,
         conditioningRating: conditioning,
         effortRating: effort,
+        passingRating: passing,
+        shootingRating: shooting,
+        defensiveRating: null,
+        shiftDisciplineRating: shiftDiscipline,
+        speedBurstRating: speedBurst,
         levelPlayed,
+        positionPlayed: '',
         peerComparison: '',
         confidenceLevel: '',
         selfRatingRaw: weightedSkill,
@@ -2553,8 +2640,12 @@ function updateCalculatedRating() {
                 document.getElementById('skatingRating').value = data.skatingRating || '';
                 document.getElementById('puckSkillsRating').value = data.puckSkillsRating || '';
                 document.getElementById('hockeySenseRating').value = data.hockeySenseRating || '';
+                document.getElementById('passingRating').value = data.passingRating || '';
+                document.getElementById('shootingRating').value = data.shootingRating || '';
+                document.getElementById('speedBurstRating').value = data.speedBurstRating || '';
                 document.getElementById('conditioningRating').value = data.conditioningRating || '';
                 document.getElementById('effortRating').value = data.effortRating || '';
+                document.getElementById('shiftDisciplineRating').value = data.shiftDisciplineRating || '';
                 document.getElementById('levelPlayed').value = data.levelPlayed || '';
                 document.getElementById('rating').value = data.rating || '';
                 if (data.paymentMethod) {
@@ -2578,8 +2669,12 @@ function updateCalculatedRating() {
                 skatingRating: document.getElementById('skatingRating').value,
                 puckSkillsRating: document.getElementById('puckSkillsRating').value,
                 hockeySenseRating: document.getElementById('hockeySenseRating').value,
+                passingRating: document.getElementById('passingRating').value,
+                shootingRating: document.getElementById('shootingRating').value,
+                speedBurstRating: document.getElementById('speedBurstRating').value,
                 conditioningRating: document.getElementById('conditioningRating').value,
                 effortRating: document.getElementById('effortRating').value,
+                shiftDisciplineRating: document.getElementById('shiftDisciplineRating').value,
                 levelPlayed: document.getElementById('levelPlayed').value,
                 rating: document.getElementById('rating').value,
                 paymentMethod: document.querySelector('input[name="payment"]:checked')?.value
@@ -3519,7 +3614,12 @@ function updateCalculatedRating() {
                 hockeySenseRating: skillProfile.hockeySenseRating,
                 conditioningRating: skillProfile.conditioningRating,
                 effortRating: skillProfile.effortRating,
+                passingRating: skillProfile.passingRating,
+                shootingRating: skillProfile.shootingRating,
+                speedBurstRating: skillProfile.speedBurstRating,
+                shiftDisciplineRating: skillProfile.shiftDisciplineRating,
                 levelPlayed: skillProfile.levelPlayed,
+                positionPlayed: skillProfile.positionPlayed,
                 peerComparison: skillProfile.peerComparison,
                 confidenceLevel: skillProfile.confidenceLevel,
                 isGoalie: false,
@@ -3586,7 +3686,7 @@ function updateCalculatedRating() {
                 });
             }
             
-            const inputs = ['firstName', 'lastName', 'phone', 'directRating', 'skatingRating', 'puckSkillsRating', 'hockeySenseRating', 'conditioningRating', 'effortRating'];
+            const inputs = ['firstName', 'lastName', 'phone', 'directRating', 'skatingRating', 'puckSkillsRating', 'hockeySenseRating', 'passingRating', 'shootingRating', 'speedBurstRating', 'conditioningRating', 'effortRating', 'shiftDisciplineRating'];
             inputs.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
@@ -3603,7 +3703,7 @@ function updateCalculatedRating() {
                 });
             });
 
-            ['levelPlayed', 'effortRating'].forEach(id => {
+            ['levelPlayed', 'effortRating', 'shiftDisciplineRating'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
                     el.addEventListener('change', updateCalculatedRating);
