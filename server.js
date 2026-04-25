@@ -956,9 +956,80 @@ function minutesSinceLatestWeeklyOccurrence(scheduleAt, etDate = getCurrentETTim
     return (nowMinute - scheduleMinute + (7 * 24 * 60)) % (7 * 24 * 60);
 }
 
-function canSafelyRunWeeklyReset(etTime = getCurrentETTime()) {
+function getGameSchedulePointFromGameTime(selectedGameTime = gameTime) {
+    const parsed = parseGameTimeString(selectedGameTime);
+    return {
+        dow: parsed.dayIndex,
+        hour: parsed.hour24,
+        minute: parsed.minute,
+        label: `${parsed.dayName} ${String(((parsed.hour24 + 11) % 12) + 1)}:${String(parsed.minute).padStart(2, '0')} ${parsed.hour24 >= 12 ? 'PM' : 'AM'} ET`
+    };
+}
+
+function getForwardMinutesBetweenWeeklyPoints(fromPoint, toPoint) {
+    if (!fromPoint || !toPoint) return null;
+    const fromMin = minuteOfWeekFromParts(fromPoint.dow, fromPoint.hour, fromPoint.minute);
+    const toMin = minuteOfWeekFromParts(toPoint.dow, toPoint.hour, toPoint.minute);
+    return (toMin - fromMin + (7 * 24 * 60)) % (7 * 24 * 60);
+}
+
+function validateResetScheduleAgainstGame(resetAt, selectedGameTime = gameTime) {
+    if (!resetAt) {
+        return { ok: false, reason: 'Weekly reset is missing a reset time.' };
+    }
+
+    const gamePoint = getGameSchedulePointFromGameTime(selectedGameTime);
+    const minutesAfterGame = getForwardMinutesBetweenWeeklyPoints(gamePoint, resetAt);
+
+    if (!Number.isFinite(minutesAfterGame) || minutesAfterGame <= 0) {
+        return {
+            ok: false,
+            reason: `Blocked weekly reset because the reset time is not after the configured game time (${gamePoint.label}).`
+        };
+    }
+
+    // A weekly reset should happen after that week's game, not almost a full week later before the next game.
+    // This blocks stale Friday reset settings such as Friday afternoon/evening for Friday hockey.
+    const maxResetHoursAfterGame = Math.max(1, Number(process.env.MAX_RESET_HOURS_AFTER_GAME || 72));
+    if (minutesAfterGame > maxResetHoursAfterGame * 60) {
+        return {
+            ok: false,
+            reason: `Blocked weekly reset because it is ${Math.round(minutesAfterGame / 60)} hours after the configured game time. Reset must be within ${maxResetHoursAfterGame} hours after ${gamePoint.label}.`
+        };
+    }
+
+    return { ok: true, reason: `Reset schedule is ${Math.round(minutesAfterGame / 60)} hours after the configured game time.` };
+}
+
+function validateResetScheduleAgainstRosterRelease(resetAt) {
+    if (!resetAt || !rosterReleaseSchedule || !rosterReleaseSchedule.enabled || !rosterReleaseSchedule.at) {
+        return { ok: true, reason: 'No roster-release schedule comparison needed.' };
+    }
+
+    const minutesAfterRelease = getForwardMinutesBetweenWeeklyPoints(rosterReleaseSchedule.at, resetAt);
+    if (!Number.isFinite(minutesAfterRelease) || minutesAfterRelease <= 0) {
+        return {
+            ok: false,
+            reason: 'Blocked weekly reset because the reset time is not after the configured roster release time.'
+        };
+    }
+
+    return { ok: true, reason: `Reset schedule is ${Math.round(minutesAfterRelease / 60)} hours after roster release.` };
+}
+
+function canSafelyRunWeeklyReset(etTime = getCurrentETTime(), resetAt = resetWeekSchedule && resetWeekSchedule.at) {
     const registeredPlayerCount = Array.isArray(players) ? players.length : 0;
     const waitlistCount = Array.isArray(waitlist) ? waitlist.length : 0;
+
+    const gameScheduleSafety = validateResetScheduleAgainstGame(resetAt, gameTime);
+    if (!gameScheduleSafety.ok) {
+        return gameScheduleSafety;
+    }
+
+    const rosterScheduleSafety = validateResetScheduleAgainstRosterRelease(resetAt);
+    if (!rosterScheduleSafety.ok) {
+        return rosterScheduleSafety;
+    }
 
     if (!resetArmed) {
         return {
@@ -988,7 +1059,7 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime()) {
         };
     }
 
-    return { ok: true, reason: 'Reset arm is ON, roster has been released, and there are no registered players or waitlist entries to reset.' };
+    return { ok: true, reason: 'Reset arm is ON, roster has been released, reset is after game time, and there are no registered players or waitlist entries to reset.' };
 }
 
 function getNextOccurrenceEtParts(scheduleAt, etDate = getCurrentETTime()) {
@@ -1480,7 +1551,7 @@ async function checkWeeklyReset() {
     );
     if (!resetCheck.shouldRun) return false;
 
-    const resetSafety = canSafelyRunWeeklyReset(etTime);
+    const resetSafety = canSafelyRunWeeklyReset(etTime, resetWeekSchedule.at);
     if (!resetSafety.ok) {
         console.warn(`[SAFETY] Weekly reset skipped at ${resetCheck.minuteKey}: ${resetSafety.reason}`);
         return false;
@@ -3168,6 +3239,18 @@ function validateScheduleInputs({ signupLockEnabled, signupLockStart, signupLock
     if (resetWeekEnabled) {
         if (!resetWeekAt) return 'Weekly reset requires a valid date/time.';
         if (!resetParts) return 'Weekly reset date/time is invalid.';
+
+        const resetDowTime = parseDatetimeLocalToDowTime(resetWeekAt);
+        const gameSafety = validateResetScheduleAgainstGame(resetDowTime, gameTime);
+        if (!gameSafety.ok) return gameSafety.reason;
+
+        if (rosterReleaseEnabled && rosterReleaseAt) {
+            const releaseDowTime = parseDatetimeLocalToDowTime(rosterReleaseAt);
+            const minutesAfterRelease = getForwardMinutesBetweenWeeklyPoints(releaseDowTime, resetDowTime);
+            if (!Number.isFinite(minutesAfterRelease) || minutesAfterRelease <= 0) {
+                return 'Weekly reset must be after the roster release time.';
+            }
+        }
     }
 
     return null;
