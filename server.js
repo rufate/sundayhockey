@@ -3734,114 +3734,135 @@ function generateFairTeams() {
     const goalies = players.filter(p => p.isGoalie).map(hydratePlayerRatingProfile).sort(sortByBalance);
     const skaters = players.filter(p => !p.isGoalie).map(hydratePlayerRatingProfile).sort(sortByBalance);
 
-    let whiteTeam = [];
-    let darkTeam = [];
-
-    if (goalies.length >= 2) {
-        whiteTeam.push({ ...goalies[0], team: 'White' });
-        darkTeam.push({ ...goalies[1], team: 'Dark' });
-        for (let i = 2; i < goalies.length; i += 1) {
-            const goalie = goalies[i];
-            const addWhite = [...whiteTeam, { ...goalie, team: 'White' }];
-            const addDark = [...darkTeam, { ...goalie, team: 'Dark' }];
-            const whiteScore = computeTeamBalanceObjective(addWhite, darkTeam);
-            const darkScore = computeTeamBalanceObjective(whiteTeam, addDark);
-            if (whiteScore <= darkScore) {
-                whiteTeam = addWhite;
-            } else {
-                darkTeam = addDark;
-            }
-        }
-    } else if (goalies.length === 1) {
-        whiteTeam.push({ ...goalies[0], team: 'White' });
-    }
-
-    const tierSize = Math.max(2, Math.min(4, Math.ceil(skaters.length / 5) || 2));
-    let snakeLeftToRight = true;
-
-    for (let start = 0; start < skaters.length; start += tierSize) {
-        const tier = skaters.slice(start, start + tierSize);
-        const preferredOrder = snakeLeftToRight ? ['White', 'Dark'] : ['Dark', 'White'];
-
-        tier.forEach((skater, index) => {
-            const preferredTeam = preferredOrder[index % preferredOrder.length];
-            const tryWhite = [...whiteTeam, { ...skater, team: 'White' }];
-            const tryDark = [...darkTeam, { ...skater, team: 'Dark' }];
-            const whiteObjective = computeTeamBalanceObjective(tryWhite, darkTeam) + (preferredTeam === 'White' ? -0.08 : 0);
-            const darkObjective = computeTeamBalanceObjective(whiteTeam, tryDark) + (preferredTeam === 'Dark' ? -0.08 : 0);
-
-            if (whiteObjective <= darkObjective) {
-                whiteTeam = tryWhite;
-            } else {
-                darkTeam = tryDark;
-            }
-        });
-
-        snakeLeftToRight = !snakeLeftToRight;
-    }
-
-    let improved = true;
-    let guard = 0;
-    while (improved && guard < 60) {
-        improved = false;
-        guard += 1;
-        let bestSwap = null;
-        const currentObjective = computeTeamBalanceObjective(whiteTeam, darkTeam);
-
-        for (const whitePlayer of whiteTeam.filter(p => !p.isGoalie)) {
-            for (const darkPlayer of darkTeam.filter(p => !p.isGoalie)) {
-                const nextWhite = whiteTeam
-                    .filter(p => p.id !== whitePlayer.id)
-                    .concat({ ...darkPlayer, team: 'White' });
-                const nextDark = darkTeam
-                    .filter(p => p.id !== darkPlayer.id)
-                    .concat({ ...whitePlayer, team: 'Dark' });
-
-                const nextObjective = computeTeamBalanceObjective(nextWhite, nextDark);
-                if (nextObjective + 0.01 < currentObjective) {
-                    if (!bestSwap || nextObjective < bestSwap.objective) {
-                        bestSwap = {
-                            whiteId: whitePlayer.id,
-                            darkId: darkPlayer.id,
-                            objective: nextObjective,
-                            nextWhite,
-                            nextDark
-                        };
-                    }
-                }
-            }
-        }
-
-        if (bestSwap) {
-            whiteTeam = bestSwap.nextWhite;
-            darkTeam = bestSwap.nextDark;
-            improved = true;
-        }
-    }
-
     const sortTeamForDisplay = (team) => team.sort((a, b) => {
         if (a.isGoalie && !b.isGoalie) return -1;
         if (!a.isGoalie && b.isGoalie) return 1;
         return `${a.firstName} ${a.lastName}`.toLowerCase().localeCompare(`${b.firstName} ${b.lastName}`.toLowerCase());
     });
 
-    whiteTeam = sortTeamForDisplay(whiteTeam.map(p => ({ ...p, team: 'White' })));
-    darkTeam = sortTeamForDisplay(darkTeam.map(p => ({ ...p, team: 'Dark' })));
+    const assignSkatersAndOptimize = (initialWhite = [], initialDark = [], label = 'default') => {
+        let whiteTeam = initialWhite.map(p => ({ ...p, team: 'White' }));
+        let darkTeam = initialDark.map(p => ({ ...p, team: 'Dark' }));
 
+        const tierSize = Math.max(2, Math.min(4, Math.ceil(skaters.length / 5) || 2));
+        let snakeLeftToRight = true;
+
+        for (let start = 0; start < skaters.length; start += tierSize) {
+            const tier = skaters.slice(start, start + tierSize);
+            const preferredOrder = snakeLeftToRight ? ['White', 'Dark'] : ['Dark', 'White'];
+
+            tier.forEach((skater, index) => {
+                const preferredTeam = preferredOrder[index % preferredOrder.length];
+                const tryWhite = [...whiteTeam, { ...skater, team: 'White' }];
+                const tryDark = [...darkTeam, { ...skater, team: 'Dark' }];
+                const whiteObjective = computeTeamBalanceObjective(tryWhite, darkTeam) + (preferredTeam === 'White' ? -0.08 : 0);
+                const darkObjective = computeTeamBalanceObjective(whiteTeam, tryDark) + (preferredTeam === 'Dark' ? -0.08 : 0);
+
+                if (whiteObjective <= darkObjective) {
+                    whiteTeam = tryWhite;
+                } else {
+                    darkTeam = tryDark;
+                }
+            });
+
+            snakeLeftToRight = !snakeLeftToRight;
+        }
+
+        let improved = true;
+        let guard = 0;
+        while (improved && guard < 60) {
+            improved = false;
+            guard += 1;
+            let bestSwap = null;
+            const currentObjective = computeTeamBalanceObjective(whiteTeam, darkTeam);
+
+            for (const whitePlayer of whiteTeam.filter(p => !p.isGoalie)) {
+                for (const darkPlayer of darkTeam.filter(p => !p.isGoalie)) {
+                    const nextWhite = whiteTeam.filter(p => p.id !== whitePlayer.id).concat({ ...darkPlayer, team: 'White' });
+                    const nextDark = darkTeam.filter(p => p.id !== darkPlayer.id).concat({ ...whitePlayer, team: 'Dark' });
+                    const nextObjective = computeTeamBalanceObjective(nextWhite, nextDark);
+
+                    if (nextObjective + 0.01 < currentObjective && (!bestSwap || nextObjective < bestSwap.objective)) {
+                        bestSwap = { objective: nextObjective, nextWhite, nextDark };
+                    }
+                }
+            }
+
+            if (bestSwap) {
+                whiteTeam = bestSwap.nextWhite;
+                darkTeam = bestSwap.nextDark;
+                improved = true;
+            }
+        }
+
+        const finalWhite = sortTeamForDisplay(whiteTeam.map(p => ({ ...p, team: 'White' })));
+        const finalDark = sortTeamForDisplay(darkTeam.map(p => ({ ...p, team: 'Dark' })));
+        const whiteMetrics = summarizeTeamMetrics(finalWhite);
+        const darkMetrics = summarizeTeamMetrics(finalDark);
+
+        return {
+            label,
+            whiteTeam: finalWhite,
+            darkTeam: finalDark,
+            objective: computeTeamBalanceObjective(finalWhite, finalDark),
+            whiteMetrics,
+            darkMetrics
+        };
+    };
+
+    const goalieCandidates = [];
+
+    if (goalies.length >= 2) {
+        goalieCandidates.push({ label: 'goalie-order-a', white: [{ ...goalies[0], team: 'White' }], dark: [{ ...goalies[1], team: 'Dark' }] });
+        goalieCandidates.push({ label: 'goalie-order-b', white: [{ ...goalies[1], team: 'White' }], dark: [{ ...goalies[0], team: 'Dark' }] });
+
+        for (const candidate of goalieCandidates) {
+            for (let i = 2; i < goalies.length; i += 1) {
+                const goalie = goalies[i];
+                const addWhite = [...candidate.white, { ...goalie, team: 'White' }];
+                const addDark = [...candidate.dark, { ...goalie, team: 'Dark' }];
+                const whiteScore = computeTeamBalanceObjective(addWhite, candidate.dark);
+                const darkScore = computeTeamBalanceObjective(candidate.white, addDark);
+                if (whiteScore <= darkScore) candidate.white = addWhite;
+                else candidate.dark = addDark;
+            }
+        }
+    } else if (goalies.length === 1) {
+        goalieCandidates.push({ label: 'single-goalie-white', white: [{ ...goalies[0], team: 'White' }], dark: [] });
+        goalieCandidates.push({ label: 'single-goalie-dark', white: [], dark: [{ ...goalies[0], team: 'Dark' }] });
+    } else {
+        goalieCandidates.push({ label: 'no-goalies', white: [], dark: [] });
+    }
+
+    const best = goalieCandidates
+        .map(candidate => assignSkatersAndOptimize(candidate.white, candidate.dark, candidate.label))
+        .sort((a, b) => {
+            const objectiveDiff = a.objective - b.objective;
+            if (Math.abs(objectiveDiff) > 0.01) return objectiveDiff;
+            const goalieDiffA = Math.abs(a.whiteMetrics.goalieImpact - a.darkMetrics.goalieImpact);
+            const goalieDiffB = Math.abs(b.whiteMetrics.goalieImpact - b.darkMetrics.goalieImpact);
+            if (Math.abs(goalieDiffA - goalieDiffB) > 0.01) return goalieDiffA - goalieDiffB;
+            return Math.abs(a.whiteMetrics.skaterCount - a.darkMetrics.skaterCount) - Math.abs(b.whiteMetrics.skaterCount - b.darkMetrics.skaterCount);
+        })[0];
+
+    const whiteTeam = best.whiteTeam;
+    const darkTeam = best.darkTeam;
     players = [...whiteTeam, ...darkTeam];
 
-    const whiteMetrics = summarizeTeamMetrics(whiteTeam);
-    const darkMetrics = summarizeTeamMetrics(darkTeam);
+    console.log(`[TEAM BALANCE] Selected ${best.label}. White balance ${roundRating(best.whiteMetrics.totalBalance)}, Dark balance ${roundRating(best.darkMetrics.totalBalance)}, objective ${roundRating(best.objective)}.`);
 
     return {
         whiteTeam,
         darkTeam,
-        whiteRating: whiteMetrics.averageFinalRating,
-        darkRating: darkMetrics.averageFinalRating,
-        whiteBalance: roundRating(whiteMetrics.totalBalance),
-        darkBalance: roundRating(darkMetrics.totalBalance)
+        whiteRating: best.whiteMetrics.averageFinalRating,
+        darkRating: best.darkMetrics.averageFinalRating,
+        whiteBalance: roundRating(best.whiteMetrics.totalBalance),
+        darkBalance: roundRating(best.darkMetrics.totalBalance),
+        balanceObjective: roundRating(best.objective),
+        goalieAssignmentMode: best.label
     };
 }
+
 
 function escapeCsvValue(value) {
     if (value === null || value === undefined) return '';
