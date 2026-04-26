@@ -628,6 +628,23 @@
             margin-top: 8px;
         }
 
+
+
+        /* Final premium single-line released roster detail */
+        .roster-header #rosterGameInfo {
+            font-size: clamp(0.92rem, 2.8vw, 1.18rem);
+            font-weight: 800;
+            letter-spacing: 0.45px;
+            color: #e8e8e8;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.35;
+        }
+        @media (max-width: 420px) {
+            .roster-header #rosterGameInfo { font-size: 0.86rem; letter-spacing: 0.15px; }
+        }
+
         @media (max-width: 600px) {
             .container { padding: 20px; }
             .spot-number { font-size: 2.5rem; }
@@ -2784,6 +2801,24 @@ function updateCalculatedRating() {
             saveFormData();
         }
 
+
+        function formatPremiumRosterLine(dateValue, formattedDate, gameTimeValue, locationValue) {
+            const monthNames = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+            let dateText = String(formattedDate || dateValue || '').trim();
+            const rawDate = String(dateValue || '').trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+                const parts = rawDate.split('-').map(Number);
+                const localDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                const dayName = localDate.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+                dateText = `${dayName} ${monthNames[localDate.getMonth()]} ${localDate.getDate()}`;
+            } else {
+                dateText = dateText.replace(/,?\s*\d{4}\b/g, '').replace(/,/g, '').trim().toUpperCase();
+            }
+            const timeText = String(gameTimeValue || '').replace(/^[A-Za-z]+\s+/, '').replace(/\s+/g, ' ').trim();
+            const locationText = String(locationValue || '').trim();
+            return [dateText, timeText, locationText].filter(Boolean).join(' • ');
+        }
+
         async function loadAndDisplayRoster() {
             try {
                 const res = await fetch(`${API_URL}/api/roster`);
@@ -2794,8 +2829,12 @@ function updateCalculatedRating() {
                     return false;
                 }
 
-                document.getElementById('rosterGameInfo').innerText =
-                    `${data.formattedDate || data.date || currentDate} | ${data.location || currentLocation} | ${data.time || currentTime}`;
+                document.getElementById('rosterGameInfo').innerText = formatPremiumRosterLine(
+                    data.date || currentGameDateValue,
+                    data.formattedDate || currentDate,
+                    data.time || currentTime,
+                    data.location || currentLocation
+                );
 
                 document.getElementById('whiteCount').innerText = data.whiteActiveCount ?? (Array.isArray(data.whiteTeam) ? data.whiteTeam.filter(p => !p.cancelled).length : 0);
                 document.getElementById('darkCount').innerText = data.darkActiveCount ?? (Array.isArray(data.darkTeam) ? data.darkTeam.filter(p => !p.cancelled).length : 0);

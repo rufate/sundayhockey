@@ -238,6 +238,24 @@
             margin-top: 15px;
         }
 
+
+
+        /* Final premium single-line roster page header */
+        #gameDate {
+            font-size: clamp(0.95rem, 3vw, 1.22rem);
+            font-weight: 800;
+            letter-spacing: 0.45px;
+            color: #f2f2f2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.35;
+        }
+        #gameLocationTime { display: none; }
+        @media (max-width: 420px) {
+            #gameDate { font-size: 0.86rem; letter-spacing: 0.15px; }
+        }
+
         @media (max-width: 600px) {
             .container { padding: 20px; }
             .teams-container { grid-template-columns: 1fr; }
@@ -559,14 +577,32 @@ html.has-preview-toolbar .preview-toolbar{display:block;}
 
         loadScheduleInfo();
 
+
+        function formatPremiumRosterLine(dateValue, formattedDate, gameTimeValue, locationValue) {
+            const monthNames = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+            let dateText = String(formattedDate || dateValue || '').trim();
+            const rawDate = String(dateValue || '').trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+                const parts = rawDate.split('-').map(Number);
+                const localDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                const dayName = localDate.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+                dateText = `${dayName} ${monthNames[localDate.getMonth()]} ${localDate.getDate()}`;
+            } else {
+                dateText = dateText.replace(/,?\s*\d{4}\b/g, '').replace(/,/g, '').trim().toUpperCase();
+            }
+            const timeText = String(gameTimeValue || '').replace(/^[A-Za-z]+\s+/, '').replace(/\s+/g, ' ').trim();
+            const locationText = String(locationValue || '').trim();
+            return [dateText, timeText, locationText].filter(Boolean).join(' • ');
+        }
+
         async function loadRoster() {
             try {
                 const res = await fetch(`${API_URL}/api/roster`);
                 const data = await res.json();
 
                 if (data.location && data.time) {
-                    document.getElementById('gameDate').innerText = data.formattedDate || data.date;
-                    document.getElementById('gameLocationTime').innerText = `${data.location} | ${data.time}`;
+                    document.getElementById('gameDate').innerText = formatPremiumRosterLine(data.date, data.formattedDate, data.time, data.location);
+                    document.getElementById('gameLocationTime').innerText = '';
                 }
 
                 if (!data.released) {
