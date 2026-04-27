@@ -632,17 +632,22 @@
 
         /* Final premium single-line released roster detail */
         .roster-header #rosterGameInfo {
-            font-size: clamp(0.92rem, 2.8vw, 1.18rem);
+            font-size: clamp(0.88rem, 2.5vw, 1.18rem);
             font-weight: 800;
-            letter-spacing: 0.45px;
+            letter-spacing: 0.35px;
             color: #e8e8e8;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
             line-height: 1.35;
+            overflow-wrap: anywhere;
         }
-        @media (max-width: 420px) {
-            .roster-header #rosterGameInfo { font-size: 0.86rem; letter-spacing: 0.15px; }
+        @media (max-width: 520px) {
+            .roster-header #rosterGameInfo {
+                font-size: clamp(0.74rem, 3.15vw, 0.88rem);
+                letter-spacing: 0.05px;
+                line-height: 1.28;
+            }
         }
 
         @media (max-width: 600px) {

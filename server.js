@@ -933,6 +933,10 @@ function armScheduleGuardForCurrentWeek(scheduleAt, etDate = getCurrentETTime())
 }
 
 function syncScheduledActionRunMarker(scheduleAt, runType = 'release', etDate = getCurrentETTime()) {
+    if (runType === 'release' && rosterReleaseAt) {
+        const exactGuard = markExactScheduleIfPast(rosterReleaseAt, 'release', etDate);
+        if (exactGuard.occurrenceKey) return exactGuard;
+    }
     if (!scheduleAt) return { occurrenceKey: '', minuteKey: '' };
 
     const guard = armScheduleGuardForCurrentWeek(scheduleAt, etDate);
@@ -1155,6 +1159,73 @@ function minutesSinceEtParts(occurrenceParts, etDate = getCurrentETTime()) {
         0
     );
     return Math.floor((etDate.getTime() - occurrence.getTime()) / 60000);
+}
+
+
+function getEtWallClockDateFromParts(parts) {
+    if (!parts) return null;
+    return new Date(
+        Number(parts.year),
+        Number(parts.month) - 1,
+        Number(parts.day),
+        Number(parts.hour),
+        Number(parts.minute),
+        0,
+        0
+    );
+}
+
+function shouldRunExactDateTimeAction(dtLocalStr, lastRunMinuteKey, etDate = getCurrentETTime(), maxCatchUpMinutes = 360) {
+    const parts = parseDatetimeLocalToETDate(dtLocalStr);
+    if (!parts) {
+        return { shouldRun: false, reason: 'missing_exact_datetime', occurrenceKey: '', minuteKey: '', lagMinutes: null };
+    }
+
+    const exactMinuteKey = String(etPartsToMinuteKey(parts));
+    const scheduledAt = getEtWallClockDateFromParts(parts);
+    const lagMinutes = Math.floor((etDate.getTime() - scheduledAt.getTime()) / 60000);
+
+    if (!Number.isFinite(lagMinutes) || lagMinutes < 0) {
+        return { shouldRun: false, reason: 'before_exact_datetime', occurrenceKey: `exact:${exactMinuteKey}`, minuteKey: exactMinuteKey, lagMinutes };
+    }
+
+    if (lagMinutes > maxCatchUpMinutes) {
+        return { shouldRun: false, reason: 'outside_exact_catchup_window', occurrenceKey: `exact:${exactMinuteKey}`, minuteKey: exactMinuteKey, lagMinutes };
+    }
+
+    if (String(lastRunMinuteKey || '') === exactMinuteKey || String(lastExactRosterReleaseRunAt || '') === `exact:${exactMinuteKey}`) {
+        return { shouldRun: false, reason: 'already_ran_exact_datetime', occurrenceKey: `exact:${exactMinuteKey}`, minuteKey: exactMinuteKey, lagMinutes };
+    }
+
+    return {
+        shouldRun: true,
+        reason: lagMinutes === 0 ? 'exact_datetime_minute' : 'exact_datetime_catchup',
+        occurrenceKey: `exact:${exactMinuteKey}`,
+        minuteKey: exactMinuteKey,
+        lagMinutes
+    };
+}
+
+function markExactScheduleIfPast(dtLocalStr, runType = 'release', etDate = getCurrentETTime()) {
+    const parts = parseDatetimeLocalToETDate(dtLocalStr);
+    if (!parts) return { occurrenceKey: '', minuteKey: '' };
+
+    const scheduledAt = getEtWallClockDateFromParts(parts);
+    const lagMinutes = Math.floor((etDate.getTime() - scheduledAt.getTime()) / 60000);
+    if (!Number.isFinite(lagMinutes) || lagMinutes < 0) {
+        return { occurrenceKey: '', minuteKey: '' };
+    }
+
+    const minuteKey = String(etPartsToMinuteKey(parts));
+    const occurrenceKey = `exact:${minuteKey}`;
+    if (runType === 'reset') {
+        lastExactResetRunAt = occurrenceKey;
+        lastExactResetMinuteKey = minuteKey;
+    } else {
+        lastExactRosterReleaseRunAt = occurrenceKey;
+        lastExactRosterReleaseMinuteKey = minuteKey;
+    }
+    return { occurrenceKey, minuteKey };
 }
 
 function shouldRunScheduledAction(scheduleAt, lastRunOccurrenceKey, etDate = getCurrentETTime(), maxCatchUpMinutes = 360, options = {}) {
@@ -1387,12 +1458,15 @@ async function autoReleaseRoster() {
     if (!rosterReleaseSchedule.at) return false;
     if (rosterReleased || players.length === 0) return false;
 
-    const releaseCheck = shouldRunScheduledAction(
-        rosterReleaseSchedule.at,
-        lastExactRosterReleaseRunAt,
-        etTime,
-        Number(process.env.ROSTER_RELEASE_CATCHUP_MINUTES || (31 * 60))
-    );
+    const maxCatchUpMinutes = Number(process.env.ROSTER_RELEASE_CATCHUP_MINUTES || (31 * 60));
+    const releaseCheck = rosterReleaseAt
+        ? shouldRunExactDateTimeAction(rosterReleaseAt, lastExactRosterReleaseMinuteKey, etTime, maxCatchUpMinutes)
+        : shouldRunScheduledAction(
+            rosterReleaseSchedule.at,
+            lastExactRosterReleaseRunAt,
+            etTime,
+            maxCatchUpMinutes
+        );
     if (!releaseCheck.shouldRun) return false;
 
     lastExactRosterReleaseRunAt = releaseCheck.occurrenceKey;
@@ -4374,9 +4448,12 @@ function getSignupOpenMessageData() {
         : null;
     const openLabel = nextOpenAt ? formatETDateTimeLong(nextOpenAt) : null;
 
-    const releaseAtParts = (rosterReleaseSchedule && rosterReleaseSchedule.enabled && rosterReleaseSchedule.at)
-        ? getCurrentOrNextOccurrenceEtParts(rosterReleaseSchedule.at, etNow)
+    const exactReleaseParts = (rosterReleaseSchedule && rosterReleaseSchedule.enabled && rosterReleaseAt)
+        ? parseDatetimeLocalToETDate(rosterReleaseAt)
         : null;
+    const releaseAtParts = exactReleaseParts || ((rosterReleaseSchedule && rosterReleaseSchedule.enabled && rosterReleaseSchedule.at)
+        ? getCurrentOrNextOccurrenceEtParts(rosterReleaseSchedule.at, etNow)
+        : null);
     const rosterReleaseLabel = releaseAtParts ? formatETDateTimeLong(releaseAtParts) : null;
 
     const gameDayName = getGameDayName();
@@ -6114,7 +6191,9 @@ app.post('/api/admin/update-schedules', async (req, res) => {
             resetWeekSchedule.at = resetWeekAt ? parseDatetimeLocalToDowTime(resetWeekAt) : null;
 
             const guardTime = getCurrentETTime();
-            const rosterGuard = armScheduleGuardForCurrentWeek(rosterReleaseSchedule.at, guardTime);
+            const rosterGuard = rosterReleaseAt
+                ? markExactScheduleIfPast(rosterReleaseAt, 'release', guardTime)
+                : armScheduleGuardForCurrentWeek(rosterReleaseSchedule.at, guardTime);
             const resetGuard = armScheduleGuardForCurrentWeek(resetWeekSchedule.at, guardTime);
             lastExactRosterReleaseRunAt = rosterGuard.occurrenceKey;
             lastExactRosterReleaseMinuteKey = rosterGuard.minuteKey;
