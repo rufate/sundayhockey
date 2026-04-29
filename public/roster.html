@@ -242,23 +242,18 @@
 
         /* Final premium single-line roster page header */
         #gameDate {
-            font-size: clamp(0.88rem, 2.5vw, 1.22rem);
+            font-size: clamp(0.95rem, 3vw, 1.22rem);
             font-weight: 800;
-            letter-spacing: 0.35px;
+            letter-spacing: 0.45px;
             color: #f2f2f2;
-            white-space: normal;
-            overflow: visible;
-            text-overflow: clip;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
             line-height: 1.35;
-            overflow-wrap: anywhere;
         }
         #gameLocationTime { display: none; }
-        @media (max-width: 520px) {
-            #gameDate {
-                font-size: clamp(0.74rem, 3.15vw, 0.88rem);
-                letter-spacing: 0.05px;
-                line-height: 1.28;
-            }
+        @media (max-width: 420px) {
+            #gameDate { font-size: 0.86rem; letter-spacing: 0.15px; }
         }
 
         @media (max-width: 600px) {

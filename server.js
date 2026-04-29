@@ -933,10 +933,6 @@ function armScheduleGuardForCurrentWeek(scheduleAt, etDate = getCurrentETTime())
 }
 
 function syncScheduledActionRunMarker(scheduleAt, runType = 'release', etDate = getCurrentETTime()) {
-    if (runType === 'release' && rosterReleaseAt) {
-        const exactGuard = markExactScheduleIfPast(rosterReleaseAt, 'release', etDate);
-        if (exactGuard.occurrenceKey) return exactGuard;
-    }
     if (!scheduleAt) return { occurrenceKey: '', minuteKey: '' };
 
     const guard = armScheduleGuardForCurrentWeek(scheduleAt, etDate);
@@ -1021,9 +1017,50 @@ function validateResetScheduleAgainstRosterRelease(resetAt) {
     return { ok: true, reason: `Reset schedule is ${Math.round(minutesAfterRelease / 60)} hours after roster release.` };
 }
 
-function canSafelyRunWeeklyReset(etTime = getCurrentETTime(), resetAt = resetWeekSchedule && resetWeekSchedule.at) {
+function getEtDateOnlyKey(etDate = getCurrentETTime()) {
+    return (
+        etDate.getFullYear() * 10000 +
+        (etDate.getMonth() + 1) * 100 +
+        etDate.getDate()
+    );
+}
+
+function isEtTimeOnOrAfterParts(etDate, parts) {
+    if (!parts) return false;
+    const nowKey = nowETMinuteKey(etDate);
+    const targetKey = etPartsToMinuteKey(parts);
+    return Number.isFinite(nowKey) && Number.isFinite(targetKey) && nowKey >= targetKey;
+}
+
+function canSafelyRunWeeklyReset(etTime = getCurrentETTime(), resetAt = resetWeekSchedule && resetWeekSchedule.at, resetCheck = null) {
     const registeredPlayerCount = Array.isArray(players) ? players.length : 0;
     const waitlistCount = Array.isArray(waitlist) ? waitlist.length : 0;
+
+    if (!resetAt) {
+        return { ok: false, reason: 'Blocked weekly reset because no reset schedule is configured.' };
+    }
+
+    if (!sameDowHourMinute(resetAt, getEtDowHourMinute(etTime))) {
+        return {
+            ok: false,
+            reason: `Blocked weekly reset because current ET time is not the exact scheduled reset minute (${formatScheduleDowTime(resetAt)}).`
+        };
+    }
+
+    if (resetCheck && resetCheck.reason !== 'exact_minute') {
+        return {
+            ok: false,
+            reason: `Blocked weekly reset because scheduler reason was ${resetCheck.reason || 'unknown'} instead of exact_minute.`
+        };
+    }
+
+    const configuredResetParts = parseDatetimeLocalToETDate(resetWeekAt);
+    if (configuredResetParts && !isEtTimeOnOrAfterParts(etTime, configuredResetParts)) {
+        return {
+            ok: false,
+            reason: 'Blocked weekly reset because the configured first reset date/time has not arrived yet.'
+        };
+    }
 
     const gameScheduleSafety = validateResetScheduleAgainstGame(resetAt, gameTime);
     if (!gameScheduleSafety.ok) {
@@ -1033,6 +1070,16 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime(), resetAt = resetWee
     const rosterScheduleSafety = validateResetScheduleAgainstRosterRelease(resetAt);
     if (!rosterScheduleSafety.ok) {
         return rosterScheduleSafety;
+    }
+
+    const gamePoint = getGameSchedulePointFromGameTime(gameTime);
+    const minutesAfterLatestGame = minutesSinceLatestWeeklyOccurrence(gamePoint, etTime);
+    const maxResetHoursAfterGame = Math.max(1, Number(process.env.MAX_RESET_HOURS_AFTER_GAME || 72));
+    if (!Number.isFinite(minutesAfterLatestGame) || minutesAfterLatestGame <= 0 || minutesAfterLatestGame > maxResetHoursAfterGame * 60) {
+        return {
+            ok: false,
+            reason: `Blocked weekly reset because it is not within ${maxResetHoursAfterGame} hours after the actual configured game time (${gamePoint.label}).`
+        };
     }
 
     if (!resetArmed) {
@@ -1045,25 +1092,22 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime(), resetAt = resetWee
     if (!rosterReleased) {
         return {
             ok: false,
-            reason: 'Blocked weekly reset because roster has not been released yet.'
+            reason: `Blocked weekly reset because roster has not been released yet. Players: ${registeredPlayerCount}, waitlist: ${waitlistCount}.`
         };
     }
 
-    if (registeredPlayerCount > 0) {
+    const releaseTimeMs = Number(currentWeekData && currentWeekData.rosterReleaseTime) || Date.parse(currentWeekData && currentWeekData.releaseDate);
+    if (!Number.isFinite(releaseTimeMs) || releaseTimeMs <= 0) {
         return {
             ok: false,
-            reason: `Blocked weekly reset because ${registeredPlayerCount} registered player${registeredPlayerCount === 1 ? '' : 's'} still exist.`
+            reason: 'Blocked weekly reset because there is no recorded roster release timestamp for this week.'
         };
     }
 
-    if (waitlistCount > 0) {
-        return {
-            ok: false,
-            reason: `Blocked weekly reset because ${waitlistCount} waitlist player${waitlistCount === 1 ? '' : 's'} still exist.`
-        };
-    }
-
-    return { ok: true, reason: 'Reset arm is ON, roster has been released, reset is after game time, and there are no registered players or waitlist entries to reset.' };
+    return {
+        ok: true,
+        reason: `Reset allowed: exact scheduled ET minute, roster released, reset arm ON, ${registeredPlayerCount} player(s) and ${waitlistCount} waitlist record(s) ready to clear.`
+    };
 }
 
 function getNextOccurrenceEtParts(scheduleAt, etDate = getCurrentETTime()) {
@@ -1159,73 +1203,6 @@ function minutesSinceEtParts(occurrenceParts, etDate = getCurrentETTime()) {
         0
     );
     return Math.floor((etDate.getTime() - occurrence.getTime()) / 60000);
-}
-
-
-function getEtWallClockDateFromParts(parts) {
-    if (!parts) return null;
-    return new Date(
-        Number(parts.year),
-        Number(parts.month) - 1,
-        Number(parts.day),
-        Number(parts.hour),
-        Number(parts.minute),
-        0,
-        0
-    );
-}
-
-function shouldRunExactDateTimeAction(dtLocalStr, lastRunMinuteKey, etDate = getCurrentETTime(), maxCatchUpMinutes = 360) {
-    const parts = parseDatetimeLocalToETDate(dtLocalStr);
-    if (!parts) {
-        return { shouldRun: false, reason: 'missing_exact_datetime', occurrenceKey: '', minuteKey: '', lagMinutes: null };
-    }
-
-    const exactMinuteKey = String(etPartsToMinuteKey(parts));
-    const scheduledAt = getEtWallClockDateFromParts(parts);
-    const lagMinutes = Math.floor((etDate.getTime() - scheduledAt.getTime()) / 60000);
-
-    if (!Number.isFinite(lagMinutes) || lagMinutes < 0) {
-        return { shouldRun: false, reason: 'before_exact_datetime', occurrenceKey: `exact:${exactMinuteKey}`, minuteKey: exactMinuteKey, lagMinutes };
-    }
-
-    if (lagMinutes > maxCatchUpMinutes) {
-        return { shouldRun: false, reason: 'outside_exact_catchup_window', occurrenceKey: `exact:${exactMinuteKey}`, minuteKey: exactMinuteKey, lagMinutes };
-    }
-
-    if (String(lastRunMinuteKey || '') === exactMinuteKey || String(lastExactRosterReleaseRunAt || '') === `exact:${exactMinuteKey}`) {
-        return { shouldRun: false, reason: 'already_ran_exact_datetime', occurrenceKey: `exact:${exactMinuteKey}`, minuteKey: exactMinuteKey, lagMinutes };
-    }
-
-    return {
-        shouldRun: true,
-        reason: lagMinutes === 0 ? 'exact_datetime_minute' : 'exact_datetime_catchup',
-        occurrenceKey: `exact:${exactMinuteKey}`,
-        minuteKey: exactMinuteKey,
-        lagMinutes
-    };
-}
-
-function markExactScheduleIfPast(dtLocalStr, runType = 'release', etDate = getCurrentETTime()) {
-    const parts = parseDatetimeLocalToETDate(dtLocalStr);
-    if (!parts) return { occurrenceKey: '', minuteKey: '' };
-
-    const scheduledAt = getEtWallClockDateFromParts(parts);
-    const lagMinutes = Math.floor((etDate.getTime() - scheduledAt.getTime()) / 60000);
-    if (!Number.isFinite(lagMinutes) || lagMinutes < 0) {
-        return { occurrenceKey: '', minuteKey: '' };
-    }
-
-    const minuteKey = String(etPartsToMinuteKey(parts));
-    const occurrenceKey = `exact:${minuteKey}`;
-    if (runType === 'reset') {
-        lastExactResetRunAt = occurrenceKey;
-        lastExactResetMinuteKey = minuteKey;
-    } else {
-        lastExactRosterReleaseRunAt = occurrenceKey;
-        lastExactRosterReleaseMinuteKey = minuteKey;
-    }
-    return { occurrenceKey, minuteKey };
 }
 
 function shouldRunScheduledAction(scheduleAt, lastRunOccurrenceKey, etDate = getCurrentETTime(), maxCatchUpMinutes = 360, options = {}) {
@@ -1458,15 +1435,12 @@ async function autoReleaseRoster() {
     if (!rosterReleaseSchedule.at) return false;
     if (rosterReleased || players.length === 0) return false;
 
-    const maxCatchUpMinutes = Number(process.env.ROSTER_RELEASE_CATCHUP_MINUTES || (31 * 60));
-    const releaseCheck = rosterReleaseAt
-        ? shouldRunExactDateTimeAction(rosterReleaseAt, lastExactRosterReleaseMinuteKey, etTime, maxCatchUpMinutes)
-        : shouldRunScheduledAction(
-            rosterReleaseSchedule.at,
-            lastExactRosterReleaseRunAt,
-            etTime,
-            maxCatchUpMinutes
-        );
+    const releaseCheck = shouldRunScheduledAction(
+        rosterReleaseSchedule.at,
+        lastExactRosterReleaseRunAt,
+        etTime,
+        Number(process.env.ROSTER_RELEASE_CATCHUP_MINUTES || (31 * 60))
+    );
     if (!releaseCheck.shouldRun) return false;
 
     lastExactRosterReleaseRunAt = releaseCheck.occurrenceKey;
@@ -1625,11 +1599,12 @@ async function checkWeeklyReset() {
     );
     if (!resetCheck.shouldRun) return false;
 
-    const resetSafety = canSafelyRunWeeklyReset(etTime, resetWeekSchedule.at);
+    const resetSafety = canSafelyRunWeeklyReset(etTime, resetWeekSchedule.at, resetCheck);
     if (!resetSafety.ok) {
-        console.warn(`[SAFETY] Weekly reset skipped at ${resetCheck.minuteKey}: ${resetSafety.reason}`);
+        console.warn(`[FRIDAY-KILLER SAFETY] Weekly reset skipped at ${resetCheck.minuteKey}: ${resetSafety.reason}`);
         return false;
     }
+    console.log(`[FRIDAY-KILLER SAFETY] Weekly reset approved at ${resetCheck.minuteKey}: ${resetSafety.reason}`);
 
     lastExactResetRunAt = resetCheck.occurrenceKey;
     lastExactResetMinuteKey = resetCheck.minuteKey;
@@ -4448,12 +4423,9 @@ function getSignupOpenMessageData() {
         : null;
     const openLabel = nextOpenAt ? formatETDateTimeLong(nextOpenAt) : null;
 
-    const exactReleaseParts = (rosterReleaseSchedule && rosterReleaseSchedule.enabled && rosterReleaseAt)
-        ? parseDatetimeLocalToETDate(rosterReleaseAt)
-        : null;
-    const releaseAtParts = exactReleaseParts || ((rosterReleaseSchedule && rosterReleaseSchedule.enabled && rosterReleaseSchedule.at)
+    const releaseAtParts = (rosterReleaseSchedule && rosterReleaseSchedule.enabled && rosterReleaseSchedule.at)
         ? getCurrentOrNextOccurrenceEtParts(rosterReleaseSchedule.at, etNow)
-        : null);
+        : null;
     const rosterReleaseLabel = releaseAtParts ? formatETDateTimeLong(releaseAtParts) : null;
 
     const gameDayName = getGameDayName();
@@ -6191,9 +6163,7 @@ app.post('/api/admin/update-schedules', async (req, res) => {
             resetWeekSchedule.at = resetWeekAt ? parseDatetimeLocalToDowTime(resetWeekAt) : null;
 
             const guardTime = getCurrentETTime();
-            const rosterGuard = rosterReleaseAt
-                ? markExactScheduleIfPast(rosterReleaseAt, 'release', guardTime)
-                : armScheduleGuardForCurrentWeek(rosterReleaseSchedule.at, guardTime);
+            const rosterGuard = armScheduleGuardForCurrentWeek(rosterReleaseSchedule.at, guardTime);
             const resetGuard = armScheduleGuardForCurrentWeek(resetWeekSchedule.at, guardTime);
             lastExactRosterReleaseRunAt = rosterGuard.occurrenceKey;
             lastExactRosterReleaseMinuteKey = rosterGuard.minuteKey;
