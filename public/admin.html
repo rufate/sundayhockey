@@ -3706,6 +3706,36 @@ th, td{padding:2px 3px !important;}
 }
 </style>
 
+
+<style id="announcement-toggle-polish-v1">
+/* Announcement ON/OFF bar: replaces separate green Enable button */
+.compact-announcement-control .announcement-topbar{
+    align-items: stretch !important;
+}
+.compact-announcement-control .announcement-status{
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    width:100% !important;
+    min-height:36px !important;
+    border-radius:999px !important;
+    font-weight:900 !important;
+    letter-spacing:.2px !important;
+    cursor:pointer !important;
+    user-select:none !important;
+    border:0 !important;
+    box-shadow:0 8px 20px rgba(0,0,0,.25) !important;
+}
+.compact-announcement-control .announcement-status.active{
+    background:linear-gradient(135deg,#2e7d32,#43a047) !important;
+}
+.compact-announcement-control .announcement-status.inactive{
+    background:linear-gradient(135deg,#b71c1c,#e53935) !important;
+}
+.compact-announcement-control .announcement-toggle-row{
+    display:none !important;
+}
+</style>
 </head>
 <body class="admin-layout-option-1">
 
@@ -3817,13 +3847,10 @@ th, td{padding:2px 3px !important;}
         <div class="announcement-control compact-announcement-control">
             <div class="announcement-topbar">
                 <h3>📢 Announcement</h3>
-                <div class="announcement-status inactive" id="announcementStatus">OFF</div>
             </div>
 
-            <div class="announcement-toggle-row">
-                <input type="checkbox" id="announcementCheckbox" class="maintenance-checkbox">
-                <label for="announcementCheckbox" class="maintenance-label">Enable</label>
-            </div>
+            <input type="checkbox" id="announcementCheckbox" class="maintenance-checkbox">
+            <div class="announcement-status inactive" id="announcementStatus" role="button" tabindex="0" onclick="toggleAnnouncementEnabled()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAnnouncementEnabled();}">ANNOUNCEMENT OFF</div>
 
             <div class="announcement-compact-grid">
                 <div class="message-box message-box-main">
@@ -4849,18 +4876,27 @@ th, td{padding:2px 3px !important;}
                 .replace(/\w/g, ch => ch.toUpperCase());
         }
 
+        function formatManual12HourTime(date) {
+            const hours24 = date.getHours();
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const ampm = hours24 >= 12 ? 'PM' : 'AM';
+            const hours12 = hours24 % 12 || 12;
+            return `${hours12}:${minutes} ${ampm}`;
+        }
+
         function formatDateTime(value) {
             if (!value) return '—';
             const d = new Date(value);
             if (Number.isNaN(d.getTime())) return value;
-            return d.toLocaleString([], { year:'numeric', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+            const month = d.toLocaleDateString('en-US', { month: 'short' });
+            return `${month} ${d.getDate()}, ${d.getFullYear()}, ${formatManual12HourTime(d)}`;
         }
 
         function formatLockedSignupTime(value) {
             if (!value) return '';
             const d = new Date(value);
             if (Number.isNaN(d.getTime())) return String(value);
-            return d.toLocaleString([], { month:'numeric', day:'numeric', hour:'numeric', minute:'2-digit' });
+            return `${d.getMonth() + 1}/${d.getDate()}, ${formatManual12HourTime(d)}`;
         }
 
         async function loadSessionInfo() {
@@ -5237,8 +5273,10 @@ th, td{padding:2px 3px !important;}
                     announcementCheckbox.checked = !!data.announcementEnabled;
                 }
                 if (announcementStatus) {
-                    announcementStatus.innerText = data.announcementEnabled ? 'ANNOUNCEMENT LIVE' : 'ANNOUNCEMENT OFF';
+                    announcementStatus.innerText = data.announcementEnabled ? 'ANNOUNCEMENT ON' : 'ANNOUNCEMENT OFF';
                     announcementStatus.className = 'announcement-status ' + (data.announcementEnabled ? 'active' : 'inactive');
+                    announcementStatus.setAttribute('aria-pressed', data.announcementEnabled ? 'true' : 'false');
+                    announcementStatus.title = data.announcementEnabled ? 'Click to turn announcement OFF' : 'Click to turn announcement ON';
                 }
                 if (announcementText) {
                     announcementText.value = data.announcementText || '';
@@ -6463,7 +6501,7 @@ Date: ${selectedGameDate}`);
                             : item.action === 'late_cancel_no_show_owed'
                                 ? '<span class="cancelled-badge" style="background:#ff4444;">NO-SHOW OWES</span>'
                                 : '<span class="cancelled-badge">PLAYER CANCELLED</span>';
-                        const when = item.cancelledAt ? new Date(item.cancelledAt).toLocaleString() : '--';
+                        const when = item.cancelledAt ? new Date(item.cancelledAt).toLocaleString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true }) : '--';
                         tr.innerHTML = `
                             <td>${item.firstName || ''} ${item.lastName || ''} ${goalieBadge}${item.notes ? `<div style="color:#ffb366; font-size:0.9rem; margin-top:4px;">${item.notes}</div>` : ''}</td>
                             <td>${typeBadge}</td>
@@ -6845,14 +6883,14 @@ Date: ${selectedGameDate}`);
                 data.reports.forEach(report => {
                     const option = document.createElement('option');
                     option.value = report.id;
-                    const created = new Date(report.created_at).toLocaleString();
+                    const created = new Date(report.created_at).toLocaleString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true });
                     const trigger = (report.trigger_source || 'snapshot').replace(/_/g, ' ');
                     option.text = `#${report.id} • Week ${report.week_number || '--'}, ${report.year || '--'} • ${trigger} • ${created}`;
                     select.appendChild(option);
                 });
 
                 const latest = data.reports[0];
-                status.innerText = `Latest saved report: ${new Date(latest.created_at).toLocaleString()} (${(latest.trigger_source || 'snapshot').replace(/_/g, ' ')})`;
+                status.innerText = `Latest saved report: ${new Date(latest.created_at).toLocaleString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true })} (${(latest.trigger_source || 'snapshot').replace(/_/g, ' ')})`;
             } catch (err) {
                 console.error('Error loading payment report snapshots:', err);
                 status.innerText = 'Error loading saved reports.';
@@ -6978,7 +7016,7 @@ Continue?`;
                         const dateValue = week.created || week.releaseDate || week.gameDate;
                         const date = dateValue ? new Date(dateValue) : null;
                         const dateText = date && !Number.isNaN(date.getTime())
-                            ? date.toLocaleDateString()
+                            ? date.toLocaleDateString('en-US')
                             : 'No date';
                         option.textContent = `Week ${week.weekNumber}, ${week.year} (${dateText})`;
                         select.appendChild(option);
@@ -7217,7 +7255,21 @@ Continue?`;
             }
         }
 
-        async function saveAnnouncementSettings() {
+
+        async function toggleAnnouncementEnabled() {
+            const checkbox = document.getElementById('announcementCheckbox');
+            const status = document.getElementById('announcementStatus');
+            const nextEnabled = !(checkbox && checkbox.checked);
+            if (checkbox) checkbox.checked = nextEnabled;
+            if (status) {
+                status.innerText = nextEnabled ? 'ANNOUNCEMENT ON' : 'ANNOUNCEMENT OFF';
+                status.className = 'announcement-status ' + (nextEnabled ? 'active' : 'inactive');
+                status.setAttribute('aria-pressed', nextEnabled ? 'true' : 'false');
+            }
+            await saveAnnouncementSettings({ silent: true });
+        }
+
+        async function saveAnnouncementSettings(options = {}) {
             const button = document.getElementById('saveAnnouncementBtn');
             return withBusyButton(button, 'Saving...', async () => {
                 const checkbox = document.getElementById('announcementCheckbox');
@@ -7248,9 +7300,11 @@ Continue?`;
                     }
 
                     await loadAppSettings();
-                    alert(enabled
-                        ? '📢 Announcement saved and enabled on signup page.'
-                        : '✅ Announcement saved and hidden from signup page.');
+                    if (!options.silent) {
+                        alert(enabled
+                            ? '📢 Announcement saved and enabled on signup page.'
+                            : '✅ Announcement saved and hidden from signup page.');
+                    }
                 } catch (err) {
                     console.error('Save announcement error:', err);
                     alert(err.message || 'Failed to save announcement');
