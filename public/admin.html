@@ -896,6 +896,38 @@
             font-size: 0.88rem;
             margin-bottom: 4px;
         }
+
+        .game-setup-section .custom-title-input {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-height: 52px;
+            padding: 14px 16px !important;
+            margin: 0 !important;
+            font-size: 1.28rem !important;
+            font-weight: 800;
+            line-height: 1.3;
+            border-radius: 12px;
+            border: 2px solid #555;
+            background: #3d3d3d;
+            color: #fff;
+            resize: none;
+            overflow: hidden;
+            white-space: pre-wrap;
+        }
+        .game-setup-section .custom-title-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(255, 107, 0, 0.25);
+        }
+        .game-setup-section .custom-title-note {
+            color: #bdbdbd;
+            font-size: 0.82rem;
+            margin-top: 6px;
+            line-height: 1.35;
+        }
+        .game-setup-section #titlePreview {
+            display: none !important;
+        }
         .game-setup-section .arena-select-group {
             display: block;
         }
@@ -3833,6 +3865,11 @@ th, td{padding:2px 3px !important;}
             <h3>🏒 Game Setup</h3>
             <div class="game-setup-title-row">
                 <div class="title-preview" id="titlePreview">Phan's Friday Hockey</div>
+                <div class="title-control-group">
+                    <label for="customTitleInput">Title shown on public pages</label>
+                    <textarea id="customTitleInput" class="custom-title-input" rows="1" placeholder="Enter custom title..." oninput="handleCustomTitleInput()">Phan's Friday Hockey</textarea>
+                    <div class="custom-title-note">This title auto-expands as you type and saves to the public pages.</div>
+                </div>
             </div>
             <div class="game-setup-grid">
                 <div class="title-control-group">
@@ -5086,6 +5123,37 @@ th, td{padding:2px 3px !important;}
             document.getElementById('adminPass').type = this.checked ? 'text' : 'password';
         });
 
+
+        function getPublicTitleFromInput(fallback = "Phan's Hockey") {
+            const input = document.getElementById('customTitleInput');
+            const value = input ? String(input.value || '').trim() : '';
+            return value || fallback;
+        }
+
+        function autoResizeTitleInput() {
+            const input = document.getElementById('customTitleInput');
+            if (!input) return;
+            input.style.height = 'auto';
+            input.style.height = `${input.scrollHeight}px`;
+        }
+
+        function setCustomTitleInput(value) {
+            const input = document.getElementById('customTitleInput');
+            if (!input) return;
+            input.value = value || '';
+            autoResizeTitleInput();
+        }
+
+        function handleCustomTitleInput() {
+            autoResizeTitleInput();
+            const current = getPublicTitleFromInput("Phan's Hockey");
+            const preview = document.getElementById('dynamicTitlePreview');
+            const hiddenPreview = document.getElementById('titlePreview');
+            if (preview) preview.innerText = current;
+            if (hiddenPreview) hiddenPreview.innerText = current;
+            updateGameSetupPreview();
+        }
+
         // Load app settings (maintenance mode, title, etc.)
         async function loadAppSettings() {
             try {
@@ -5141,7 +5209,10 @@ th, td{padding:2px 3px !important;}
                 if (data.customTitle) {
                     document.getElementById('titlePreview').innerText = data.customTitle;
                     document.getElementById('dynamicTitlePreview').innerText = data.customTitle;
+                    setCustomTitleInput(data.customTitle);
                     updateGameSetupPreview();
+                } else {
+                    autoResizeTitleInput();
                 }
                 
                 // Update arena selector
@@ -5262,7 +5333,13 @@ th, td{padding:2px 3px !important;}
             const parts = getEnhancedControlParts('titleDayTime');
             if (!parts) return;
             const newTitle = `Phan's ${parts.weekday} Hockey`;
-            document.getElementById('dynamicTitlePreview').innerText = newTitle;
+            const customInput = document.getElementById('customTitleInput');
+            const currentCustom = customInput ? String(customInput.value || '').trim() : '';
+            const shouldFollowDay = !currentCustom || /^Phan's\s+\w+\s+Hockey$/i.test(currentCustom);
+            if (shouldFollowDay) {
+                setCustomTitleInput(newTitle);
+            }
+            document.getElementById('dynamicTitlePreview').innerText = getPublicTitleFromInput(newTitle);
 
             const wrapper = document.querySelector('.enhanced-datetime[data-target="titleDayTime"]');
             const summary = wrapper?.querySelector('.picker-summary');
@@ -5278,7 +5355,7 @@ th, td{padding:2px 3px !important;}
         }
 
         function updateGameSetupPreview() {
-            const titleText = (document.getElementById('dynamicTitlePreview')?.innerText || document.getElementById('titlePreview')?.innerText || "Phan's Hockey").trim();
+            const titleText = getPublicTitleFromInput((document.getElementById('dynamicTitlePreview')?.innerText || document.getElementById('titlePreview')?.innerText || "Phan's Hockey").trim());
             const arenaText = (document.getElementById('arenaSelect')?.value || document.getElementById('currentArenaDisplay')?.innerText || '--').trim() || '--';
             const arenaDisplay = document.getElementById('currentArenaDisplay');
             if (arenaDisplay) arenaDisplay.innerText = arenaText;
@@ -5295,7 +5372,8 @@ th, td{padding:2px 3px !important;}
                 }
 
                 const arena = document.getElementById('arenaSelect').value;
-                const newTitle = `Phan's ${parts.weekday} Hockey`;
+                const defaultTitle = `Phan's ${parts.weekday} Hockey`;
+                const newTitle = getPublicTitleFromInput(defaultTitle);
                 const dayTime = `${parts.weekday} ${formatTime12(parts.hour24, parts.minute)}`;
                 const selectedGameDate = parts.dateVal;
 
@@ -5321,6 +5399,7 @@ th, td{padding:2px 3px !important;}
                     if (res.ok) {
                         document.getElementById('titlePreview').innerText = newTitle;
                         document.getElementById('dynamicTitlePreview').innerText = newTitle;
+                        setCustomTitleInput(newTitle);
                         document.getElementById('currentArenaDisplay').innerText = arena;
                         document.getElementById('locationInput').value = arena;
                         document.getElementById('timeInput').value = dayTime;
@@ -5351,7 +5430,8 @@ Date: ${selectedGameDate}`);
                     return;
                 }
 
-                const newTitle = `Phan's ${parts.weekday} Hockey`;
+                const defaultTitle = `Phan's ${parts.weekday} Hockey`;
+                const newTitle = getPublicTitleFromInput(defaultTitle);
                 const dayTime = `${parts.weekday} ${formatTime12(parts.hour24, parts.minute)}`;
                 const selectedGameDate = parts.dateVal;
 
@@ -5375,6 +5455,8 @@ Date: ${selectedGameDate}`);
                     const result = await res.json().catch(() => ({}));
                     if (res.ok) {
                         document.getElementById('titlePreview').innerText = newTitle;
+                        document.getElementById('dynamicTitlePreview').innerText = newTitle;
+                        setCustomTitleInput(newTitle);
                         document.getElementById('timeInput').value = dayTime;
                         alert(`✅ Title updated to: ${newTitle}\nTime updated to: ${formatEtDateTimeLocal(buildDatetimeLocal(parts.dateVal, parts.hour24, parts.minute))}\nDate updated to: ${selectedGameDate}\n\nWeekly auto-schedule was rebuilt from this game time.`);
                         await loadSettings();

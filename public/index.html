@@ -630,16 +630,24 @@
 
 
 
-        /* Final premium single-line released roster detail */
+        /* Clean two-line released roster detail */
         .roster-header #rosterGameInfo {
             font-size: clamp(0.92rem, 2.8vw, 1.18rem);
             font-weight: 800;
             letter-spacing: 0.45px;
             color: #e8e8e8;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
             line-height: 1.35;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: unset;
+        }
+        .roster-header #rosterGameInfo .roster-date-time-line,
+        .roster-header #rosterGameInfo .roster-location-line {
+            display: block;
+        }
+        .roster-header #rosterGameInfo .roster-location-line {
+            margin-top: 2px;
+            color: var(--accent);
         }
         @media (max-width: 420px) {
             .roster-header #rosterGameInfo { font-size: 0.86rem; letter-spacing: 0.15px; }
@@ -1568,7 +1576,7 @@
         <!-- Roster Display Section -->
         <div class="roster-display-section" id="rosterDisplay">
             <div class="roster-header">
-                <h2>🏒 Team Roster Released!</h2>
+                <h2>🏒 Team Roster</h2>
                 <p id="rosterGameInfo">--</p>
             </div>
             <div class="teams-container">
@@ -2620,6 +2628,34 @@ function updateCalculatedRating() {
             return [dateText, timeText, locationText].filter(Boolean).join(' • ');
         }
 
+        function escapeHtml(value) {
+            return String(value || '').replace(/[&<>"']/g, function(char) {
+                return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char];
+            });
+        }
+
+        function formatRosterHeaderHtml(dateValue, formattedDate, gameTimeValue, locationValue) {
+            const monthNames = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+            let dateText = String(formattedDate || dateValue || '').trim();
+            const rawDate = String(dateValue || '').trim();
+
+            if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+                const parts = rawDate.split('-').map(Number);
+                const localDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                const dayName = localDate.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+                dateText = `${dayName} ${monthNames[localDate.getMonth()]} ${localDate.getDate()}`;
+            } else {
+                dateText = dateText.replace(/,?\s*\d{4}\b/g, '').replace(/,/g, '').trim().toUpperCase();
+            }
+
+            const timeText = String(gameTimeValue || '').replace(/^[A-Za-z]+\s+/, '').replace(/\s+/g, ' ').trim();
+            const locationText = String(locationValue || '').trim();
+            const dateTimeText = [dateText, timeText].filter(Boolean).join(' • ');
+
+            if (!locationText) return escapeHtml(dateTimeText);
+            return `<span class="roster-date-time-line">${escapeHtml(dateTimeText)}</span><span class="roster-location-line">${escapeHtml(locationText)}</span>`;
+        }
+
         async function loadAndDisplayRoster() {
             try {
                 const res = await fetch(`${API_URL}/api/roster`);
@@ -2630,7 +2666,7 @@ function updateCalculatedRating() {
                     return false;
                 }
 
-                document.getElementById('rosterGameInfo').innerText = formatPremiumRosterLine(
+                document.getElementById('rosterGameInfo').innerHTML = formatRosterHeaderHtml(
                     data.date || currentGameDateValue,
                     data.formattedDate || currentDate,
                     data.time || currentTime,

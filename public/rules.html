@@ -284,9 +284,9 @@
         let rosterReleaseAtIso = null;
         let gameDayName = "game day";
 
-        function applyGameDayBranding(dayName) {
+        function applyGameDayBranding(dayName, customTitle) {
             const safeDayName = String(dayName || 'Sunday').trim();
-            const leagueName = `Phan's ${safeDayName} Hockey`;
+            const leagueName = String(customTitle || '').trim() || `Phan's ${safeDayName} Hockey`;
             document.title = `Game Rules - ${leagueName}`;
 
             const headingEl = document.getElementById('rulesHeading');
@@ -303,11 +303,13 @@
                 if (status && status.rosterReleaseLine) rosterReleaseLine = status.rosterReleaseLine;
                 if (status && status.rosterReleaseAt) rosterReleaseAtIso = status.rosterReleaseAt;
                 if (status && status.gameDayName) gameDayName = status.gameDayName;
+                applyGameDayBranding(gameDayName, status && status.customTitle);
+                return;
             } catch (e) {
                 console.warn('Could not load schedule info', e);
-            } finally {
-                applyGameDayBranding(gameDayName);
             }
+            applyGameDayBranding(gameDayName);
+            return;
         })();
 // Check for temp registration data
         const tempData = sessionStorage.getItem('tempRegData');
