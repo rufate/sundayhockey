@@ -4018,6 +4018,18 @@ function escapeCsvValue(value) {
     return `"${str.replace(/"/g, '""')}"`;
 }
 
+function formatDateTime12HourForExport(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    const hours24 = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const ampm = hours24 >= 12 ? 'PM' : 'AM';
+    const hours12 = hours24 % 12 || 12;
+    const month = date.toLocaleDateString('en-US', { month: 'short' });
+    return `${month} ${date.getDate()}, ${date.getFullYear()}, ${hours12}:${minutes} ${ampm}`;
+}
+
 function buildPaymentReportCsv() {
     const headers = ['Team', 'First Name', 'Last Name', 'Phone', 'Rating', 'Payment Method', 'Paid Amount', 'Payment Status', 'Goalie', 'Registered At'];
     const csvRows = [headers.join(',')];
@@ -4033,7 +4045,7 @@ function buildPaymentReportCsv() {
             escapeCsvValue(p.paidAmount == null ? 0 : p.paidAmount),
             escapeCsvValue(p.paid ? 'PAID' : 'UNPAID'),
             escapeCsvValue(p.isGoalie ? 'YES' : 'NO'),
-            escapeCsvValue(dateValue ? new Date(dateValue).toLocaleString('en-US') : '')
+            escapeCsvValue(formatDateTime12HourForExport(dateValue))
         ];
         csvRows.push(row.join(','));
     };
@@ -4058,7 +4070,7 @@ function buildPaymentReportCsv() {
             escapeCsvValue('N/A'),
             escapeCsvValue('N/A'),
             escapeCsvValue(p.isGoalie ? 'YES' : 'NO'),
-            escapeCsvValue(p.joinedAt ? new Date(p.joinedAt).toLocaleString('en-US') : '')
+            escapeCsvValue(formatDateTime12HourForExport(p.joinedAt))
         ];
         csvRows.push(row.join(','));
     });
