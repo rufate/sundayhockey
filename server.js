@@ -1844,6 +1844,11 @@ async function initDatabase() {
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS admin_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS admin_adjustment NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS final_rating NUMERIC(4,1)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS promoted_from_waitlist BOOLEAN DEFAULT false`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS late_added_after_release BOOLEAN DEFAULT false`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS subbed_in_for_player_id BIGINT`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS subbed_in_for_name VARCHAR(220)`);
+        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS subbed_in_at TIMESTAMP`);
         
         await pool.query(`
             CREATE TABLE IF NOT EXISTS waitlist (
@@ -2062,7 +2067,12 @@ async function loadDataFromDB() {
             isGoalie: !!p.is_goalie,
             team: p.team,
             registeredAt: p.registered_at,
-            rulesAgreed: !!p.rules_agreed
+            rulesAgreed: !!p.rules_agreed,
+            promotedFromWaitlist: !!p.promoted_from_waitlist,
+            lateAddedAfterRelease: !!p.late_added_after_release,
+            subbedInForPlayerId: p.subbed_in_for_player_id == null ? null : Number(p.subbed_in_for_player_id),
+            subbedInForName: p.subbed_in_for_name || null,
+            subbedInAt: p.subbed_in_at || null
         }));
         
         // FIX: Recalculate playerSpots based on actual player count
@@ -2999,9 +3009,10 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
                     skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating, effort_rating,
                     passing_rating, shooting_rating, defensive_rating, speed_burst_rating, position_played,
                     level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating,
-                    admin_rating, admin_adjustment, final_rating, is_goalie, team, registered_at, rules_agreed
+                    admin_rating, admin_adjustment, final_rating, is_goalie, team, registered_at, rules_agreed,
+                    promoted_from_waitlist, late_added_after_release, subbed_in_for_player_id, subbed_in_for_name, subbed_in_at
                 ) VALUES (
-                    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30
+                    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35
                 )`,
                 [
                     player.id, player.firstName, player.lastName, player.phone, player.paymentMethod || null, !!player.paid,
@@ -3009,7 +3020,8 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
                     toNumericOrNull(player.skatingRating), toNumericOrNull(player.puckSkillsRating), toNumericOrNull(player.hockeySenseRating), toNumericOrNull(player.conditioningRating), toNumericOrNull(player.effortRating),
                     toNumericOrNull(player.passingRating), toNumericOrNull(player.shootingRating), toNumericOrNull(player.defensiveRating), toNumericOrNull(player.speedBurstRating), player.positionPlayed || null,
                     player.levelPlayed || null, player.peerComparison || null, player.confidenceLevel || null, toNumericOrNull(player.selfRatingRaw), toNumericOrNull(player.derivedRating),
-                    toNumericOrNull(player.adminRating), toNumericOrNull(player.adminAdjustment), toNumericOrNull(player.finalRating), !!player.isGoalie, player.team || null, player.registeredAt || new Date().toISOString(), !!player.rulesAgreed
+                    toNumericOrNull(player.adminRating), toNumericOrNull(player.adminAdjustment), toNumericOrNull(player.finalRating), !!player.isGoalie, player.team || null, player.registeredAt || new Date().toISOString(), !!player.rulesAgreed,
+                    !!player.promotedFromWaitlist, !!player.lateAddedAfterRelease, player.subbedInForPlayerId || null, player.subbedInForName || null, player.subbedInAt || null
                 ]
             );
         }
@@ -3773,6 +3785,7 @@ function buildPromotedRosterPlayer(waitlistPlayer, team = null, metadata = {}) {
         registeredAt: waitlistPlayer.registeredAt || waitlistPlayer.joinedAt || new Date().toISOString(),
         rulesAgreed: true,
         promotedFromWaitlist: !!metadata.promotedFromWaitlist,
+        lateAddedAfterRelease: !!metadata.promotedFromWaitlist,
         subbedInForPlayerId: metadata.subbedInForPlayerId ?? null,
         subbedInForName: subbedInForName || null,
         subbedInAt: metadata.subbedInAt || new Date().toISOString()
@@ -4565,6 +4578,7 @@ function buildPublicRosterPayload() {
             canCancel: !cancelled && !p.isGoalie && !(String(p.firstName || '').toLowerCase() === 'phan' && String(p.lastName || '').toLowerCase() === 'ly'),
             promotedFromWaitlist: !!p.promotedFromWaitlist,
             lateAddedAfterRelease: !!p.lateAddedAfterRelease,
+            isLateAddition: !!(p.promotedFromWaitlist || p.lateAddedAfterRelease),
             subbedInForName: p.subbedInForName || null,
             subbedInForPlayerId: p.subbedInForPlayerId ?? null,
             subbedInAt: p.subbedInAt || null
@@ -6360,7 +6374,10 @@ app.post('/api/admin/promote-waitlist', async (req, res) => {
     const requestedTeam = assignTeam === 'White' || assignTeam === 'Dark' ? assignTeam : null;
     const player = waitlist[index];
     const teamForPromotion = rosterReleased ? requestedTeam : null;
-    const newPlayer = buildPromotedRosterPlayer(player, teamForPromotion);
+    const newPlayer = buildPromotedRosterPlayer(player, teamForPromotion, {
+        promotedFromWaitlist: !!rosterReleased,
+        subbedInAt: new Date().toISOString()
+    });
 
     try {
         await runProtectedMutation('promote-waitlist', req, async () => {

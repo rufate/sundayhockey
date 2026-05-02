@@ -187,6 +187,11 @@
             background: rgba(255, 68, 68, 0.14);
         }
 
+        .player-item.late-addition {
+            border-left-color: #4a90e2;
+            background: rgba(74, 144, 226, 0.12);
+        }
+
         .player-name {
             font-weight: 500;
             display: flex;
@@ -473,11 +478,11 @@
                 whiteList.innerHTML = '';
                 data.whiteTeam.forEach(player => {
                     const li = document.createElement('li');
-                    li.className = 'player-item' + (player.isGoalie ? ' goalie' : '') + (player.lateCancelOwes ? ' late-cancelled' : '');
+                    li.className = 'player-item' + (player.isGoalie ? ' goalie' : '') + (player.lateCancelOwes ? ' late-cancelled' : '') + ((player.isLateAddition || player.promotedFromWaitlist || player.lateAddedAfterRelease) ? ' late-addition' : '');
                     
                     const goalieBadge = player.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
                     const lateCancelBadge = player.lateCancelOwes ? '<span class="late-cancel-badge">CANCEL</span>' : '';
-                    const lateAddedBadge = player.promotedFromWaitlist ? '<span class="late-added-badge">WAITLIST ADD</span>' : (player.lateAddedAfterRelease ? '<span class="late-added-badge">LATE ADD</span>' : '');
+                    const lateAddedBadge = (player.isLateAddition || player.promotedFromWaitlist || player.lateAddedAfterRelease) ? '<span class="late-added-badge">Late Addition</span>' : '';
                     
                     li.innerHTML = `
                         <span class="player-name">${player.firstName} ${player.lastName} ${goalieBadge} ${lateCancelBadge} ${lateAddedBadge}</span>
@@ -490,11 +495,11 @@
                 darkList.innerHTML = '';
                 data.darkTeam.forEach(player => {
                     const li = document.createElement('li');
-                    li.className = 'player-item' + (player.isGoalie ? ' goalie' : '') + (player.lateCancelOwes ? ' late-cancelled' : '');
+                    li.className = 'player-item' + (player.isGoalie ? ' goalie' : '') + (player.lateCancelOwes ? ' late-cancelled' : '') + ((player.isLateAddition || player.promotedFromWaitlist || player.lateAddedAfterRelease) ? ' late-addition' : '');
                     
                     const goalieBadge = player.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
                     const lateCancelBadge = player.lateCancelOwes ? '<span class="late-cancel-badge">CANCEL</span>' : '';
-                    const lateAddedBadge = player.promotedFromWaitlist ? '<span class="late-added-badge">WAITLIST ADD</span>' : (player.lateAddedAfterRelease ? '<span class="late-added-badge">LATE ADD</span>' : '');
+                    const lateAddedBadge = (player.isLateAddition || player.promotedFromWaitlist || player.lateAddedAfterRelease) ? '<span class="late-added-badge">Late Addition</span>' : '';
                     
                     li.innerHTML = `
                         <span class="player-name">${player.firstName} ${player.lastName} ${goalieBadge} ${lateCancelBadge} ${lateAddedBadge}</span>

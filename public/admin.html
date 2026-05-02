@@ -3738,6 +3738,61 @@ th, td{padding:2px 3px !important;}
 }
 </style>
 
+
+<style id="late-player-upgrade-v1">
+.late-roster-admin-panel{
+    display:none;
+    background:linear-gradient(135deg,#12331f,#244a2f);
+    border:3px solid #4CAF50;
+    border-radius:14px;
+    padding:16px;
+    margin-bottom:18px;
+    box-shadow:0 10px 24px rgba(0,0,0,.24);
+}
+.late-roster-admin-panel.active{display:block;}
+.late-roster-admin-panel h3{margin:0 0 8px 0;color:#7ee28a;font-size:1.15rem;}
+.late-roster-admin-panel p{margin:0 0 10px 0;color:#d8ffd8;font-size:.92rem;line-height:1.35;}
+.late-roster-admin-panel .late-team-hint{
+    background:rgba(0,0,0,.22);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:10px;
+    padding:10px;
+    color:#fff;
+    font-weight:700;
+    margin-top:8px;
+}
+.late-badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:2px 7px;
+    border-radius:999px;
+    background:#4a90e2;
+    color:#fff;
+    font-size:.62rem;
+    font-weight:800;
+    margin-top:3px;
+}
+.waitlist-to-roster-panel{
+    display:none;
+    background:linear-gradient(135deg,#17324f,#25476d);
+    border:3px solid #5fa8ff;
+    border-radius:14px;
+    padding:16px;
+    margin-bottom:18px;
+    box-shadow:0 10px 24px rgba(0,0,0,.24);
+}
+.waitlist-to-roster-panel.active{display:block;}
+.waitlist-to-roster-panel h3{margin:0 0 8px 0;color:#9dcbff;font-size:1.15rem;}
+.waitlist-to-roster-panel p{margin:0 0 10px 0;color:#d9ecff;font-size:.92rem;line-height:1.35;}
+.waitlist-to-roster-grid{display:grid;grid-template-columns:1.4fr .8fr;gap:10px;align-items:end;}
+.waitlist-to-roster-panel select{margin:0;}
+.waitlist-to-roster-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
+.waitlist-to-roster-actions button{margin:0!important;}
+.waitlist-to-roster-hint{background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:10px;color:#fff;font-weight:700;margin-top:10px;}
+@media(max-width:700px){.waitlist-to-roster-grid{grid-template-columns:1fr;}}
+</style>
+
 </head>
 <body class="admin-layout-option-1">
 
@@ -4189,9 +4244,42 @@ th, td{padding:2px 3px !important;}
             <div id="deleteResult" class="delete-result"></div>
         </div>
 
+
+        <div id="lateRosterAdminPanel" class="late-roster-admin-panel">
+            <h3>🚀 Add Late Player to Released Roster</h3>
+            <p>Roster is already released. Use the Add Player form below, choose Team White or Team Dark, then click Add Player. This adds the player directly to the posted roster without rebalancing teams.</p>
+            <div id="lateRosterTeamHint" class="late-team-hint">Suggested team: —</div>
+        </div>
+
+        <div id="waitlistToRosterPanel" class="waitlist-to-roster-panel">
+            <h3>📋 Move Waitlist Player to Released Roster</h3>
+            <p>Pick any player from the waitlist, choose Team White or Team Dark, then add them directly to the posted roster. They are removed from the waitlist automatically.</p>
+            <div class="waitlist-to-roster-grid">
+                <div>
+                    <label style="display:block; color:#d9ecff; font-weight:700; margin-bottom:6px;">Waitlist player</label>
+                    <select id="waitlistRosterSelect">
+                        <option value="">No waitlist players available</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display:block; color:#d9ecff; font-weight:700; margin-bottom:6px;">Team</label>
+                    <select id="waitlistRosterTeam">
+                        <option value="">Auto-suggest</option>
+                        <option value="White">Team White</option>
+                        <option value="Dark">Team Dark</option>
+                    </select>
+                </div>
+            </div>
+            <div id="waitlistRosterHint" class="waitlist-to-roster-hint">Suggested team: —</div>
+            <div class="waitlist-to-roster-actions">
+                <button class="control-btn" onclick="applyWaitlistRosterSuggestedTeam()" style="background:#546e7a;">Use Suggested Team</button>
+                <button class="control-btn" onclick="promoteSelectedWaitlistToRoster()" style="background:#2e7d32;">Add Selected Waitlist Player to Roster</button>
+            </div>
+        </div>
+
         <!-- Add Player Form -->
         <div class="add-player-form">
-            <h3>➕ Add Player Manually</h3>
+            <h3 id="manualAddPlayerHeading">➕ Add Player Manually</h3>
             <div class="form-row">
                 <input type="text" id="newFirstName" placeholder="First Name">
                 <input type="text" id="newLastName" placeholder="Last Name">
@@ -4226,10 +4314,20 @@ th, td{padding:2px 3px !important;}
             </div>
 
             <label style="display:flex; align-items:center; gap:10px; margin:10px 0; color:#aaa;">
-                <input type="checkbox" id="addToWaitlist" style="width:auto;">
+                <input type="checkbox" id="addToWaitlist" style="width:auto;" onchange="updateLatePlayerTeamUI()">
                 Add to Waitlist
             </label>
-            <button class="add-btn" onclick="addPlayer()">Add Player</button>
+
+            <div id="latePlayerTeamWrap" style="display:none; margin:10px 0; padding:12px; border:1px solid #4CAF50; border-radius:10px; background:rgba(76,175,80,0.12);">
+                <label style="display:block; color:#8fd18f; font-weight:700; margin-bottom:6px;">Roster released — place late player on team:</label>
+                <select id="latePlayerTeam">
+                    <option value="">Auto-suggest / choose team</option>
+                    <option value="White">Team White</option>
+                    <option value="Dark">Team Dark</option>
+                </select>
+                <div style="color:#b8d8b8; font-size:0.82rem; margin-top:6px;">This adds the player directly to the released roster without regenerating teams.</div>
+            </div>
+            <button class="add-btn" id="manualAddPlayerBtn" onclick="addPlayer()">Add Player</button>
         </div>
 
         <div class="registered-players-box">
@@ -4859,6 +4957,7 @@ th, td{padding:2px 3px !important;}
         let currentGoalies = 15;
         let playersCount = 15;
         let currentTotalPaid = 15;
+        let currentRosterReleased = false;
         let backupGoaliesData = [];
         let snapshotCatalog = [];
         let filteredSnapshotCatalog = [];
@@ -4867,6 +4966,7 @@ th, td{padding:2px 3px !important;}
         let latestSnapshotKey = null;
         let currentRegularSkatersByDay = normalizeRegularDayBucketMap(loadLocalRegularSkaters());
         let adminPlayersById = {};
+        let adminWaitlist = [];
 
         // Pre-defined goalie data
         const PREDEFINED_GOALIES = [
@@ -6316,8 +6416,12 @@ Date: ${selectedGameDate}`);
                 }
                 
                 const data = await res.json();
-
+                currentRosterReleased = !!data.rosterReleased;
                 adminPlayersById = Object.fromEntries((data.players || []).map(p => [String(p.id), p]));
+                adminWaitlist = Array.isArray(data.waitlist) ? data.waitlist : [];
+                updateLatePlayerTeamUI();
+                renderWaitlistRosterPicker();
+
                 const serverRegularMap = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
                 const localRegularMap = normalizeRegularDayBucketMap(loadLocalRegularSkaters());
                 const serverRegularCount = getRegularEntriesFlatFromMap(serverRegularMap).length;
@@ -6634,22 +6738,37 @@ Date: ${selectedGameDate}`);
             }
         });
 
-        async function promotePlayer(id) {
+        async function promotePlayer(id, forcedTeam = '') {
             const spotsDisplay = document.getElementById('currentPlayerSpotsDisplay').innerText;
-            const spots = parseInt(spotsDisplay);
-            
-            let confirmMsg = "Promote this player from waitlist to game?";
+            const spots = parseInt(spotsDisplay, 10);
+            let assignTeam = forcedTeam;
+
+            if (currentRosterReleased && assignTeam !== 'White' && assignTeam !== 'Dark') {
+                assignTeam = getLatePlayerSuggestedTeam().team;
+                const chosen = prompt('Roster is released. Type team for this waitlist player: White or Dark', assignTeam);
+                if (!chosen) return;
+                const normalized = String(chosen).trim().toLowerCase();
+                assignTeam = normalized === 'white' ? 'White' : normalized === 'dark' ? 'Dark' : '';
+                if (!assignTeam) {
+                    alert('Please enter White or Dark.');
+                    return;
+                }
+            }
+
+            let confirmMsg = currentRosterReleased
+                ? `Add this waitlist player to Team ${assignTeam}?`
+                : 'Promote this player from waitlist to game?';
             if (spots <= 0) {
-                confirmMsg = "⚠️ ADMIN OVERRIDE\n\nPlayer spots are currently 0.\nPromote player anyway?";
+                confirmMsg += '\n\n⚠️ ADMIN OVERRIDE\nPlayer spots are currently 0.';
             }
             
-            if (!confirm(confirmMsg)) return;
+            if (!forcedTeam && !confirm(confirmMsg)) return;
 
             try {
                 const res = await fetch(`${API_URL}/api/admin/promote-waitlist`, {
                     method: 'POST',
                     headers: getAdminHeaders(),
-                    body: JSON.stringify({ sessionToken: sessionToken, waitlistId: id })
+                    body: JSON.stringify({ sessionToken: sessionToken, waitlistId: id, assignTeam })
                 });
 
                 if (res.status === 401) {
@@ -6659,7 +6778,7 @@ Date: ${selectedGameDate}`);
 
                 if (res.ok) {
                     const data = await res.json();
-                    let message = `✅ Player promoted!`;
+                    let message = data.assignTeam ? `✅ Waitlist player added to Team ${data.assignTeam}!` : `✅ Player promoted!`;
                     if (data.override) {
                         message += '\n\n(Admin override - spots were at 0)';
                     }
@@ -6667,11 +6786,11 @@ Date: ${selectedGameDate}`);
                     loadData();
                 } else {
                     const err = await res.json();
-                    alert("Error: " + err.error);
+                    alert('Error: ' + err.error);
                 }
             } catch (err) {
-                console.error("Promote player error:", err);
-                alert("Error promoting player");
+                console.error('Promote player error:', err);
+                alert('Error promoting player');
             }
         }
 
@@ -6728,6 +6847,7 @@ Date: ${selectedGameDate}`);
                 loadData();
                 return;
             }
+
 
             try {
                 const res = await fetch(`${API_URL}/api/admin/update-rating`, {
@@ -6800,6 +6920,103 @@ Date: ${selectedGameDate}`);
             toggleManualGoalieMode();
         }
 
+        function getLatePlayerSuggestedTeam() {
+            const playerValues = Object.values(adminPlayersById || {});
+            const white = playerValues.filter(p => p && p.team === 'White');
+            const dark = playerValues.filter(p => p && p.team === 'Dark');
+            const whiteCount = white.length;
+            const darkCount = dark.length;
+            const whiteRating = white.reduce((sum, p) => sum + (parseFloat(p.rating) || 0), 0);
+            const darkRating = dark.reduce((sum, p) => sum + (parseFloat(p.rating) || 0), 0);
+            if (whiteCount < darkCount) return { team: 'White', reason: `White has fewer players (${whiteCount} vs ${darkCount})` };
+            if (darkCount < whiteCount) return { team: 'Dark', reason: `Dark has fewer players (${darkCount} vs ${whiteCount})` };
+            if (whiteRating <= darkRating) return { team: 'White', reason: `Teams are even; White has lower/equal rating total (${whiteRating.toFixed(1)} vs ${darkRating.toFixed(1)})` };
+            return { team: 'Dark', reason: `Teams are even; Dark has lower rating total (${darkRating.toFixed(1)} vs ${whiteRating.toFixed(1)})` };
+        }
+        function renderWaitlistRosterPicker() {
+            const select = document.getElementById('waitlistRosterSelect');
+            if (!select) return;
+            const list = Array.isArray(adminWaitlist) ? adminWaitlist : [];
+            if (!list.length) {
+                select.innerHTML = '<option value="">No waitlist players available</option>';
+            } else {
+                select.innerHTML = '<option value="">-- Select waitlist player --</option>' + list.map((p, index) => {
+                    const rating = Number(p.finalRating ?? p.rating ?? 5).toFixed(1);
+                    const goalie = p.isGoalie ? ' - GOALIE' : '';
+                    return `<option value="${p.id}">#${index + 1} - ${p.firstName} ${p.lastName}${goalie} - Rating ${rating}</option>`;
+                }).join('');
+            }
+            updateWaitlistRosterHint();
+        }
+
+        function updateWaitlistRosterHint() {
+            const hint = document.getElementById('waitlistRosterHint');
+            const teamSelect = document.getElementById('waitlistRosterTeam');
+            if (!hint) return;
+            if (!currentRosterReleased) {
+                hint.textContent = 'This option appears after roster release.';
+                return;
+            }
+            const suggested = getLatePlayerSuggestedTeam();
+            hint.textContent = `Suggested team: Team ${suggested.team} — ${suggested.reason}`;
+            if (teamSelect && !teamSelect.value) teamSelect.value = suggested.team;
+        }
+
+        function applyWaitlistRosterSuggestedTeam() {
+            const teamSelect = document.getElementById('waitlistRosterTeam');
+            if (!teamSelect) return;
+            const suggested = getLatePlayerSuggestedTeam();
+            teamSelect.value = suggested.team;
+            updateWaitlistRosterHint();
+        }
+
+        async function promoteSelectedWaitlistToRoster() {
+            const playerSelect = document.getElementById('waitlistRosterSelect');
+            const teamSelect = document.getElementById('waitlistRosterTeam');
+            if (!playerSelect || !teamSelect) return;
+            const waitlistId = playerSelect.value;
+            let assignTeam = teamSelect.value;
+            if (!waitlistId) {
+                alert('Select a waitlist player first.');
+                return;
+            }
+            if (assignTeam !== 'White' && assignTeam !== 'Dark') {
+                assignTeam = getLatePlayerSuggestedTeam().team;
+                teamSelect.value = assignTeam;
+            }
+            const player = (adminWaitlist || []).find(p => String(p.id) === String(waitlistId));
+            const name = player ? `${player.firstName} ${player.lastName}` : 'this waitlist player';
+            if (!confirm(`Add ${name} to Team ${assignTeam} and remove them from the waitlist?`)) return;
+            await promotePlayer(waitlistId, assignTeam);
+        }
+
+
+        function updateLatePlayerTeamUI() {
+            const wrap = document.getElementById('latePlayerTeamWrap');
+            const waitlistBox = document.getElementById('addToWaitlist');
+            const teamSelect = document.getElementById('latePlayerTeam');
+            const panel = document.getElementById('lateRosterAdminPanel');
+            const waitlistPanel = document.getElementById('waitlistToRosterPanel');
+            const hint = document.getElementById('lateRosterTeamHint');
+            const heading = document.getElementById('manualAddPlayerHeading');
+            const button = document.getElementById('manualAddPlayerBtn');
+            if (!wrap) return;
+            const show = !!currentRosterReleased && !(waitlistBox && waitlistBox.checked);
+            wrap.style.display = show ? 'block' : 'none';
+            if (panel) panel.classList.toggle('active', !!currentRosterReleased);
+            if (waitlistPanel) waitlistPanel.classList.toggle('active', !!currentRosterReleased);
+            if (heading) heading.textContent = currentRosterReleased ? '🚀 Add Late Player to Roster' : '➕ Add Player Manually';
+            if (button) button.textContent = currentRosterReleased && !show ? 'Add Player to Waitlist' : (currentRosterReleased ? 'Add Late Player to Roster' : 'Add Player');
+            if (show) {
+                const suggested = getLatePlayerSuggestedTeam();
+                if (hint) hint.textContent = `Suggested team: Team ${suggested.team} — ${suggested.reason}`;
+                if (teamSelect && !teamSelect.value) teamSelect.value = suggested.team;
+            } else if (!show && teamSelect) {
+                teamSelect.value = '';
+                if (hint) hint.textContent = 'Suggested team: —';
+            }
+        }
+
         async function addPlayer() {
             const firstName = document.getElementById('newFirstName').value.trim();
             const lastName = document.getElementById('newLastName').value.trim();
@@ -6808,9 +7025,15 @@ Date: ${selectedGameDate}`);
             const isGoalie = !!document.getElementById('newIsGoalie').checked;
             const paymentMethod = isGoalie ? 'FREE' : document.getElementById('newPayment').value;
             const toWaitlist = document.getElementById('addToWaitlist').checked;
+            const assignTeam = document.getElementById('latePlayerTeam') ? document.getElementById('latePlayerTeam').value : '';
 
             if (!firstName || !lastName || !phone || !rating) {
                 alert("Please fill in all required fields");
+                return;
+            }
+
+            if (currentRosterReleased && !toWaitlist && assignTeam !== 'White' && assignTeam !== 'Dark') {
+                alert('Roster is already released. Choose Team White or Team Dark for this late player.');
                 return;
             }
 
@@ -6826,7 +7049,8 @@ Date: ${selectedGameDate}`);
                         rating,
                         paymentMethod,
                         isGoalie,
-                        toWaitlist 
+                        toWaitlist,
+                        assignTeam
                     })
                 });
                 
@@ -6837,9 +7061,12 @@ Date: ${selectedGameDate}`);
                     document.getElementById('newRating').value = '';
                     document.getElementById('newIsGoalie').checked = false;
                     document.getElementById('addToWaitlist').checked = false;
+                    const lateTeamSelect = document.getElementById('latePlayerTeam');
+                    if (lateTeamSelect) lateTeamSelect.value = '';
                     const goalieSelect = document.getElementById('goalieQuickSelect');
                     if (goalieSelect) goalieSelect.value = '';
                     toggleManualGoalieMode();
+                    updateLatePlayerTeamUI();
                     loadData();
                 } else if (res.status === 401) {
                     logout();
