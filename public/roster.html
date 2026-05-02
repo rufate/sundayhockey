@@ -195,6 +195,17 @@
             flex-wrap: wrap;
         }
 
+
+        .late-added-badge {
+            background: #4a90e2;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
         .late-cancel-badge {
             background: #ff4444;
             color: white;
@@ -466,9 +477,10 @@
                     
                     const goalieBadge = player.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
                     const lateCancelBadge = player.lateCancelOwes ? '<span class="late-cancel-badge">CANCEL</span>' : '';
+                    const lateAddedBadge = player.promotedFromWaitlist ? '<span class="late-added-badge">WAITLIST ADD</span>' : (player.lateAddedAfterRelease ? '<span class="late-added-badge">LATE ADD</span>' : '');
                     
                     li.innerHTML = `
-                        <span class="player-name">${player.firstName} ${player.lastName} ${goalieBadge} ${lateCancelBadge}</span>
+                        <span class="player-name">${player.firstName} ${player.lastName} ${goalieBadge} ${lateCancelBadge} ${lateAddedBadge}</span>
                     `;
                     whiteList.appendChild(li);
                 });
@@ -482,9 +494,10 @@
                     
                     const goalieBadge = player.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
                     const lateCancelBadge = player.lateCancelOwes ? '<span class="late-cancel-badge">CANCEL</span>' : '';
+                    const lateAddedBadge = player.promotedFromWaitlist ? '<span class="late-added-badge">WAITLIST ADD</span>' : (player.lateAddedAfterRelease ? '<span class="late-added-badge">LATE ADD</span>' : '');
                     
                     li.innerHTML = `
-                        <span class="player-name">${player.firstName} ${player.lastName} ${goalieBadge} ${lateCancelBadge}</span>
+                        <span class="player-name">${player.firstName} ${player.lastName} ${goalieBadge} ${lateCancelBadge} ${lateAddedBadge}</span>
                     `;
                     darkList.appendChild(li);
                 });

@@ -712,8 +712,8 @@ function getWeeklyAutoAddPlayers(dayName = getGameDayName()) {
 function buildRosterReleasePaymentAnnouncement() {
     const email = String(paymentEmail || '').trim();
     return email
-        ? `Please E-transfer to ${email} or cash. 3-hour cancel window. No-show owes.`
-        : 'Please E-Transfer or cash. 3-hour cancel window. No-show owes.';
+        ? `Please E-transfer to ${email} or cash. 3-hour cancel window. No-show owes. Contact Phan to join if spots are available.`
+        : 'Please E-Transfer or cash. 3-hour cancel window. No-show owes. Contact Phan to join if spots are available.';
 }
 
 function clearAnnouncementState() {
@@ -4564,6 +4564,7 @@ function buildPublicRosterPayload() {
             owes: cancelled,
             canCancel: !cancelled && !p.isGoalie && !(String(p.firstName || '').toLowerCase() === 'phan' && String(p.lastName || '').toLowerCase() === 'ly'),
             promotedFromWaitlist: !!p.promotedFromWaitlist,
+            lateAddedAfterRelease: !!p.lateAddedAfterRelease,
             subbedInForName: p.subbedInForName || null,
             subbedInForPlayerId: p.subbedInForPlayerId ?? null,
             subbedInAt: p.subbedInAt || null
@@ -6396,7 +6397,7 @@ app.post('/api/admin/remove-waitlist', async (req, res) => {
 });
 
 app.post('/api/admin/add-player', async (req, res) => {
-    const { password, sessionToken, firstName, lastName, phone, paymentMethod, rating, isGoalie, toWaitlist } = req.body;
+    const { password, sessionToken, firstName, lastName, phone, paymentMethod, rating, isGoalie, toWaitlist, assignTeam } = req.body;
     if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
     if (!firstName || !lastName || !phone || !rating) return res.status(400).json({ error: "First name, last name, phone, and rating required" });
     const cleanFirstName = capitalizeFullName(firstName);
@@ -6405,6 +6406,11 @@ app.post('/api/admin/add-player', async (req, res) => {
     const formattedPhone = formatPhoneNumber(phone);
     const ratingNum = roundRating(parseFloat(rating) || 5);
     const isGoalieBool = isGoalie || false;
+    const requestedTeam = assignTeam === 'White' || assignTeam === 'Dark' ? assignTeam : null;
+    const teamForLateAdd = rosterReleased ? requestedTeam : null;
+    if (rosterReleased && !toWaitlist && !teamForLateAdd) {
+        return res.status(400).json({ error: "Roster is already released. Choose Team White or Team Dark for this late player." });
+    }
     if (toWaitlist) {
         const waitlistPlayer = hydratePlayerRatingProfile({ id: Date.now(), firstName: cleanFirstName, lastName: cleanLastName, phone: formattedPhone, paymentMethod: paymentMethod || 'Cash', rating: ratingNum, derivedRating: ratingNum, finalRating: ratingNum, selfRatingRaw: ratingNum, isGoalie: isGoalieBool, bypassAutoPromote: false, joinedAt: new Date() });
         try { await runProtectedMutation('admin-add-waitlist-player', req, async () => { waitlist.push(waitlistPlayer); }, { playerId: waitlistPlayer.id }); }
@@ -6412,10 +6418,10 @@ app.post('/api/admin/add-player', async (req, res) => {
         return res.json({ success: true, player: waitlistPlayer, inWaitlist: true });
     }
     if (isGoalieBool && !isGoalieSpotsAvailable()) return res.status(400).json({ error: "Goalie spots are full (maximum 2)." });
-    const newPlayer = hydratePlayerRatingProfile({ id: Date.now(), firstName: cleanFirstName, lastName: cleanLastName, phone: formattedPhone, paymentMethod: paymentMethod || 'Cash', paid: isGoalieBool ? true : false, paidAmount: isGoalieBool ? 0 : null, rating: ratingNum, derivedRating: ratingNum, finalRating: ratingNum, selfRatingRaw: ratingNum, isGoalie: isGoalieBool, team: null, registeredAt: new Date().toISOString() });
-    try { await runProtectedMutation('admin-add-player', req, async () => { players.push(newPlayer); if (!isGoalieBool && playerSpots > 0) playerSpots--; }, { playerId: newPlayer.id }); }
+    const newPlayer = hydratePlayerRatingProfile({ id: Date.now(), firstName: cleanFirstName, lastName: cleanLastName, phone: formattedPhone, paymentMethod: paymentMethod || 'Cash', paid: isGoalieBool ? true : false, paidAmount: isGoalieBool ? 0 : null, rating: ratingNum, derivedRating: ratingNum, finalRating: ratingNum, selfRatingRaw: ratingNum, isGoalie: isGoalieBool, team: teamForLateAdd, registeredAt: new Date().toISOString(), lateAddedAfterRelease: !!teamForLateAdd });
+    try { await runProtectedMutation('admin-add-player', req, async () => { players.push(newPlayer); if (!isGoalieBool && playerSpots > 0) playerSpots--; if (rosterReleased) syncCurrentWeekTeamsFromPlayers(); }, { playerId: newPlayer.id, rosterReleased, assignTeam: teamForLateAdd }); }
     catch (err) { console.error('Error adding player:', err); return res.status(500).json({ error: "Failed to add player safely" }); }
-    res.json({ success: true, player: newPlayer, inWaitlist: false });
+    res.json({ success: true, player: newPlayer, inWaitlist: false, assignTeam: teamForLateAdd, rosterReleased });
 });
 
 // ADMIN REMOVE PLAYER - WORKS ON ANY PLAYER AT ANY TIME (NO RESTRICTIONS)
