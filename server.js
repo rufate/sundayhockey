@@ -712,8 +712,8 @@ function getWeeklyAutoAddPlayers(dayName = getGameDayName()) {
 function buildRosterReleasePaymentAnnouncement() {
     const email = String(paymentEmail || '').trim();
     return email
-        ? `Please pay before stepping on the ice. E-transfer to ${email}. Last minute cancellations must be done 3 hours before game time. No Show Owes!`
-        : 'Please pay before stepping on the ice. Last minute cancellations must be done 3 hours before game time. No Show Owes!';
+        ? `Please E-transfer to ${email} or cash. 3-hour cancel window. No-show owes.`
+        : 'Please E-Transfer or cash. 3-hour cancel window. No-show owes.';
 }
 
 function clearAnnouncementState() {

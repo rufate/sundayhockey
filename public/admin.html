@@ -3706,6 +3706,38 @@ th, td{padding:2px 3px !important;}
 }
 </style>
 
+
+
+<style id="announcement-toggle-red-green-fix-v1">
+/* Announcement ON/OFF button: red when OFF, green when ON */
+.compact-announcement-control .announcement-toggle-row .maintenance-label{
+    min-width: 260px !important;
+    width: auto !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    background: linear-gradient(135deg, #c62828, #ef5350) !important;
+    color: #ffffff !important;
+    border: 0 !important;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.25) !important;
+    animation: none !important;
+}
+.compact-announcement-control #announcementCheckbox:checked + .maintenance-label{
+    background: linear-gradient(135deg, #2e7d32, #3fae46) !important;
+}
+.compact-announcement-control .announcement-status.active{
+    background: #2e7d32 !important;
+}
+.compact-announcement-control .announcement-status.inactive{
+    background: #c62828 !important;
+}
+@media (max-width:700px){
+    .compact-announcement-control .announcement-toggle-row .maintenance-label{
+        min-width: 220px !important;
+        font-size: 0.92rem !important;
+    }
+}
+</style>
+
 </head>
 <body class="admin-layout-option-1">
 
@@ -5242,13 +5274,8 @@ th, td{padding:2px 3px !important;}
                 const paymentEmail = document.getElementById('paymentEmail');
                 const announcementImagePreview = document.getElementById('announcementImagePreview');
 
-                if (announcementCheckbox) {
-                    announcementCheckbox.checked = !!data.announcementEnabled;
-                }
-                if (announcementStatus) {
-                    announcementStatus.innerText = data.announcementEnabled ? 'ANNOUNCEMENT LIVE' : 'ANNOUNCEMENT OFF';
-                    announcementStatus.className = 'announcement-status ' + (data.announcementEnabled ? 'active' : 'inactive');
-                }
+                updateAnnouncementToggleUI(!!data.announcementEnabled);
+                bindAnnouncementToggleUI();
                 if (announcementText) {
                     announcementText.value = data.announcementText || '';
                 }
@@ -7226,6 +7253,32 @@ Continue?`;
             }
         }
 
+
+
+        function updateAnnouncementToggleUI(enabled) {
+            const checkbox = document.getElementById('announcementCheckbox');
+            const label = document.querySelector('label[for="announcementCheckbox"]');
+            const status = document.getElementById('announcementStatus');
+            const isOn = !!enabled;
+
+            if (checkbox) checkbox.checked = isOn;
+            if (label) label.textContent = isOn ? 'ON' : 'OFF';
+            if (status) {
+                status.innerText = isOn ? 'ANNOUNCEMENT LIVE' : 'ANNOUNCEMENT OFF';
+                status.className = 'announcement-status ' + (isOn ? 'active' : 'inactive');
+            }
+        }
+
+        function bindAnnouncementToggleUI() {
+            const checkbox = document.getElementById('announcementCheckbox');
+            if (!checkbox || checkbox.dataset.boundAnnouncementToggle === '1') return;
+            checkbox.dataset.boundAnnouncementToggle = '1';
+            checkbox.addEventListener('change', function() {
+                updateAnnouncementToggleUI(this.checked);
+            });
+            updateAnnouncementToggleUI(checkbox.checked);
+        }
+
         async function saveAnnouncementSettings() {
             const button = document.getElementById('saveAnnouncementBtn');
             return withBusyButton(button, 'Saving...', async () => {
@@ -7272,7 +7325,7 @@ Continue?`;
             if (!confirm('Clear custom announcement, remove picture, and turn announcement off?')) return;
             const checkbox = document.getElementById('announcementCheckbox');
             const text = document.getElementById('announcementText');
-            if (checkbox) checkbox.checked = false;
+            updateAnnouncementToggleUI(false);
             if (text) text.value = '';
             window.announcementImageData = '';
             clearAnnouncementImage();
