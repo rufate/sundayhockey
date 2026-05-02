@@ -286,7 +286,7 @@
                     const option = document.createElement('option');
                     option.value = `${week.year}-${week.weekNumber}`;
                     const date = new Date(week.created);
-                    option.text = `Week ${week.weekNumber}, ${week.year} (${date.toLocaleDateString()})`;
+                    option.text = `Week ${week.weekNumber}, ${week.year} (${date.toLocaleDateString('en-US')})`;
                     select.appendChild(option);
                 });
                 
@@ -324,7 +324,7 @@
                 document.getElementById('gameInfo').innerHTML = `
                     <strong>Week ${data.weekNumber}, ${data.year}</strong><br>
                     ${data.gameLocation} | ${data.gameTime}<br>
-                    <small>Released: ${releaseDate.toLocaleString()}</small>
+                    <small>Released: ${releaseDate.toLocaleString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', hour12:true })}</small>
                 `;
                 
                 document.getElementById('whiteCount').innerText = data.whiteTeam.length;

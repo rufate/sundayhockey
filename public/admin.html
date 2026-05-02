@@ -3706,36 +3706,6 @@ th, td{padding:2px 3px !important;}
 }
 </style>
 
-
-<style id="announcement-toggle-polish-v1">
-/* Announcement ON/OFF bar: replaces separate green Enable button */
-.compact-announcement-control .announcement-topbar{
-    align-items: stretch !important;
-}
-.compact-announcement-control .announcement-status{
-    display:flex !important;
-    align-items:center !important;
-    justify-content:center !important;
-    width:100% !important;
-    min-height:36px !important;
-    border-radius:999px !important;
-    font-weight:900 !important;
-    letter-spacing:.2px !important;
-    cursor:pointer !important;
-    user-select:none !important;
-    border:0 !important;
-    box-shadow:0 8px 20px rgba(0,0,0,.25) !important;
-}
-.compact-announcement-control .announcement-status.active{
-    background:linear-gradient(135deg,#2e7d32,#43a047) !important;
-}
-.compact-announcement-control .announcement-status.inactive{
-    background:linear-gradient(135deg,#b71c1c,#e53935) !important;
-}
-.compact-announcement-control .announcement-toggle-row{
-    display:none !important;
-}
-</style>
 </head>
 <body class="admin-layout-option-1">
 
@@ -3847,10 +3817,13 @@ th, td{padding:2px 3px !important;}
         <div class="announcement-control compact-announcement-control">
             <div class="announcement-topbar">
                 <h3>📢 Announcement</h3>
+                <div class="announcement-status inactive" id="announcementStatus">OFF</div>
             </div>
 
-            <input type="checkbox" id="announcementCheckbox" class="maintenance-checkbox">
-            <div class="announcement-status inactive" id="announcementStatus" role="button" tabindex="0" onclick="toggleAnnouncementEnabled()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleAnnouncementEnabled();}">ANNOUNCEMENT OFF</div>
+            <div class="announcement-toggle-row">
+                <input type="checkbox" id="announcementCheckbox" class="maintenance-checkbox">
+                <label for="announcementCheckbox" class="maintenance-label">Enable</label>
+            </div>
 
             <div class="announcement-compact-grid">
                 <div class="message-box message-box-main">
@@ -5273,10 +5246,8 @@ th, td{padding:2px 3px !important;}
                     announcementCheckbox.checked = !!data.announcementEnabled;
                 }
                 if (announcementStatus) {
-                    announcementStatus.innerText = data.announcementEnabled ? 'ANNOUNCEMENT ON' : 'ANNOUNCEMENT OFF';
+                    announcementStatus.innerText = data.announcementEnabled ? 'ANNOUNCEMENT LIVE' : 'ANNOUNCEMENT OFF';
                     announcementStatus.className = 'announcement-status ' + (data.announcementEnabled ? 'active' : 'inactive');
-                    announcementStatus.setAttribute('aria-pressed', data.announcementEnabled ? 'true' : 'false');
-                    announcementStatus.title = data.announcementEnabled ? 'Click to turn announcement OFF' : 'Click to turn announcement ON';
                 }
                 if (announcementText) {
                     announcementText.value = data.announcementText || '';
@@ -7255,21 +7226,7 @@ Continue?`;
             }
         }
 
-
-        async function toggleAnnouncementEnabled() {
-            const checkbox = document.getElementById('announcementCheckbox');
-            const status = document.getElementById('announcementStatus');
-            const nextEnabled = !(checkbox && checkbox.checked);
-            if (checkbox) checkbox.checked = nextEnabled;
-            if (status) {
-                status.innerText = nextEnabled ? 'ANNOUNCEMENT ON' : 'ANNOUNCEMENT OFF';
-                status.className = 'announcement-status ' + (nextEnabled ? 'active' : 'inactive');
-                status.setAttribute('aria-pressed', nextEnabled ? 'true' : 'false');
-            }
-            await saveAnnouncementSettings({ silent: true });
-        }
-
-        async function saveAnnouncementSettings(options = {}) {
+        async function saveAnnouncementSettings() {
             const button = document.getElementById('saveAnnouncementBtn');
             return withBusyButton(button, 'Saving...', async () => {
                 const checkbox = document.getElementById('announcementCheckbox');
@@ -7300,11 +7257,9 @@ Continue?`;
                     }
 
                     await loadAppSettings();
-                    if (!options.silent) {
-                        alert(enabled
-                            ? '📢 Announcement saved and enabled on signup page.'
-                            : '✅ Announcement saved and hidden from signup page.');
-                    }
+                    alert(enabled
+                        ? '📢 Announcement saved and enabled on signup page.'
+                        : '✅ Announcement saved and hidden from signup page.');
                 } catch (err) {
                     console.error('Save announcement error:', err);
                     alert(err.message || 'Failed to save announcement');
@@ -7979,10 +7934,18 @@ function setPaymentSliderAmount(amount){
     const slider = document.getElementById('paymentSliderInput');
     const valueLabel = document.getElementById('paymentSliderAmount');
     const numberInput = document.getElementById('paymentSliderNumber');
-    const safe = Math.max(0, Math.min(50, Number(amount) || 0));
-    if(slider) slider.value = String(safe);
-    if(numberInput) numberInput.value = String(safe);
-    if(valueLabel) valueLabel.textContent = '$' + safe;
+    const parsed = Number(amount);
+    const safe = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+    const display = Number.isInteger(safe) ? String(safe) : safe.toFixed(2).replace(/\.00$/, '').replace(/0$/, '');
+
+    // Keep the existing slider UI, but do not let it cap manually typed payments.
+    // The slider can move up to its visual max; the number box can hold any higher amount.
+    if(slider){
+        const sliderMax = Number(slider.max || 500);
+        slider.value = String(Math.min(safe, Number.isFinite(sliderMax) ? sliderMax : safe));
+    }
+    if(numberInput) numberInput.value = display;
+    if(valueLabel) valueLabel.textContent = '$' + display;
 }
 function openPaymentSlider(playerId){
     activePaymentSliderPlayerId = playerId;
@@ -8006,7 +7969,7 @@ async function savePaymentSlider(){
     const wrap = compactPayFind(activePaymentSliderPlayerId);
     if(wrap && wrap.dataset.busy === '1') return;
 
-    const amount = Number(document.getElementById('paymentSliderInput')?.value || 0);
+    const amount = Math.max(0, Number(document.getElementById('paymentSliderNumber')?.value || 0));
     if(wrap){
         wrap.dataset.busy = '1';
         wrap.style.opacity = '0.7';
@@ -8055,8 +8018,8 @@ document.addEventListener('keydown', function(e){
         <div class="payment-slider-card">
             <div class="payment-slider-title">Set Payment Amount</div>
             <div class="payment-slider-amount" id="paymentSliderAmount">$15</div>
-            <input type="range" id="paymentSliderInput" class="payment-slider-input" min="0" max="50" step="1" value="15" oninput="handlePaymentSliderInput(this.value)">
-            <input type="number" id="paymentSliderNumber" min="0" max="50" step="1" value="15" oninput="handlePaymentSliderInput(this.value)">
+            <input type="range" id="paymentSliderInput" class="payment-slider-input" min="0" max="500" step="1" value="15" oninput="handlePaymentSliderInput(this.value)">
+            <input type="number" id="paymentSliderNumber" min="0" step="1" value="15" placeholder="Enter any amount" oninput="handlePaymentSliderInput(this.value)">
             <div class="payment-slider-presets">
                 <button type="button" class="payment-slider-preset" onclick="paymentSliderPreset(10)">$10</button>
                 <button type="button" class="payment-slider-preset" onclick="paymentSliderPreset(15)">$15</button>

@@ -391,6 +391,10 @@ const AUTO_SCHEDULE_LOCK_MINUTE = 0;
 const AUTO_SCHEDULE_RESET_HOUR = 0;
 const AUTO_SCHEDULE_RESET_MINUTE = 0;
 
+// Reset catch-up: Render/external cron may not hit the exact minute, especially around midnight.
+// Use Eastern Time and allow a safe post-game catch-up window so the reset still runs once.
+const WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT = Math.max(1, Number(process.env.WEEKLY_RESET_CATCHUP_MINUTES || 720));
+
 // Admin-configurable schedules (interpreted in America/New_York, repeats weekly)
 let signupLockSchedule = {
     enabled: false,
@@ -408,7 +412,10 @@ let resetWeekSchedule = {
     at: null
 };
 
-
+// Controls whether schedules may be auto rebuilt from game date/time.
+// 'manual' means admin-saved schedules are preserved across weekly resets and game-date changes.
+// 'auto' means schedules can be rebuilt from the selected game day/time.
+let scheduleMode = 'auto';
 
 function hasConfiguredAdminPassword() {
     return !!ADMIN_PASSWORD;
@@ -1040,17 +1047,19 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime(), resetAt = resetWee
         return { ok: false, reason: 'Blocked weekly reset because no reset schedule is configured.' };
     }
 
-    if (!sameDowHourMinute(resetAt, getEtDowHourMinute(etTime))) {
+    const maxCatchUpMinutes = WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT;
+    const minutesAfterScheduledReset = minutesSinceLatestWeeklyOccurrence(resetAt, etTime);
+    if (!Number.isFinite(minutesAfterScheduledReset) || minutesAfterScheduledReset < 0 || minutesAfterScheduledReset > maxCatchUpMinutes) {
         return {
             ok: false,
-            reason: `Blocked weekly reset because current ET time is not the exact scheduled reset minute (${formatScheduleDowTime(resetAt)}).`
+            reason: `Blocked weekly reset because current ET time is outside the ${maxCatchUpMinutes}-minute catch-up window after the scheduled reset (${formatScheduleDowTime(resetAt)}).`
         };
     }
 
-    if (resetCheck && resetCheck.reason !== 'exact_minute') {
+    if (resetCheck && !['exact_minute', 'catchup'].includes(resetCheck.reason)) {
         return {
             ok: false,
-            reason: `Blocked weekly reset because scheduler reason was ${resetCheck.reason || 'unknown'} instead of exact_minute.`
+            reason: `Blocked weekly reset because scheduler reason was ${resetCheck.reason || 'unknown'}.`
         };
     }
 
@@ -1106,7 +1115,7 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime(), resetAt = resetWee
 
     return {
         ok: true,
-        reason: `Reset allowed: exact scheduled ET minute, roster released, reset arm ON, ${registeredPlayerCount} player(s) and ${waitlistCount} waitlist record(s) ready to clear.`
+        reason: `Reset allowed: scheduled ET reset window, roster released, reset arm ON, ${registeredPlayerCount} player(s) and ${waitlistCount} waitlist record(s) ready to clear.`
     };
 }
 
@@ -1257,6 +1266,14 @@ function shouldAutoBuildMissingSchedules(scheduleSettings = {}) {
     const hasStoredRosterReleaseSchedule = !!scheduleSettings.rosterReleaseSchedule;
     const hasStoredResetWeekSchedule = !!scheduleSettings.resetWeekSchedule;
     return !hasStoredSignupLockSchedule && !hasStoredRosterReleaseSchedule && !hasStoredResetWeekSchedule;
+}
+
+function isManualScheduleMode() {
+    return String(scheduleMode || 'auto').toLowerCase() === 'manual';
+}
+
+function canAutoRebuildSchedules() {
+    return AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME && !isManualScheduleMode();
 }
 
 function buildAutoSchedulesFromGameTime(selectedGameTime = gameTime, anchorDate = gameDate) {
@@ -1594,17 +1611,17 @@ async function checkWeeklyReset() {
         resetWeekSchedule.at,
         lastExactResetRunAt,
         etTime,
-        Number(process.env.WEEKLY_RESET_CATCHUP_MINUTES || 0),
-        { exactMinuteOnly: true }
+        WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT,
+        { exactMinuteOnly: false }
     );
     if (!resetCheck.shouldRun) return false;
 
     const resetSafety = canSafelyRunWeeklyReset(etTime, resetWeekSchedule.at, resetCheck);
     if (!resetSafety.ok) {
-        console.warn(`[FRIDAY-KILLER SAFETY] Weekly reset skipped at ${resetCheck.minuteKey}: ${resetSafety.reason}`);
+        console.warn(`[ET SCHEDULER] Weekly reset skipped at ${resetCheck.minuteKey}: ${resetSafety.reason}`);
         return false;
     }
-    console.log(`[FRIDAY-KILLER SAFETY] Weekly reset approved at ${resetCheck.minuteKey}: ${resetSafety.reason}`);
+    console.log(`[ET SCHEDULER] Weekly reset approved at ${resetCheck.minuteKey}: ${resetSafety.reason}`);
 
     lastExactResetRunAt = resetCheck.occurrenceKey;
     lastExactResetMinuteKey = resetCheck.minuteKey;
@@ -1665,8 +1682,8 @@ async function checkWeeklyReset() {
     return true;
 }
 
-const BACKGROUND_SCHEDULER_ENABLED = String(process.env.BACKGROUND_SCHEDULER_ENABLED || 'false').toLowerCase() === 'true';
-const ENABLE_INTERNAL_SCHEDULER_CRON = String(process.env.ENABLE_INTERNAL_SCHEDULER_CRON || 'false').toLowerCase() === 'true';
+const BACKGROUND_SCHEDULER_ENABLED = String(process.env.BACKGROUND_SCHEDULER_ENABLED || 'true').toLowerCase() === 'true';
+const ENABLE_INTERNAL_SCHEDULER_CRON = String(process.env.ENABLE_INTERNAL_SCHEDULER_CRON || 'true').toLowerCase() === 'true';
 const WARM_TICK_ENABLED = String(process.env.WARM_TICK_ENABLED || 'false').toLowerCase() === 'true';
 const WARM_TICK_MS = Number(process.env.WARM_TICK_MS || 60000);
 let schedulerRunning = false;
@@ -1688,6 +1705,7 @@ function buildPersistedStateFingerprint(snapshot = null) {
         cancelledRegistrations: payload.cancelledRegistrations,
         regularSkatersByDay: payload.regularSkatersByDay,
         customSignupCode: payload.customSignupCode,
+        scheduleMode: payload.scheduleMode,
         gameLocation: payload.gameLocation,
         gameTime: payload.gameTime,
         gameDate: payload.gameDate,
@@ -1996,6 +2014,7 @@ async function loadDataFromDB() {
         if (settings.currentWeekData) currentWeekData = settings.currentWeekData;
         if (settings.cancelledRegistrations) cancelledRegistrations = Array.isArray(settings.cancelledRegistrations) ? settings.cancelledRegistrations : [];
         if (settings.customSignupCode !== undefined) customSignupCode = String(settings.customSignupCode || '').trim();
+        if (settings.scheduleMode !== undefined) scheduleMode = String(settings.scheduleMode || 'auto').toLowerCase() === 'manual' ? 'manual' : 'auto';
         if (settings.signupLockStartAt !== undefined) signupLockStartAt = settings.signupLockStartAt || '';
         if (settings.signupLockEndAt !== undefined) signupLockEndAt = settings.signupLockEndAt || '';
         if (settings.rosterReleaseAt !== undefined) rosterReleaseAt = settings.rosterReleaseAt || '';
@@ -2007,7 +2026,7 @@ async function loadDataFromDB() {
         if (settings.signupLockSchedule) signupLockSchedule = settings.signupLockSchedule;
         if (settings.rosterReleaseSchedule) rosterReleaseSchedule = settings.rosterReleaseSchedule;
         if (settings.resetWeekSchedule) resetWeekSchedule = settings.resetWeekSchedule;
-        if (shouldAutoBuildMissingSchedules(settings)) {
+        if (!isManualScheduleMode() && shouldAutoBuildMissingSchedules(settings)) {
             buildAutoSchedulesFromGameTime(gameTime, gameDate);
         }
         refreshDynamicSignupCode();
@@ -2614,6 +2633,7 @@ function applySnapshotToMemory(snapshot) {
     cancelledRegistrations = Array.isArray(snapshot.cancelledRegistrations) ? snapshot.cancelledRegistrations : [];
     regularSkatersByDay = normalizeRegularSkatersByDayMap(snapshot.regularSkatersByDay || {});
     customSignupCode = String(snapshot.customSignupCode || '').trim();
+    scheduleMode = String(snapshot.scheduleMode || scheduleMode || 'auto').toLowerCase() === 'manual' ? 'manual' : 'auto';
     currentWeekData = snapshot.currentWeekData ?? {
         weekNumber: null,
         year: null,
@@ -2933,6 +2953,7 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
             ['cancelledRegistrations', cancelledRegistrations],
             ['regularSkatersByDay', regularSkatersByDay],
             ['customSignupCode', customSignupCode],
+            ['scheduleMode', scheduleMode],
             ['signupLockStartAt', signupLockStartAt],
             ['signupLockEndAt', signupLockEndAt],
             ['rosterReleaseAt', rosterReleaseAt],
@@ -3157,6 +3178,7 @@ function buildFullDataSnapshot() {
         cancelledRegistrations,
         regularSkatersByDay,
         customSignupCode,
+        scheduleMode,
         gameLocation,
         gameTime,
         gameDate,
@@ -3279,6 +3301,7 @@ function getSettingsSnapshot() {
         cancelledRegistrations,
         regularSkatersByDay,
         customSignupCode,
+        scheduleMode,
         lastExactResetMinuteKey,
         lastExactRosterReleaseMinuteKey
     };
@@ -3379,6 +3402,7 @@ function loadDataFromFile() {
             cancelledRegistrations = Array.isArray(data.cancelledRegistrations) ? data.cancelledRegistrations : [];
             regularSkatersByDay = normalizeRegularSkatersByDayMap(data.regularSkatersByDay || {});
             customSignupCode = String(data.customSignupCode || '').trim();
+            scheduleMode = String(data.scheduleMode || scheduleMode || 'auto').toLowerCase() === 'manual' ? 'manual' : 'auto';
             currentWeekData = data.currentWeekData ?? {
                 weekNumber: null,
                 year: null,
@@ -3392,7 +3416,7 @@ function loadDataFromFile() {
             announcementEnabled = data.announcementEnabled ?? false;
             announcementText = data.announcementText ?? '';
             announcementImages = Array.isArray(data.announcementImages) ? data.announcementImages : [];
-            if (shouldAutoBuildMissingSchedules(data)) {
+            if (!isManualScheduleMode() && shouldAutoBuildMissingSchedules(data)) {
                 buildAutoSchedulesFromGameTime(gameTime, gameDate);
             }
             refreshDynamicSignupCode();
@@ -4333,24 +4357,59 @@ app.get('/api/debug-time', (req, res) => {
     const now = new Date();
     const etTime = getCurrentETTime();
     const shouldLock = shouldBeLocked();
+    const resetCheck = resetWeekSchedule && resetWeekSchedule.at
+        ? shouldRunScheduledAction(resetWeekSchedule.at, lastExactResetRunAt, etTime, WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT, { exactMinuteOnly: false })
+        : { shouldRun: false, reason: 'missing_schedule' };
+    const resetSafety = resetWeekSchedule && resetWeekSchedule.at
+        ? canSafelyRunWeeklyReset(etTime, resetWeekSchedule.at, resetCheck)
+        : { ok: false, reason: 'No reset schedule configured.' };
     
     res.json({
-        systemTime: now.toISOString(),
-        etTime: etTime.toISOString(),
+        systemTimeUtc: now.toISOString(),
+        easternTime: formatETDateTimeLong({
+            year: etTime.getFullYear(),
+            month: etTime.getMonth() + 1,
+            day: etTime.getDate(),
+            hour: etTime.getHours(),
+            minute: etTime.getMinutes()
+        }),
+        etIsoWallClock: etTime.toISOString(),
         etDay: etTime.getDay(),
         etHour: etTime.getHours(),
+        etMinute: etTime.getMinutes(),
         shouldBeLocked: shouldLock,
-        "schedule": "Locked: Fri 5pm - Mon 6pm, Reset: Sat 12am",
+        signupLockSchedule,
+        rosterReleaseSchedule,
+        resetWeekSchedule,
+        resetCatchupMinutes: WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT,
+        resetCheck,
+        resetSafety,
         requirePlayerCode: requirePlayerCode,
         manualOverride: manualOverride,
-        rosterReleased: rosterReleased
+        manualOverrideState: manualOverrideState,
+        rosterReleased: rosterReleased,
+        resetArmed: resetArmed,
+        lastExactResetRunAt,
+        lastExactResetMinuteKey,
+        scheduler: {
+            lastSchedulerRunAt,
+            lastSchedulerMinuteKey,
+            lastSchedulerError,
+            backgroundEnabled: BACKGROUND_SCHEDULER_ENABLED,
+            internalCronEnabled: ENABLE_INTERNAL_SCHEDULER_CRON,
+            internalCron: process.env.INTERNAL_SCHEDULER_CRON || '* * * * *'
+        }
     });
 });
 
-app.get('/api/force-check', (req, res) => {
+app.get('/api/force-check', async (req, res) => {
+    const before = { rosterReleased, players: players.length, waitlist: waitlist.length, requirePlayerCode };
+    await runSchedulerTick();
     const result = checkAutoLock();
     res.json({ 
-        message: 'Lock check forced',
+        message: 'Full Eastern-time scheduler check forced',
+        before,
+        after: { rosterReleased, players: players.length, waitlist: waitlist.length, requirePlayerCode },
         ...result,
         timestamp: new Date().toISOString()
     });
@@ -5335,7 +5394,7 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
             }
             if (selectedDayTime) {
                 gameTime = selectedDayTime;
-                if (AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME) {
+                if (canAutoRebuildSchedules()) {
                     gameDate = newGameDate || calculateNextGameDate();
                     buildAutoSchedulesFromGameTime(gameTime, gameDate);
                     const guardTime = getCurrentETTime();
@@ -5350,7 +5409,7 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
             if (selectedArena) gameLocation = selectedArena;
             if (newGameDate) {
                 gameDate = newGameDate;
-                if (AUTO_BUILD_WEEKLY_SCHEDULES_FROM_GAMETIME) {
+                if (canAutoRebuildSchedules()) {
                     buildAutoSchedulesFromGameTime(gameTime, gameDate);
                 }
             }
@@ -6059,6 +6118,7 @@ app.post('/api/admin/settings', (req, res) => {
         signupLockEndAt,
         rosterReleaseAt,
         resetWeekAt,
+        scheduleMode,
         customSignupCode,
         usingCustomSignupCode: /^\d{4}$/.test(String(customSignupCode || '').trim()),
         regularSkatersByDay,
@@ -6160,6 +6220,7 @@ app.post('/api/admin/update-schedules', async (req, res) => {
 
     try {
         await runProtectedMutation('update-schedules', req, async () => {
+            scheduleMode = 'manual';
             signupLockStartAt = signupLockStart || '';
             signupLockEndAt = signupLockEnd || '';
             rosterReleaseAt = rosterReleaseAtInput || '';
@@ -6197,6 +6258,7 @@ app.post('/api/admin/update-schedules', async (req, res) => {
         signupLockEndAt,
         rosterReleaseAt,
         resetWeekAt,
+        scheduleMode,
         resetArmed,
         requireCode: requirePlayerCode,
         isLockedWindow: lockStatus.isLockedWindow
@@ -6237,8 +6299,10 @@ app.post('/api/admin/reset-schedule', async (req, res) => {
     
     try {
         await runProtectedMutation('reset-schedule', req, async () => {
+            scheduleMode = 'auto';
             manualOverride = false;
             manualOverrideState = null;
+            buildAutoSchedulesFromGameTime(gameTime, gameDate || calculateNextGameDate());
             checkAutoLock();
         });
     } catch (err) {
@@ -6250,6 +6314,14 @@ app.post('/api/admin/reset-schedule', async (req, res) => {
         requireCode: requirePlayerCode,
         manualOverride: manualOverride,
         manualOverrideState: manualOverrideState,
+        scheduleMode,
+        signupLockSchedule,
+        rosterReleaseSchedule,
+        resetWeekSchedule,
+        signupLockStartAt,
+        signupLockEndAt,
+        rosterReleaseAt,
+        resetWeekAt,
         message: "Auto-schedule restored"
     });
 });
@@ -6833,7 +6905,7 @@ initDatabase().then(async () => {
     await runSchedulerTick();
 
     if (BACKGROUND_SCHEDULER_ENABLED && ENABLE_INTERNAL_SCHEDULER_CRON) {
-        cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '*/15 7-23 * * *', async () => {
+        cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '* * * * *', async () => {
             await runSchedulerTick();
         }, {
             timezone: 'America/New_York'
@@ -6855,8 +6927,8 @@ initDatabase().then(async () => {
         console.log(`Auto-add goalies for ${getGameDayName()}: ${getWeeklyAutoAddPlayers().filter(p => p.isGoalie).map(p => `${p.firstName} ${p.lastName}`).join(', ')}`);
         console.log(`Current players registered: ${players.length}`);
         console.log(`Background scheduler: ${BACKGROUND_SCHEDULER_ENABLED ? 'enabled' : 'disabled (request-driven mode)'}`);
-        console.log(`Recommended external keepalive cron: */15 7-23 * * * -> /health (lightweight, add ?db=1 only for full checks)`);
-        console.log(`Recommended external keepalive cron: */15 7-23 * * * -> /health (lightweight, add ?db=1 only for full checks)`);
+        console.log(`Recommended external keepalive cron: * * * * * -> /api/cron/heartbeat (Eastern scheduler-safe)`);
+        console.log(`Recommended external keepalive cron: * * * * * -> /api/cron/heartbeat (Eastern scheduler-safe)`);
     });
 }).catch(err => {
     console.error('Failed to initialize database, starting with file fallback:', err);
@@ -6867,7 +6939,7 @@ initDatabase().then(async () => {
     runSchedulerTick();
     
     if (BACKGROUND_SCHEDULER_ENABLED && ENABLE_INTERNAL_SCHEDULER_CRON) {
-        cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '*/15 7-23 * * *', async () => {
+        cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '* * * * *', async () => {
             await runSchedulerTick();
         }, {
             timezone: 'America/New_York'
