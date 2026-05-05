@@ -965,6 +965,11 @@
             line-height: 1.4;
         }
 
+        .announcement-copy > span,
+        .announcement-copy > strong {
+            display: block;
+        }
+
     
         .rating-grid {
             display: grid;
@@ -1003,10 +1008,12 @@
             font-weight: 800;
             text-decoration: underline;
             cursor: pointer;
+            display: inline !important;
         }
 
 
         .announcement-spots {
+            display: block;
             font-weight: 800;
             white-space: nowrap;
         }
@@ -1550,6 +1557,7 @@
         <div class="announcement-copy">
             <strong>Attention:</strong>
             <span id="announcementText">&nbsp;</span>
+            <small id="announcementCopyHint" class="announcement-copy-hint" style="display:none;"></small>
         </div>
     </div>
 
@@ -2734,7 +2742,12 @@ function updateCalculatedRating() {
             const value = String(text || '').trim();
             if (!value) return;
 
-            const onCopied = () => {};
+            const onCopied = () => {
+                const hintEl = document.getElementById('announcementCopyHint');
+                if (!hintEl) return;
+                hintEl.textContent = '';
+                hintEl.style.display = 'none';
+            };
 
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(value).then(onCopied).catch(() => {
@@ -2750,6 +2763,7 @@ function updateCalculatedRating() {
             const bulletin = document.getElementById('announcementBulletin');
             const textEl = document.getElementById('announcementText');
             const thumbEl = document.getElementById('announcementThumb');
+            const hintEl = document.getElementById('announcementCopyHint');
             if (!bulletin || !textEl || !thumbEl) return;
 
             const enabled = !!data.announcementEnabled;
@@ -2766,6 +2780,10 @@ function updateCalculatedRating() {
                 textEl.removeAttribute('role');
                 thumbEl.src = '';
                 thumbEl.classList.remove('visible');
+                if (hintEl) {
+                    hintEl.style.display = 'none';
+                    hintEl.textContent = 'Tap email to copy';
+                }
                 return;
             }
 
@@ -2781,34 +2799,62 @@ function updateCalculatedRating() {
             const spotsClass = hasSpots ? 'available' : 'full';
             const spotsToken = '%%ANNOUNCEMENT_SPOTS_TOKEN%%';
 
-            let text = rawText
-                .replace(/\s+[–—-]\s+(You can still ['’‘"]?Join Game['’‘"]?, message Phan after joining\.)/i, ' $1')
-                .replace(/^[–—-]\s+(You can still ['’‘"]?Join Game['’‘"]?, message Phan after joining\.)/im, '$1');
+            let text = rawText;
             if (text.includes('{spots}')) {
                 text = text.split('{spots}').join(spotsToken);
             }
 
-            let html = escapeHtml(text).split(spotsToken).join(
-                `<strong class="announcement-spots ${spotsClass}">${escapeHtml(spotsText)}</strong>`
-            );
+            let html = '';
 
-            if (email) {
-                const escapedEmail = escapeHtml(email);
-                const emailRegex = new RegExp(escapedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-                html = html.replace(emailRegex, (matchedEmail) =>
-                    `<span class="announcement-copy-email" data-copy-payment-email="${matchedEmail}">${matchedEmail}</span>`
+            if (/^\s*Etransfer:/i.test(rawText)) {
+                const emailMatch = rawText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+                const displayEmail = email || (emailMatch ? emailMatch[0] : '');
+
+                let messageLine = rawText;
+                messageLine = messageLine.replace(/^\s*Etransfer:\s*/i, '').trim();
+                if (displayEmail) {
+                    messageLine = messageLine.replace(new RegExp(displayEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').trim();
+                }
+                messageLine = messageLine.replace(/\{spots\}/gi, '').trim();
+                messageLine = messageLine.replace(/^[-–—()\s]+/, '').replace(/[()\s]+$/g, '').trim();
+                messageLine = messageLine || "You can still 'Join Game', message Phan after joining.";
+
+                const emailLine = displayEmail
+                    ? `Etransfer: <span class="announcement-copy-email" data-copy-payment-email="${escapeHtml(displayEmail)}">${escapeHtml(displayEmail)}</span>`
+                    : 'Etransfer:';
+
+                html = `
+                    <span>${emailLine}</span>
+                    <strong class="announcement-spots ${spotsClass}">${escapeHtml(spotsText)}</strong>
+                    <span>${escapeHtml(messageLine)}</span>
+                `;
+            } else {
+                html = escapeHtml(text).split(spotsToken).join(
+                    `<strong class="announcement-spots ${spotsClass}">${escapeHtml(spotsText)}</strong>`
                 );
+
+                if (email) {
+                    const escapedEmail = escapeHtml(email);
+                    const emailRegex = new RegExp(escapedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+                    html = html.replace(emailRegex, (matchedEmail) =>
+                        `<span class="announcement-copy-email" data-copy-payment-email="${matchedEmail}">${matchedEmail}</span>`
+                    );
+                }
             }
 
             textEl.innerHTML = html || 'Attention';
-
             const copyTarget = textEl.querySelector('[data-copy-payment-email]');
             if (copyTarget) {
                 copyTarget.addEventListener('click', (event) => {
                     event.preventDefault();
                     event.stopPropagation();
-                    copyTextToClipboard(email);
+                    copyTextToClipboard(copyTarget.getAttribute('data-copy-payment-email') || email);
                 });
+            }
+
+            if (hintEl) {
+                hintEl.style.display = 'none';
+                hintEl.textContent = '';
             }
 
             if (image) {

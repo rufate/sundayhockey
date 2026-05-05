@@ -2046,7 +2046,7 @@ button {
 }
 .compact-announcement-control .announcement-compact-grid{
     display:grid;
-    grid-template-columns:1.15fr 0.85fr;
+    grid-template-columns:1fr 1fr 0.85fr;
     gap:12px;
     align-items:start;
 }
@@ -3914,8 +3914,13 @@ th, td{padding:2px 3px !important;}
 
             <div class="announcement-compact-grid">
                 <div class="message-box message-box-main">
-                    <label for="announcementText">Message</label>
+                    <label for="announcementText">Message Announcement</label>
                     <textarea id="announcementText" rows="4" placeholder="Type announcement..."></textarea>
+                </div>
+
+                <div class="message-box message-box-main">
+                    <label for="rosterReleaseAnnouncementText">Roster Release Announcement</label>
+                    <textarea id="rosterReleaseAnnouncementText" rows="4" placeholder="Etransfer: okosoff@outlook.com {spots} – You can still 'Join Game', message Phan after joining."></textarea>
                 </div>
 
                 <div class="announcement-side-stack">
@@ -5371,6 +5376,7 @@ th, td{padding:2px 3px !important;}
                 const announcementCheckbox = document.getElementById('announcementCheckbox');
                 const announcementStatus = document.getElementById('announcementStatus');
                 const announcementText = document.getElementById('announcementText');
+                const rosterReleaseAnnouncementText = document.getElementById('rosterReleaseAnnouncementText');
                 const paymentEmail = document.getElementById('paymentEmail');
                 const announcementImagePreview = document.getElementById('announcementImagePreview');
 
@@ -5378,6 +5384,9 @@ th, td{padding:2px 3px !important;}
                 bindAnnouncementToggleUI();
                 if (announcementText) {
                     announcementText.value = data.announcementText || '';
+                }
+                if (rosterReleaseAnnouncementText) {
+                    rosterReleaseAnnouncementText.value = data.rosterReleaseAnnouncementText || `Etransfer: ${data.paymentEmail || 'okosoff@outlook.com'} {spots} – You can still 'Join Game', message Phan after joining.`;
                 }
                 if (paymentEmail) {
                     paymentEmail.value = data.paymentEmail || '';
@@ -7511,11 +7520,15 @@ Continue?`;
             return withBusyButton(button, 'Saving...', async () => {
                 const checkbox = document.getElementById('announcementCheckbox');
                 const text = document.getElementById('announcementText');
+                const rosterReleaseText = document.getElementById('rosterReleaseAnnouncementText');
                 const paymentEmailInput = document.getElementById('paymentEmail');
                 const checkboxEnabled = !!(checkbox && checkbox.checked);
                 const enabled = checkboxEnabled;
                 const announcementTextValue = text ? text.value.trim() : '';
                 const paymentEmailValue = paymentEmailInput ? paymentEmailInput.value.trim() : '';
+                const rosterReleaseAnnouncementTextValue = rosterReleaseText
+                    ? rosterReleaseText.value.trim()
+                    : `Etransfer: ${paymentEmailValue || 'okosoff@outlook.com'} {spots} – You can still 'Join Game', message Phan after joining.`;
                 const announcementImages = window.announcementImageData ? [window.announcementImageData] : [];
 
                 try {
@@ -7526,6 +7539,7 @@ Continue?`;
                             sessionToken,
                             announcementEnabled: checkboxEnabled,
                             announcementText: announcementTextValue,
+                            rosterReleaseAnnouncementText: rosterReleaseAnnouncementTextValue,
                             paymentEmail: paymentEmailValue,
                             announcementImages
                         })
