@@ -1005,6 +1005,20 @@
             cursor: pointer;
         }
 
+
+        .announcement-spots {
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .announcement-spots.available {
+            color: #2e7d32;
+        }
+
+        .announcement-spots.full {
+            color: #c62828;
+        }
+
         .announcement-copy-hint {
             display: block;
             margin-top: 6px;
@@ -2736,21 +2750,14 @@ function updateCalculatedRating() {
             const bulletin = document.getElementById('announcementBulletin');
             const textEl = document.getElementById('announcementText');
             const thumbEl = document.getElementById('announcementThumb');
-            const hintEl = document.getElementById('announcementCopyHint');
             if (!bulletin || !textEl || !thumbEl) return;
 
             const enabled = !!data.announcementEnabled;
-            let text = (data.announcementText || '').trim();
+            const rawText = (data.announcementText || '').trim();
             const images = Array.isArray(data.announcementImages) ? data.announcementImages : [];
             const image = images.length ? String(images[0] || '').trim() : '';
             const email = String(data.paymentEmail || '').trim();
-            const shouldShow = enabled && (!!text || !!image);
-
-            const escapeHtml = (value) => String(value || '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/\n/g, '<br>');
+            const shouldShow = enabled && (!!rawText || !!image);
 
             if (!shouldShow) {
                 bulletin.classList.remove('active');
@@ -2759,30 +2766,42 @@ function updateCalculatedRating() {
                 textEl.removeAttribute('role');
                 thumbEl.src = '';
                 thumbEl.classList.remove('visible');
-                if (hintEl) hintEl.style.display = 'none';
                 return;
             }
 
-            // Remove the dash before the join-game sentence while keeping your custom wording intact.
-            text = text.replace(/\s+[–—-]\s+(You can still)/i, ' $1');
-            text = text.replace(/^\s*[–—-]\s+/, '');
+            const escapeHtml = (value) => String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
 
-            const spots = Number(data.playerSpotsRemaining);
-            const spotsText = Number.isFinite(spots) && spots > 0
-                ? `${spots} spot${spots === 1 ? '' : 's'} left`
-                : 'FULL';
-            const spotsClass = Number.isFinite(spots) && spots > 0 ? 'available' : 'full';
-            const spotsHtml = `<strong class="announcement-spots ${spotsClass}">${escapeHtml(spotsText)}</strong>`;
+            const spots = Number(data.playerSpotsRemaining ?? data.spotsRemaining ?? 0);
+            const hasSpots = Number.isFinite(spots) && spots > 0;
+            const spotsText = hasSpots ? `${spots} spot${spots === 1 ? '' : 's'} left` : 'FULL';
+            const spotsClass = hasSpots ? 'available' : 'full';
+            const spotsToken = '%%ANNOUNCEMENT_SPOTS_TOKEN%%';
 
-            let html = escapeHtml(text).replace(/\{spots\}/gi, spotsHtml);
+            let text = rawText
+                .replace(/\s+[–—-]\s+(You can still ['’‘"]?Join Game['’‘"]?, message Phan after joining\.)/i, ' $1')
+                .replace(/^[–—-]\s+(You can still ['’‘"]?Join Game['’‘"]?, message Phan after joining\.)/im, '$1');
+            if (text.includes('{spots}')) {
+                text = text.split('{spots}').join(spotsToken);
+            }
+
+            let html = escapeHtml(text).split(spotsToken).join(
+                `<strong class="announcement-spots ${spotsClass}">${escapeHtml(spotsText)}</strong>`
+            );
 
             if (email) {
-                const safeEmail = escapeHtml(email);
-                const emailRegex = new RegExp(safeEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-                html = html.replace(emailRegex, `<span class="announcement-copy-email" data-copy-payment-email="${safeEmail}">${safeEmail}</span>`);
+                const escapedEmail = escapeHtml(email);
+                const emailRegex = new RegExp(escapedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+                html = html.replace(emailRegex, (matchedEmail) =>
+                    `<span class="announcement-copy-email" data-copy-payment-email="${matchedEmail}">${matchedEmail}</span>`
+                );
             }
 
             textEl.innerHTML = html || 'Attention';
+
             const copyTarget = textEl.querySelector('[data-copy-payment-email]');
             if (copyTarget) {
                 copyTarget.addEventListener('click', (event) => {
@@ -2791,7 +2810,6 @@ function updateCalculatedRating() {
                     copyTextToClipboard(email);
                 });
             }
-            if (hintEl) hintEl.style.display = 'none';
 
             if (image) {
                 thumbEl.src = image;

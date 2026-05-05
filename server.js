@@ -711,9 +711,24 @@ function getWeeklyAutoAddPlayers(dayName = getGameDayName()) {
 
 function buildRosterReleasePaymentAnnouncement() {
     const email = String(paymentEmail || '').trim();
-    return email
-        ? `Please E-transfer to ${email} or cash. 3-hour cancel window. No-show owes. Contact Phan to join if spots are available.`
-        : 'Please E-Transfer or cash. 3-hour cancel window. No-show owes. Contact Phan to join if spots are available.';
+    const emailLine = email ? `Etransfer: ${email}` : 'Etransfer:';
+    return `${emailLine} {spots} – You can still 'Join Game', message Phan after joining.`;
+}
+
+function isLegacyAutoRosterAnnouncement(text = '') {
+    const value = String(text || '').trim();
+    if (!value) return true;
+    return (
+        /Please\s+E-?transfer/i.test(value) ||
+        /3-hour\s+cancel\s+window/i.test(value) ||
+        /Contact\s+Phan\s+to\s+join\s+if\s+spots\s+are\s+available/i.test(value) ||
+        /You\s+can\s+['’‘"]?Join Game['’‘"]?\s+if\s+spots\s+are\s+available/i.test(value)
+    );
+}
+
+function getRosterReleaseAnnouncementText() {
+    const current = String(announcementText || '').trim();
+    return isLegacyAutoRosterAnnouncement(current) ? buildRosterReleasePaymentAnnouncement() : current;
 }
 
 function clearAnnouncementState() {
@@ -780,7 +795,7 @@ let customTitle = `Phan's ${getGameDayName()} Hockey`;
 let announcementEnabled = false;
 let announcementText = '';
 let announcementImages = [];
-let paymentEmail = String(process.env.PAYMENT_EMAIL || '').trim();
+let paymentEmail = String(process.env.PAYMENT_EMAIL || 'okosoff@outlook.com').trim();
 
 // ============================================
 // END NEW CONFIGURATION SECTION
@@ -1472,7 +1487,7 @@ async function autoReleaseRoster() {
         resetArmed = true;
 
         announcementEnabled = true;
-        announcementText = buildRosterReleasePaymentAnnouncement();
+        announcementText = getRosterReleaseAnnouncementText();
 
         currentWeekData = {
             weekNumber: week,
@@ -6574,7 +6589,7 @@ app.post('/api/admin/release-roster', async (req, res) => {
             resetArmed = true;
             syncScheduledActionRunMarker(rosterReleaseSchedule.at, 'release', etTime);
             announcementEnabled = true;
-            announcementText = buildRosterReleasePaymentAnnouncement();
+            announcementText = getRosterReleaseAnnouncementText();
             currentWeekData = { weekNumber: week, year, releaseDate: new Date().toISOString(), rosterReleaseTime: Date.now(), whiteTeam: teams.whiteTeam, darkTeam: teams.darkTeam };
         }, { week, year });
         await saveWeekHistory(year, week, teams.whiteTeam, teams.darkTeam);
