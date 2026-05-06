@@ -2046,7 +2046,7 @@ button {
 }
 .compact-announcement-control .announcement-compact-grid{
     display:grid;
-    grid-template-columns:1fr 1fr 0.85fr;
+    grid-template-columns:1fr 1fr;
     gap:12px;
     align-items:start;
 }
@@ -3914,21 +3914,18 @@ th, td{padding:2px 3px !important;}
 
             <div class="announcement-compact-grid">
                 <div class="message-box message-box-main">
-                    <label for="announcementText">Message Announcement</label>
-                    <textarea id="announcementText" rows="4" placeholder="Type announcement..."></textarea>
+                    <label for="announcementText">General Announcement</label>
+                    <textarea id="announcementText" rows="5" placeholder="Optional general announcement before roster release..."></textarea>
                 </div>
 
                 <div class="message-box message-box-main">
-                    <label for="rosterReleaseAnnouncementText">Roster Release Announcement</label>
-                    <textarea id="rosterReleaseAnnouncementText" rows="4" placeholder="Etransfer: okosoff@outlook.com {spots} – You can still 'Join Game', message Phan after joining."></textarea>
+                    <label for="rosterReleaseAnnouncementText">Roster Release Auto-Message</label>
+                    <textarea id="rosterReleaseAnnouncementText" rows="5" placeholder="Etransfer: okosoff@outlook.com
+{spots}
+You can still 'Join Game', message Phan after joining."></textarea>
                 </div>
 
                 <div class="announcement-side-stack">
-                    <div class="message-box">
-                        <label for="paymentEmail">E-transfer Email</label>
-                        <input type="email" id="paymentEmail" placeholder="Enter payment email">
-                    </div>
-
                     <div class="message-box">
                         <label for="announcementImageUpload">Upload Image</label>
                         <input type="file" id="announcementImageUpload" accept="image/*">
@@ -5377,7 +5374,6 @@ th, td{padding:2px 3px !important;}
                 const announcementStatus = document.getElementById('announcementStatus');
                 const announcementText = document.getElementById('announcementText');
                 const rosterReleaseAnnouncementText = document.getElementById('rosterReleaseAnnouncementText');
-                const paymentEmail = document.getElementById('paymentEmail');
                 const announcementImagePreview = document.getElementById('announcementImagePreview');
 
                 updateAnnouncementToggleUI(!!data.announcementEnabled);
@@ -5386,10 +5382,9 @@ th, td{padding:2px 3px !important;}
                     announcementText.value = data.announcementText || '';
                 }
                 if (rosterReleaseAnnouncementText) {
-                    rosterReleaseAnnouncementText.value = data.rosterReleaseAnnouncementText || `Etransfer: ${data.paymentEmail || 'okosoff@outlook.com'} {spots} – You can still 'Join Game', message Phan after joining.`;
-                }
-                if (paymentEmail) {
-                    paymentEmail.value = data.paymentEmail || '';
+                    rosterReleaseAnnouncementText.value = data.rosterReleaseAnnouncementText || `Etransfer: okosoff@outlook.com
+{spots}
+You can still 'Join Game', message Phan after joining.`;
                 }
                 if (announcementImagePreview) {
                     const firstImage = Array.isArray(data.announcementImages) && data.announcementImages.length ? data.announcementImages[0] : '';
@@ -7520,15 +7515,11 @@ Continue?`;
             return withBusyButton(button, 'Saving...', async () => {
                 const checkbox = document.getElementById('announcementCheckbox');
                 const text = document.getElementById('announcementText');
-                const rosterReleaseText = document.getElementById('rosterReleaseAnnouncementText');
-                const paymentEmailInput = document.getElementById('paymentEmail');
+                const rosterText = document.getElementById('rosterReleaseAnnouncementText');
                 const checkboxEnabled = !!(checkbox && checkbox.checked);
                 const enabled = checkboxEnabled;
                 const announcementTextValue = text ? text.value.trim() : '';
-                const paymentEmailValue = paymentEmailInput ? paymentEmailInput.value.trim() : '';
-                const rosterReleaseAnnouncementTextValue = rosterReleaseText
-                    ? rosterReleaseText.value.trim()
-                    : `Etransfer: ${paymentEmailValue || 'okosoff@outlook.com'} {spots} – You can still 'Join Game', message Phan after joining.`;
+                const rosterReleaseAnnouncementTextValue = rosterText ? rosterText.value.trim() : '';
                 const announcementImages = window.announcementImageData ? [window.announcementImageData] : [];
 
                 try {
@@ -7540,7 +7531,6 @@ Continue?`;
                             announcementEnabled: checkboxEnabled,
                             announcementText: announcementTextValue,
                             rosterReleaseAnnouncementText: rosterReleaseAnnouncementTextValue,
-                            paymentEmail: paymentEmailValue,
                             announcementImages
                         })
                     });
@@ -8473,9 +8463,6 @@ document.addEventListener('keydown', function(e){
 })();
 </script>
 
-</body>
-</html>
-
 <style id="admin-registered-pills-match-waitlist-mobile-v1">
 @media (max-width:600px){
     /* Match registered-player pills/badges to waitlist pill sizing on Android/mobile */
@@ -8535,3 +8522,77 @@ document.addEventListener('keydown', function(e){
     }
 }
 </style>
+
+<style id="admin-mobile-stabilizer-final-v1">
+/* Final mobile/admin stabilization: keeps spacing predictable and removes previous patch conflicts. */
+@media (max-width: 700px) {
+    body {
+        padding: 10px !important;
+        align-items: stretch !important;
+    }
+    .container {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 12px !important;
+        margin: 0 auto 12px auto !important;
+        border-radius: 12px !important;
+    }
+    .admin-panel {
+        overflow-x: hidden !important;
+    }
+    .control-box,
+    .payment-summary-box,
+    .roster-status,
+    .registered-players-box,
+    .waitlist-section,
+    .cancellations-section,
+    .snapshot-pro-section,
+    .game-setup-section,
+    .compact-announcement-control,
+    .announcement-control {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 0 12px 0 !important;
+        padding: 12px !important;
+        border-radius: 12px !important;
+    }
+    table {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-spacing: 0 !important;
+        table-layout: fixed !important;
+    }
+    th, td {
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: anywhere !important;
+        padding: 4px 3px !important;
+        font-size: 0.72rem !important;
+        vertical-align: middle !important;
+    }
+    #playerList .player-name-cell,
+    #waitlistList .player-name-cell {
+        align-items: flex-start !important;
+        text-align: left !important;
+        line-height: 1.08 !important;
+    }
+    .rating-wrap, .paid-wrap, .waitlist-action-wrap {
+        gap: 2px !important;
+        justify-content: center !important;
+    }
+    .message-grid,
+    .compact-announcement-control .announcement-compact-grid,
+    .game-setup-grid,
+    .form-row,
+    .payment-stats {
+        grid-template-columns: 1fr !important;
+    }
+    button, .control-btn, .logout-btn, .remove-btn, .promote-btn {
+        min-height: 30px !important;
+        line-height: 1.1 !important;
+    }
+}
+</style>
+
+</body>
+</html>

@@ -933,13 +933,13 @@
 
         .announcement-bulletin.active {
             display: flex;
-            align-items: center;
-            gap: 14px;
+            align-items: flex-start;
+            gap: 12px;
         }
 
         .announcement-thumb {
-            width: 96px;
-            height: 96px;
+            width: 88px;
+            height: 88px;
             object-fit: contain;
             border-radius: 10px;
             background: rgba(255,255,255,0.55);
@@ -951,23 +951,58 @@
             display: block;
         }
 
-        .announcement-copy strong {
+        .announcement-copy {
+            min-width: 0;
+            line-height: 1.28;
+        }
+
+        .announcement-copy > strong {
             display: block;
-            font-size: 1.05rem;
-            margin-bottom: 2px;
+            font-size: clamp(1rem, 4.2vw, 1.12rem);
+            margin: 0 0 6px 0;
             letter-spacing: 0.2px;
             color: #5a4306;
         }
 
-        .announcement-copy span {
+        .announcement-line {
+            display: block;
+            margin: 0;
+            padding: 0;
             color: #2f2410;
-            font-size: 1rem;
-            line-height: 1.4;
+            font-size: clamp(0.95rem, 3.7vw, 1.02rem);
+            line-height: 1.22;
         }
 
-        .announcement-copy > span,
-        .announcement-copy > strong {
+        .announcement-copy span {
+            color: #2f2410;
+            font-size: clamp(0.95rem, 3.7vw, 1.02rem);
+            line-height: 1.28;
+        }
+
+        #announcementText {
             display: block;
+        }
+
+        #announcementText br {
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            .announcement-bulletin {
+                padding: 12px 14px;
+                border-radius: 12px;
+                margin-bottom: 14px;
+            }
+            .announcement-bulletin.active {
+                gap: 10px;
+            }
+            .announcement-thumb.visible {
+                width: 64px;
+                height: 64px;
+            }
+            .announcement-copy {
+                line-height: 1.22;
+            }
         }
 
     
@@ -1008,14 +1043,13 @@
             font-weight: 800;
             text-decoration: underline;
             cursor: pointer;
-            display: inline !important;
         }
 
 
         .announcement-spots {
-            display: block;
             font-weight: 800;
             white-space: nowrap;
+            display: inline;
         }
 
         .announcement-spots.available {
@@ -1557,7 +1591,6 @@
         <div class="announcement-copy">
             <strong>Attention:</strong>
             <span id="announcementText">&nbsp;</span>
-            <small id="announcementCopyHint" class="announcement-copy-hint" style="display:none;"></small>
         </div>
     </div>
 
@@ -2709,7 +2742,7 @@ function updateCalculatedRating() {
                         const subBadge = player.promotedFromWaitlist
                             ? (isViewer
                                 ? '<span class="you-were-subbed-badge">LATE ADDITION</span>'
-                                : '<span class="subbed-in-badge">SUBBED IN</span>')
+                                : '<span class="subbed-in-badge">LATE ADDITION</span>')
                             : '';
                         const subNote = player.promotedFromWaitlist && player.subbedInForName
                             ? `<span class="subbed-in-note">for ${player.subbedInForName}</span>`
@@ -2735,22 +2768,12 @@ function updateCalculatedRating() {
                 return false;
             }
         }
-
-
-
         function copyTextToClipboard(text) {
             const value = String(text || '').trim();
             if (!value) return;
 
-            const onCopied = () => {
-                const hintEl = document.getElementById('announcementCopyHint');
-                if (!hintEl) return;
-                hintEl.textContent = '';
-                hintEl.style.display = 'none';
-            };
-
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(value).then(onCopied).catch(() => {
+                navigator.clipboard.writeText(value).catch(() => {
                     window.prompt('Copy payment email:', value);
                 });
                 return;
@@ -2763,15 +2786,17 @@ function updateCalculatedRating() {
             const bulletin = document.getElementById('announcementBulletin');
             const textEl = document.getElementById('announcementText');
             const thumbEl = document.getElementById('announcementThumb');
-            const hintEl = document.getElementById('announcementCopyHint');
             if (!bulletin || !textEl || !thumbEl) return;
 
-            const enabled = !!data.announcementEnabled;
-            const rawText = (data.announcementText || '').trim();
+            const isRosterReleased = !!data.rosterReleased;
+            const generalEnabled = !!data.announcementEnabled;
+            const generalText = String(data.announcementText || '').trim();
+            const rosterText = String(data.rosterReleaseAnnouncementText || '').trim();
+            const defaultRosterText = "Etransfer: okosoff@outlook.com\n{spots}\nYou can still 'Join Game', message Phan after joining.";
+            const rawText = isRosterReleased ? (rosterText || defaultRosterText) : generalText;
             const images = Array.isArray(data.announcementImages) ? data.announcementImages : [];
-            const image = images.length ? String(images[0] || '').trim() : '';
-            const email = String(data.paymentEmail || '').trim();
-            const shouldShow = enabled && (!!rawText || !!image);
+            const image = (!isRosterReleased && images.length) ? String(images[0] || '').trim() : '';
+            const shouldShow = isRosterReleased ? !!rawText : (generalEnabled && (!!rawText || !!image));
 
             if (!shouldShow) {
                 bulletin.classList.remove('active');
@@ -2780,10 +2805,6 @@ function updateCalculatedRating() {
                 textEl.removeAttribute('role');
                 thumbEl.src = '';
                 thumbEl.classList.remove('visible');
-                if (hintEl) {
-                    hintEl.style.display = 'none';
-                    hintEl.textContent = 'Tap email to copy';
-                }
                 return;
             }
 
@@ -2799,63 +2820,47 @@ function updateCalculatedRating() {
             const spotsClass = hasSpots ? 'available' : 'full';
             const spotsToken = '%%ANNOUNCEMENT_SPOTS_TOKEN%%';
 
-            let text = rawText;
-            if (text.includes('{spots}')) {
-                text = text.split('{spots}').join(spotsToken);
-            }
+            let text = rawText
+                .replace(/\r?\n/g, '\n')
+                .replace(/\n{2,}/g, '\n')
+                .trim()
+                .split('{spots}').join(spotsToken);
+            const wrapEmails = (safeLine) => safeLine.replace(
+                /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
+                (email) => `<span class="announcement-copy-email" data-copy-email="${email}" role="button" tabindex="0" title="Copy email">${email}</span>`
+            );
 
-            let html = '';
-
-            if (/^\s*Etransfer:/i.test(rawText)) {
-                const emailMatch = rawText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-                const displayEmail = email || (emailMatch ? emailMatch[0] : '');
-
-                let messageLine = rawText;
-                messageLine = messageLine.replace(/^\s*Etransfer:\s*/i, '').trim();
-                if (displayEmail) {
-                    messageLine = messageLine.replace(new RegExp(displayEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').trim();
-                }
-                messageLine = messageLine.replace(/\{spots\}/gi, '').trim();
-                messageLine = messageLine.replace(/^[-–—()\s]+/, '').replace(/[()\s]+$/g, '').trim();
-                messageLine = messageLine || "You can still 'Join Game', message Phan after joining.";
-
-                const emailLine = displayEmail
-                    ? `Etransfer: <span class="announcement-copy-email" data-copy-payment-email="${escapeHtml(displayEmail)}">${escapeHtml(displayEmail)}</span>`
-                    : 'Etransfer:';
-
-                html = `
-                    <span>${emailLine}</span>
-                    <strong class="announcement-spots ${spotsClass}">${escapeHtml(spotsText)}</strong>
-                    <span>${escapeHtml(messageLine)}</span>
-                `;
-            } else {
-                html = escapeHtml(text).split(spotsToken).join(
-                    `<strong class="announcement-spots ${spotsClass}">${escapeHtml(spotsText)}</strong>`
-                );
-
-                if (email) {
-                    const escapedEmail = escapeHtml(email);
-                    const emailRegex = new RegExp(escapedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-                    html = html.replace(emailRegex, (matchedEmail) =>
-                        `<span class="announcement-copy-email" data-copy-payment-email="${matchedEmail}">${matchedEmail}</span>`
-                    );
-                }
-            }
+            const html = text
+                .split('\n')
+                .map((line) => {
+                    let safeLine = wrapEmails(escapeHtml(line));
+                    safeLine = safeLine
+                        .split(spotsToken)
+                        .join(`<span class="announcement-spots ${spotsClass}">${escapeHtml(spotsText)}</span>`);
+                    return `<div class="announcement-line">${safeLine || '&nbsp;'}</div>`;
+                })
+                .join('');
 
             textEl.innerHTML = html || 'Attention';
-            const copyTarget = textEl.querySelector('[data-copy-payment-email]');
-            if (copyTarget) {
-                copyTarget.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    copyTextToClipboard(copyTarget.getAttribute('data-copy-payment-email') || email);
-                });
-            }
 
-            if (hintEl) {
-                hintEl.style.display = 'none';
-                hintEl.textContent = '';
-            }
+            const handleEmailCopy = (event) => {
+                const target = event.target && event.target.closest
+                    ? event.target.closest('.announcement-copy-email')
+                    : null;
+                if (!target) return;
+                copyTextToClipboard(target.getAttribute('data-copy-email') || target.textContent || '');
+            };
+            textEl.onclick = handleEmailCopy;
+            textEl.onkeydown = (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    const target = event.target && event.target.closest
+                        ? event.target.closest('.announcement-copy-email')
+                        : null;
+                    if (!target) return;
+                    event.preventDefault();
+                    copyTextToClipboard(target.getAttribute('data-copy-email') || target.textContent || '');
+                }
+            };
 
             if (image) {
                 thumbEl.src = image;
