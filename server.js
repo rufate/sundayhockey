@@ -711,7 +711,7 @@ function getWeeklyAutoAddPlayers(dayName = getGameDayName()) {
 
 function buildRosterReleasePaymentAnnouncement() {
     const email = String(paymentEmail || '').trim() || 'okosoff@outlook.com';
-    return `Etransfer: ${email}\n{spots}\nYou can still 'Join Game', message Phan after joining.`;
+    return `Etransfer: ${email}\n{spots}\n{joinMessage}`;
 }
 
 function isLegacyAutoRosterAnnouncement(text = '') {

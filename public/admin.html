@@ -3922,7 +3922,7 @@ th, td{padding:2px 3px !important;}
                     <label for="rosterReleaseAnnouncementText">Roster Release Auto-Message</label>
                     <textarea id="rosterReleaseAnnouncementText" rows="5" placeholder="Etransfer: okosoff@outlook.com
 {spots}
-You can still 'Join Game', message Phan after joining."></textarea>
+{joinMessage}"></textarea>
                 </div>
 
                 <div class="announcement-side-stack">
@@ -5384,7 +5384,7 @@ You can still 'Join Game', message Phan after joining."></textarea>
                 if (rosterReleaseAnnouncementText) {
                     rosterReleaseAnnouncementText.value = data.rosterReleaseAnnouncementText || `Etransfer: okosoff@outlook.com
 {spots}
-You can still 'Join Game', message Phan after joining.`;
+{joinMessage}`;
                 }
                 if (announcementImagePreview) {
                     const firstImage = Array.isArray(data.announcementImages) && data.announcementImages.length ? data.announcementImages[0] : '';

@@ -2792,7 +2792,7 @@ function updateCalculatedRating() {
             const generalEnabled = !!data.announcementEnabled;
             const generalText = String(data.announcementText || '').trim();
             const rosterText = String(data.rosterReleaseAnnouncementText || '').trim();
-            const defaultRosterText = "Etransfer: okosoff@outlook.com\n{spots}\nYou can still 'Join Game', message Phan after joining.";
+            const defaultRosterText = "Etransfer: okosoff@outlook.com\n{spots}\n{joinMessage}";
             const rawText = isRosterReleased ? (rosterText || defaultRosterText) : generalText;
             const images = Array.isArray(data.announcementImages) ? data.announcementImages : [];
             const image = (!isRosterReleased && images.length) ? String(images[0] || '').trim() : '';
@@ -2816,15 +2816,37 @@ function updateCalculatedRating() {
 
             const spots = Number(data.playerSpotsRemaining ?? data.spotsRemaining ?? 0);
             const hasSpots = Number.isFinite(spots) && spots > 0;
-            const spotsText = hasSpots ? `${spots} spot${spots === 1 ? '' : 's'} left` : 'FULL';
+            const spotsText = hasSpots ? `${spots} spot${spots === 1 ? '' : 's'} left` : '0 spots';
             const spotsClass = hasSpots ? 'available' : 'full';
             const spotsToken = '%%ANNOUNCEMENT_SPOTS_TOKEN%%';
 
             let text = rawText
                 .replace(/\r?\n/g, '\n')
                 .replace(/\n{2,}/g, '\n')
-                .trim()
-                .split('{spots}').join(spotsToken);
+                .trim();
+
+            // Roster-release announcement rule:
+            // - Always show the dynamic spot count as "0 spots" when full.
+            // - Show the join instruction conditionally based on available spots.
+            const joinMessage = hasSpots
+                ? "You can still 'Join Game', message Phan after joining."
+                : "You can still 'Join Game', you will be notified if someone cancels last minute.";
+
+            if (isRosterReleased) {
+                if (text.includes('{joinMessage}')) {
+                    text = text.split('{joinMessage}').join(joinMessage);
+                } else if (/You\s+can\s+still\s+['’‘"]?Join Game['’‘"]?/i.test(text)) {
+                    text = text
+                        .split('\n')
+                        .map(line => /You\s+can\s+still\s+['’‘"]?Join Game['’‘"]?/i.test(line) ? joinMessage : line)
+                        .join('\n')
+                        .trim();
+                } else {
+                    text = `${text}\n${joinMessage}`.trim();
+                }
+            }
+
+            text = text.split('{spots}').join(spotsToken);
             const wrapEmails = (safeLine) => safeLine.replace(
                 /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
                 (email) => `<span class="announcement-copy-email" data-copy-email="${email}" role="button" tabindex="0" title="Copy email">${email}</span>`
