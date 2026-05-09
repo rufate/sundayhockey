@@ -391,9 +391,9 @@ const AUTO_SCHEDULE_LOCK_MINUTE = 0;
 const AUTO_SCHEDULE_RESET_HOUR = 0;
 const AUTO_SCHEDULE_RESET_MINUTE = 0;
 
-// Reset catch-up: Render/external cron may not hit the exact minute, especially around midnight.
-// Use Eastern Time and allow a safe post-game catch-up window so the reset still runs once.
-const WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT = Math.max(1, Number(process.env.WEEKLY_RESET_CATCHUP_MINUTES || 720));
+// Weekly reset is intentionally exact-minute only.
+// This prevents restored snapshots or Render wake-ups from replaying a missed reset via catch-up.
+const WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT = 0;
 
 // Admin-configurable schedules (interpreted in America/New_York, repeats weekly)
 let signupLockSchedule = {
@@ -1063,19 +1063,17 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime(), resetAt = resetWee
         return { ok: false, reason: 'Blocked weekly reset because no reset schedule is configured.' };
     }
 
-    const maxCatchUpMinutes = WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT;
-    const minutesAfterScheduledReset = minutesSinceLatestWeeklyOccurrence(resetAt, etTime);
-    if (!Number.isFinite(minutesAfterScheduledReset) || minutesAfterScheduledReset < 0 || minutesAfterScheduledReset > maxCatchUpMinutes) {
+    if (!sameDowHourMinute(resetAt, getEtDowHourMinute(etTime))) {
         return {
             ok: false,
-            reason: `Blocked weekly reset because current ET time is outside the ${maxCatchUpMinutes}-minute catch-up window after the scheduled reset (${formatScheduleDowTime(resetAt)}).`
+            reason: `Blocked weekly reset because current ET time is not the exact scheduled reset minute (${formatScheduleDowTime(resetAt)}).`
         };
     }
 
-    if (resetCheck && !['exact_minute', 'catchup'].includes(resetCheck.reason)) {
+    if (resetCheck && resetCheck.reason !== 'exact_minute') {
         return {
             ok: false,
-            reason: `Blocked weekly reset because scheduler reason was ${resetCheck.reason || 'unknown'}.`
+            reason: `Blocked weekly reset because scheduler reason was ${resetCheck.reason || 'unknown'} instead of exact_minute.`
         };
     }
 
@@ -1594,23 +1592,8 @@ async function addAutoPlayers() {
 
 
 function checkMaintenanceModeSchedule() {
-    const etTime = getCurrentETTime();
-    const day = etTime.getDay();
-    const hour = etTime.getHours();
-    const minute = etTime.getMinutes();
-
-    if (day === 6 && hour === 0 && minute === 0 && maintenanceMode !== true) {
-        maintenanceMode = true;
-        saveData();
-        return true;
-    }
-
-    if (day === 6 && hour === 12 && minute === 0 && maintenanceMode !== false) {
-        maintenanceMode = false;
-        saveData();
-        return true;
-    }
-
+    // Auto maintenance schedule removed.
+    // Manual admin maintenance toggle remains active through /api/admin/update-app-settings.
     return false;
 }
 
@@ -1627,8 +1610,8 @@ async function checkWeeklyReset() {
         resetWeekSchedule.at,
         lastExactResetRunAt,
         etTime,
-        WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT,
-        { exactMinuteOnly: false }
+        0,
+        { exactMinuteOnly: true }
     );
     if (!resetCheck.shouldRun) return false;
 
@@ -4394,7 +4377,7 @@ app.get('/api/debug-time', (req, res) => {
     const etTime = getCurrentETTime();
     const shouldLock = shouldBeLocked();
     const resetCheck = resetWeekSchedule && resetWeekSchedule.at
-        ? shouldRunScheduledAction(resetWeekSchedule.at, lastExactResetRunAt, etTime, WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT, { exactMinuteOnly: false })
+        ? shouldRunScheduledAction(resetWeekSchedule.at, lastExactResetRunAt, etTime, 0, { exactMinuteOnly: true })
         : { shouldRun: false, reason: 'missing_schedule' };
     const resetSafety = resetWeekSchedule && resetWeekSchedule.at
         ? canSafelyRunWeeklyReset(etTime, resetWeekSchedule.at, resetCheck)
@@ -4417,7 +4400,8 @@ app.get('/api/debug-time', (req, res) => {
         signupLockSchedule,
         rosterReleaseSchedule,
         resetWeekSchedule,
-        resetCatchupMinutes: WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT,
+        resetCatchupMinutes: 0,
+        resetMode: 'exact_minute_only',
         resetCheck,
         resetSafety,
         requirePlayerCode: requirePlayerCode,
