@@ -1172,6 +1172,65 @@ function getCurrentOrNextOccurrenceEtParts(scheduleAt, etDate = getCurrentETTime
     return getNextOccurrenceEtParts(scheduleAt, etDate);
 }
 
+function etPartsToDatetimeLocal(parts) {
+    if (!parts) return '';
+    return `${String(parts.year).padStart(4, '0')}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}T${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`;
+}
+
+function addMinutesToEtParts(parts, minutesToAdd = 0) {
+    if (!parts || !Number.isFinite(Number(minutesToAdd))) return null;
+    const d = new Date(
+        Number(parts.year),
+        Number(parts.month) - 1,
+        Number(parts.day),
+        Number(parts.hour),
+        Number(parts.minute),
+        0,
+        0
+    );
+    d.setMinutes(d.getMinutes() + Number(minutesToAdd));
+    return {
+        year: d.getFullYear(),
+        month: d.getMonth() + 1,
+        day: d.getDate(),
+        hour: d.getHours(),
+        minute: d.getMinutes()
+    };
+}
+
+function getDynamicScheduleDatetimeLocalValues(etDate = getCurrentETTime()) {
+    const values = {
+        signupLockStartAt,
+        signupLockEndAt,
+        rosterReleaseAt,
+        resetWeekAt
+    };
+
+    if (signupLockSchedule && signupLockSchedule.enabled && signupLockSchedule.start && signupLockSchedule.end) {
+        const activeWindow = isNowInWindow(signupLockSchedule.start, signupLockSchedule.end, etDate);
+        const startParts = activeWindow
+            ? getLatestOccurrenceEtParts(signupLockSchedule.start, etDate)
+            : getCurrentOrNextOccurrenceEtParts(signupLockSchedule.start, etDate);
+        const lockMinutes = getForwardMinutesBetweenWeeklyPoints(signupLockSchedule.start, signupLockSchedule.end);
+        const endParts = startParts && Number.isFinite(lockMinutes)
+            ? addMinutesToEtParts(startParts, lockMinutes)
+            : getCurrentOrNextOccurrenceEtParts(signupLockSchedule.end, etDate);
+
+        values.signupLockStartAt = etPartsToDatetimeLocal(startParts);
+        values.signupLockEndAt = etPartsToDatetimeLocal(endParts);
+    }
+
+    if (rosterReleaseSchedule && rosterReleaseSchedule.enabled && rosterReleaseSchedule.at) {
+        values.rosterReleaseAt = etPartsToDatetimeLocal(getCurrentOrNextOccurrenceEtParts(rosterReleaseSchedule.at, etDate));
+    }
+
+    if (resetWeekSchedule && resetWeekSchedule.enabled && resetWeekSchedule.at) {
+        values.resetWeekAt = etPartsToDatetimeLocal(getCurrentOrNextOccurrenceEtParts(resetWeekSchedule.at, etDate));
+    }
+
+    return values;
+}
+
 function getLatestOccurrenceEtParts(scheduleAt, etDate = getCurrentETTime()) {
     if (!scheduleAt) return null;
 
@@ -4628,6 +4687,7 @@ app.get('/api/status', (req, res) => {
     const etTime = getCurrentETTime();
     const { week, year } = getWeekNumber(etTime);
     const signupMessageData = getSignupOpenMessageData();
+    const dynamicScheduleDates = getDynamicScheduleDatetimeLocalValues(etTime);
     
     const playerCount = getPlayerCount();
     const goalieCount = getGoalieCount();
@@ -4699,6 +4759,14 @@ app.get('/api/status', (req, res) => {
         rosterReleaseLabel: signupMessageData.rosterReleaseLabel,
         rosterReleaseHeadline: signupMessageData.rosterReleaseHeadline,
         rosterReleaseLine: signupMessageData.rosterReleaseLine,
+        signupLockSchedule,
+        rosterReleaseSchedule,
+        resetWeekSchedule,
+        signupLockStartAt: dynamicScheduleDates.signupLockStartAt,
+        signupLockEndAt: dynamicScheduleDates.signupLockEndAt,
+        rosterReleaseAtLocal: dynamicScheduleDates.rosterReleaseAt,
+        resetWeekAt: dynamicScheduleDates.resetWeekAt,
+        scheduleMode,
         noShowPolicy: NO_SHOW_POLICY_TEXT,
         cancellationDeadlineLine: NO_SHOW_POLICY_TEXT
     });
@@ -6126,6 +6194,7 @@ app.post('/api/admin/settings', (req, res) => {
     }
     
     const lockStatus = checkAutoLock();
+    const dynamicScheduleDates = getDynamicScheduleDatetimeLocalValues();
     
     res.json({
         code: playerSignupCode,
@@ -6141,10 +6210,14 @@ app.post('/api/admin/settings', (req, res) => {
         signupLockSchedule,
         rosterReleaseSchedule,
         resetWeekSchedule,
-        signupLockStartAt,
-        signupLockEndAt,
-        rosterReleaseAt,
-        resetWeekAt,
+        signupLockStartAt: dynamicScheduleDates.signupLockStartAt,
+        signupLockEndAt: dynamicScheduleDates.signupLockEndAt,
+        rosterReleaseAt: dynamicScheduleDates.rosterReleaseAt,
+        resetWeekAt: dynamicScheduleDates.resetWeekAt,
+        storedSignupLockStartAt: signupLockStartAt,
+        storedSignupLockEndAt: signupLockEndAt,
+        storedRosterReleaseAt: rosterReleaseAt,
+        storedResetWeekAt: resetWeekAt,
         scheduleMode,
         customSignupCode,
         usingCustomSignupCode: /^\d{4}$/.test(String(customSignupCode || '').trim()),
@@ -6275,16 +6348,21 @@ app.post('/api/admin/update-schedules', async (req, res) => {
         return res.status(500).json({ error: 'Failed to save schedules safely' });
     }
     const lockStatus = checkAutoLock();
+    const dynamicScheduleDates = getDynamicScheduleDatetimeLocalValues();
 
     res.json({
         success: true,
         signupLockSchedule,
         rosterReleaseSchedule,
         resetWeekSchedule,
-        signupLockStartAt,
-        signupLockEndAt,
-        rosterReleaseAt,
-        resetWeekAt,
+        signupLockStartAt: dynamicScheduleDates.signupLockStartAt,
+        signupLockEndAt: dynamicScheduleDates.signupLockEndAt,
+        rosterReleaseAt: dynamicScheduleDates.rosterReleaseAt,
+        resetWeekAt: dynamicScheduleDates.resetWeekAt,
+        storedSignupLockStartAt: signupLockStartAt,
+        storedSignupLockEndAt: signupLockEndAt,
+        storedRosterReleaseAt: rosterReleaseAt,
+        storedResetWeekAt: resetWeekAt,
         scheduleMode,
         resetArmed,
         requireCode: requirePlayerCode,
@@ -6336,6 +6414,8 @@ app.post('/api/admin/reset-schedule', async (req, res) => {
         return res.status(500).json({ error: 'Failed to restore auto schedule safely' });
     }
     
+    const dynamicScheduleDates = getDynamicScheduleDatetimeLocalValues();
+
     res.json({ 
         success: true, 
         requireCode: requirePlayerCode,
@@ -6345,10 +6425,14 @@ app.post('/api/admin/reset-schedule', async (req, res) => {
         signupLockSchedule,
         rosterReleaseSchedule,
         resetWeekSchedule,
-        signupLockStartAt,
-        signupLockEndAt,
-        rosterReleaseAt,
-        resetWeekAt,
+        signupLockStartAt: dynamicScheduleDates.signupLockStartAt,
+        signupLockEndAt: dynamicScheduleDates.signupLockEndAt,
+        rosterReleaseAt: dynamicScheduleDates.rosterReleaseAt,
+        resetWeekAt: dynamicScheduleDates.resetWeekAt,
+        storedSignupLockStartAt: signupLockStartAt,
+        storedSignupLockEndAt: signupLockEndAt,
+        storedRosterReleaseAt: rosterReleaseAt,
+        storedResetWeekAt: resetWeekAt,
         message: "Auto-schedule restored"
     });
 });
