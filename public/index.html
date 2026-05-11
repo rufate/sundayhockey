@@ -2735,11 +2735,12 @@ function updateCalculatedRating() {
                     if (!Array.isArray(team)) return;
                     team.forEach(player => {
                         const li = document.createElement('li');
-                        li.className = 'player-item' + (player.isGoalie ? ' goalie' : '') + (player.cancelled ? ' cancelled-player' : '') + (player.promotedFromWaitlist ? ' promoted-from-waitlist' : '');
+                        const isLateAddition = !!(player.isLateAddition || player.promotedFromWaitlist || player.lateAddedAfterRelease);
+                        li.className = 'player-item' + (player.isGoalie ? ' goalie' : '') + (player.cancelled ? ' cancelled-player' : '') + (isLateAddition ? ' promoted-from-waitlist' : '');
                         const goalieBadge = player.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
                         const cancelBadge = player.cancelled ? '<span class="cancel-badge">CANCEL</span>' : '';
                         const isViewer = isKnownViewerPlayer(player);
-                        const subBadge = player.promotedFromWaitlist
+                        const subBadge = isLateAddition
                             ? (isViewer
                                 ? '<span class="you-were-subbed-badge">LATE ADDITION</span>'
                                 : '<span class="subbed-in-badge">LATE ADDITION</span>')
@@ -3047,7 +3048,8 @@ function updateCalculatedRating() {
         }
 
         function markPromotedRosterEntry(li, player) {
-            if (!li || !player || !player.promotedFromWaitlist || player.id == null) return;
+            const isLateAddition = !!(player && (player.isLateAddition || player.promotedFromWaitlist || player.lateAddedAfterRelease));
+            if (!li || !player || !isLateAddition || player.id == null) return;
             const playerId = String(player.id);
             if (seenPromotedRosterIds[playerId]) return;
             seenPromotedRosterIds[playerId] = true;

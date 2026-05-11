@@ -284,7 +284,84 @@
             .container { padding: 20px; }
             .teams-container { grid-template-columns: 1fr; }
         }
-    </style>
+    
+        .roster-cancel-btn {
+            width: auto;
+            margin: 0 0 0 auto;
+            padding: 4px 8px;
+            background: #ff4444;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .roster-cancel-btn:hover { background: #ff6666; }
+
+        .roster-cancel-note {
+            background: rgba(255, 152, 0, 0.14);
+            border: 1px solid rgba(255, 152, 0, 0.55);
+            color: #ffd18a;
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin: 12px 0;
+            font-size: 0.88rem;
+            text-align: center;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.78);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        .modal-content {
+            background: var(--card-bg);
+            border: 2px solid #ff4444;
+            border-radius: 15px;
+            padding: 24px;
+            max-width: 420px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+        }
+
+        .modal-content h3 { color: #ff4444; margin: 0 0 12px 0; }
+        .modal-content p { color: #ccc; margin: 0 0 14px 0; font-size: 0.92rem; }
+        .modal-content input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            background: #3d3d3d;
+            border: 1px solid #555;
+            color: white;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        .modal-buttons { display: flex; gap: 10px; }
+        .modal-buttons button { flex: 1; margin: 0; padding: 12px; font-size: 0.95rem; }
+        .modal-buttons .confirm-cancel { background: #ff4444; }
+        .modal-buttons .abort-btn { background: #555; }
+        .cancel-error { color: #ff8888; font-size: 0.86rem; margin-top: 10px; display: none; }
+        .cancel-success { color: #4CAF50; font-size: 0.9rem; margin-top: 12px; padding: 10px; background: rgba(76,175,80,0.1); border-radius: 8px; display: none; }
+
+        @media (max-width: 600px) {
+            .player-item { gap: 8px; }
+            .roster-cancel-btn { padding: 3px 6px; font-size: 0.64rem; }
+            .modal-content { padding: 20px; }
+        }
+</style>
 </head>
 <body>
 
@@ -306,6 +383,10 @@
             <div class="check-back-message" id="checkBackMessage" style="display:none;">
                 <strong id="checkBackStrong">📅 Check back at the scheduled roster release time for team rosters</strong><br>
                 <span id="checkBackDetail">Countdown will appear once a roster release time is scheduled.</span>
+            </div>
+
+            <div class="roster-cancel-note" id="rosterCancelNote" style="display:none;">
+                Players may self-cancel after roster release until the 3-hour cancellation deadline.
             </div>
 
             <div id="teamsDisplay" style="display:none;">
@@ -338,12 +419,30 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="cancelModal">
+        <div class="modal-content">
+            <h3>Cancel Roster Spot</h3>
+            <p>Enter the same 10-digit phone number used when you registered.</p>
+            <p style="color:#ffcc80; font-weight:bold;">This is allowed only before the 3-hour cancellation deadline.</p>
+            <input type="tel" id="cancelPhoneInput" placeholder="(555) 555-5555" maxlength="14">
+            <div class="cancel-error" id="cancelError"></div>
+            <div class="cancel-success" id="cancelSuccess"></div>
+            <div class="modal-buttons">
+                <button class="abort-btn" id="abortCancelBtn" type="button">Keep Spot</button>
+                <button class="confirm-cancel" id="confirmCancelBtn" type="button">Confirm Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_URL = window.location.origin;
 
         let scheduleInfo = null;
         let rosterReleaseAtIso = null;
         let countdownInterval = null;
+        let playerToCancel = null;
+        let cancelModalAwaitingContinue = false;
+        let cancelModalAfterCloseAction = null;
 
         function formatCountdown(msRemaining) {
             if (!Number.isFinite(msRemaining) || msRemaining <= 0) return 'Roster release time has arrived.';
@@ -463,12 +562,18 @@
                     document.getElementById('pendingNotice').style.display = 'block';
                     document.getElementById('checkBackMessage').style.display = 'block';
                     document.getElementById('teamsDisplay').style.display = 'none';
+                    const cancelNote = document.getElementById('rosterCancelNote');
+                    if (cancelNote) cancelNote.style.display = 'none';
                     return;
                 }
 
                 document.getElementById('pendingNotice').style.display = 'none';
                 document.getElementById('checkBackMessage').style.display = 'none';
                 document.getElementById('teamsDisplay').style.display = 'block';
+                const cancelNote = document.getElementById('rosterCancelNote');
+                if (cancelNote) {
+                    cancelNote.style.display = data.cancellationAllowedNow ? 'block' : 'none';
+                }
 
                 document.getElementById('whiteCount').innerText = Number.isFinite(data.whiteActiveCount) ? data.whiteActiveCount : data.whiteTeam.length;
                 document.getElementById('darkCount').innerText = Number.isFinite(data.darkActiveCount) ? data.darkActiveCount : data.darkTeam.length;
@@ -484,9 +589,15 @@
                     const lateCancelBadge = player.lateCancelOwes ? '<span class="late-cancel-badge">CANCEL</span>' : '';
                     const lateAddedBadge = (player.isLateAddition || player.promotedFromWaitlist || player.lateAddedAfterRelease) ? '<span class="late-added-badge">LATE ADDITION</span>' : '';
                     
+                    const cancelButton = player.canCancel
+                        ? `<button class="roster-cancel-btn" type="button">Cancel</button>`
+                        : '';
                     li.innerHTML = `
-                        <span class="player-name">${player.firstName} ${player.lastName} ${goalieBadge} ${lateCancelBadge} ${lateAddedBadge}</span>
+                        <span class="player-name">${escapeHtml(player.firstName)} ${escapeHtml(player.lastName)} ${goalieBadge} ${lateCancelBadge} ${lateAddedBadge}</span>
+                        ${cancelButton}
                     `;
+                    const cancelBtn = li.querySelector('.roster-cancel-btn');
+                    if (cancelBtn) cancelBtn.addEventListener('click', () => openCancelModal(player.id, player.firstName, player.lastName));
                     whiteList.appendChild(li);
                 });
 
@@ -501,9 +612,15 @@
                     const lateCancelBadge = player.lateCancelOwes ? '<span class="late-cancel-badge">CANCEL</span>' : '';
                     const lateAddedBadge = (player.isLateAddition || player.promotedFromWaitlist || player.lateAddedAfterRelease) ? '<span class="late-added-badge">LATE ADDITION</span>' : '';
                     
+                    const cancelButton = player.canCancel
+                        ? `<button class="roster-cancel-btn" type="button">Cancel</button>`
+                        : '';
                     li.innerHTML = `
-                        <span class="player-name">${player.firstName} ${player.lastName} ${goalieBadge} ${lateCancelBadge} ${lateAddedBadge}</span>
+                        <span class="player-name">${escapeHtml(player.firstName)} ${escapeHtml(player.lastName)} ${goalieBadge} ${lateCancelBadge} ${lateAddedBadge}</span>
+                        ${cancelButton}
                     `;
+                    const cancelBtn = li.querySelector('.roster-cancel-btn');
+                    if (cancelBtn) cancelBtn.addEventListener('click', () => openCancelModal(player.id, player.firstName, player.lastName));
                     darkList.appendChild(li);
                 });
 
@@ -511,6 +628,129 @@
                 console.error("Error loading roster", err);
             }
         }
+
+
+        function normalizePhoneDigits(value) {
+            let digits = String(value || '').replace(/\D/g, '');
+            if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
+            return digits.slice(0, 10);
+        }
+
+        function formatPhoneInputValue(value) {
+            const digits = normalizePhoneDigits(value);
+            if (!digits) return '';
+            if (digits.length <= 3) return `(${digits}`;
+            if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+            return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+        }
+
+        function normalizeCancelPhoneInput() {
+            const input = document.getElementById('cancelPhoneInput');
+            if (!input) return '';
+            const digits = normalizePhoneDigits(input.value);
+            input.value = formatPhoneInputValue(digits);
+            return digits;
+        }
+
+        function resetCancelModalButtons() {
+            const abortBtn = document.getElementById('abortCancelBtn');
+            const confirmBtn = document.getElementById('confirmCancelBtn');
+            if (abortBtn) abortBtn.style.display = '';
+            if (confirmBtn) confirmBtn.textContent = 'Confirm Cancel';
+        }
+
+        function openCancelModal(playerId, firstName, lastName) {
+            playerToCancel = { id: playerId, firstName, lastName };
+            cancelModalAwaitingContinue = false;
+            cancelModalAfterCloseAction = null;
+            document.getElementById('cancelPhoneInput').value = '';
+            document.getElementById('cancelPhoneInput').disabled = false;
+            document.getElementById('cancelError').style.display = 'none';
+            document.getElementById('cancelSuccess').style.display = 'none';
+            resetCancelModalButtons();
+            document.getElementById('cancelModal').classList.add('active');
+            document.getElementById('cancelPhoneInput').focus();
+        }
+
+        function closeCancelModal() {
+            document.getElementById('cancelModal').classList.remove('active');
+            document.getElementById('cancelPhoneInput').disabled = false;
+            resetCancelModalButtons();
+            const afterCloseAction = cancelModalAfterCloseAction;
+            cancelModalAwaitingContinue = false;
+            cancelModalAfterCloseAction = null;
+            playerToCancel = null;
+            if (typeof afterCloseAction === 'function') afterCloseAction();
+        }
+
+        async function confirmCancel() {
+            if (!playerToCancel) return;
+            if (cancelModalAwaitingContinue) {
+                closeCancelModal();
+                return;
+            }
+
+            const phoneDigits = normalizeCancelPhoneInput();
+            const phone = formatPhoneInputValue(phoneDigits);
+            const errorDiv = document.getElementById('cancelError');
+            const successDiv = document.getElementById('cancelSuccess');
+            const abortBtn = document.getElementById('abortCancelBtn');
+            const confirmBtn = document.getElementById('confirmCancelBtn');
+
+            if (phoneDigits.length !== 10) {
+                errorDiv.innerText = 'Phone number must be exactly 10 digits.';
+                errorDiv.style.display = 'block';
+                document.getElementById('cancelPhoneInput').focus();
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/api/cancel-registration`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ playerId: playerToCancel.id, phone })
+                });
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    errorDiv.style.display = 'none';
+                    let successMsg = data.lateCancel
+                        ? `✅ ${playerToCancel.firstName} ${playerToCancel.lastName}'s cancellation was recorded.<br><br>Late cancel / no-show owes.`
+                        : `✅ ${playerToCancel.firstName} ${playerToCancel.lastName}'s roster spot has been cancelled.`;
+                    if (data.promotedPlayer) {
+                        successMsg += `<br><br>🎉 ${data.promotedPlayer.firstName} ${data.promotedPlayer.lastName} has been promoted from the waitlist.`;
+                    }
+                    successMsg += '<br><br>Tap Continue.';
+                    successDiv.innerHTML = successMsg;
+                    successDiv.style.display = 'block';
+                    document.getElementById('cancelPhoneInput').disabled = true;
+                    if (abortBtn) abortBtn.style.display = 'none';
+                    if (confirmBtn) confirmBtn.textContent = 'Continue';
+                    cancelModalAwaitingContinue = true;
+                    cancelModalAfterCloseAction = () => loadRoster();
+                } else {
+                    errorDiv.innerText = data.error || 'Failed to cancel roster spot.';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (err) {
+                console.error('Cancel error:', err);
+                errorDiv.innerText = 'Network error. Please try again.';
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        const cancelPhoneInputEl = document.getElementById('cancelPhoneInput');
+        if (cancelPhoneInputEl) {
+            cancelPhoneInputEl.addEventListener('input', normalizeCancelPhoneInput);
+            cancelPhoneInputEl.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') confirmCancel();
+                if (e.key === 'Escape') closeCancelModal();
+            });
+        }
+        const abortCancelBtn = document.getElementById('abortCancelBtn');
+        const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+        if (abortCancelBtn) abortCancelBtn.addEventListener('click', closeCancelModal);
+        if (confirmCancelBtn) confirmCancelBtn.addEventListener('click', confirmCancel);
 
         loadRoster();
         setInterval(loadRoster, 60000);

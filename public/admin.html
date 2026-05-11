@@ -1785,6 +1785,9 @@ button {
 .compact-pay.is-paid{
     background:#2e7d32;
 }
+.compact-pay.is-pia{
+    background:#1565c0;
+}
 .compact-pay-btn{
     border:none;
     background:transparent;
@@ -1905,6 +1908,9 @@ button {
 }
 .payment-slider-save{
     background:#2e7d32 !important;
+}
+.payment-slider-pia{
+    background:#1565c0 !important;
 }
 </style>
 
@@ -6506,14 +6512,20 @@ Date: ${selectedGameDate}`);
 
                         let paidInput = '';
                         if (!hideAdminPaymentUi) {
-                            const isPaid = p.paidAmount && parseFloat(p.paidAmount) > 0;
-                            const compactAmount = isPaid
-                                ? parseFloat(p.paidAmount)
-                                : 15;
+                            const paymentStatus = String(p.paymentStatus || '').toLowerCase() === 'pia'
+                                ? 'pia'
+                                : (p.paidAmount && parseFloat(p.paidAmount) > 0 ? 'paid' : 'owes');
+                            const isPaid = paymentStatus === 'paid';
+                            const isPia = paymentStatus === 'pia';
+                            const compactAmount = isPia
+                                ? 0
+                                : (isPaid ? parseFloat(p.paidAmount) : 15);
+                            const compactLabel = isPia ? 'PIA' : (isPaid ? `$${compactAmount}` : 'OWES');
+                            const compactClass = isPia ? 'is-pia' : (isPaid ? 'is-paid' : 'is-unpaid');
                             paidInput = `
-                                <div class="compact-pay ${isPaid ? 'is-paid' : 'is-unpaid'}" data-player-id="${p.id}">
-                                    <button class="compact-pay-btn compact-pay-main" title="Tap to mark paid/unpaid. Tap again to change amount." onclick="compactPayToggle(${p.id})" data-amount="${compactAmount}">
-                                        $${compactAmount}
+                                <div class="compact-pay ${compactClass}" data-player-id="${p.id}" data-payment-status="${paymentStatus}">
+                                    <button class="compact-pay-btn compact-pay-main" title="Tap to mark paid/open payment options. PIA is paid in advance." onclick="compactPayToggle(${p.id})" data-amount="${compactAmount}">
+                                        ${compactLabel}
                                     </button>
                                 </div>
                             `;
@@ -6725,6 +6737,39 @@ Date: ${selectedGameDate}`);
             } catch (err) {
                 console.error("Update paid amount error:", err);
                 alert("Error: " + (err.message || "Failed to update payment"));
+                throw err;
+            }
+        }
+
+
+        async function updatePaymentStatus(playerId, status) {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/update-payment-status`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({
+                        sessionToken: sessionToken,
+                        playerId: playerId,
+                        status: status
+                    })
+                });
+
+                if (res.status === 401) {
+                    logout();
+                    throw new Error('Unauthorized');
+                }
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    document.getElementById('totalPaidDisplay').innerText = `($${data.totalPaid})`;
+                    return data;
+                } else {
+                    throw new Error(data.error || 'Failed to update payment status');
+                }
+            } catch (err) {
+                console.error("Update payment status error:", err);
+                alert("Error: " + (err.message || "Failed to update payment status"));
                 throw err;
             }
         }
@@ -8274,7 +8319,7 @@ async function compactPayToggle(playerId){
     const wrap = compactPayFind(playerId);
     if(!main || !wrap || wrap.dataset.busy === '1') return;
 
-    if(wrap.classList.contains('is-paid')){
+    if(wrap.classList.contains('is-paid') || wrap.classList.contains('is-pia')){
         openPaymentSlider(playerId);
         return;
     }
@@ -8282,11 +8327,41 @@ async function compactPayToggle(playerId){
     wrap.dataset.busy = '1';
     wrap.style.opacity = '0.7';
     try {
-        await updatePaidAmount(playerId, 15);
+        await updatePaymentStatus(playerId, 'paid');
         await loadData();
     } finally {
         delete wrap.dataset.busy;
         wrap.style.opacity = '';
+    }
+}
+
+async function markPaymentPia(){
+    if(activePaymentSliderPlayerId == null) return;
+    const playerId = activePaymentSliderPlayerId;
+    const wrap = compactPayFind(playerId);
+    if(wrap && wrap.dataset.busy === '1') return;
+    if(wrap){ wrap.dataset.busy = '1'; wrap.style.opacity = '0.7'; }
+    try {
+        await updatePaymentStatus(playerId, 'pia');
+        closePaymentSlider();
+        await loadData();
+    } finally {
+        if(wrap){ delete wrap.dataset.busy; wrap.style.opacity = ''; }
+    }
+}
+
+async function markPaymentOwes(){
+    if(activePaymentSliderPlayerId == null) return;
+    const playerId = activePaymentSliderPlayerId;
+    const wrap = compactPayFind(playerId);
+    if(wrap && wrap.dataset.busy === '1') return;
+    if(wrap){ wrap.dataset.busy = '1'; wrap.style.opacity = '0.7'; }
+    try {
+        await updatePaymentStatus(playerId, 'owes');
+        closePaymentSlider();
+        await loadData();
+    } finally {
+        if(wrap){ delete wrap.dataset.busy; wrap.style.opacity = ''; }
     }
 }
 document.addEventListener('keydown', function(e){
@@ -8312,7 +8387,8 @@ document.addEventListener('keydown', function(e){
             </div>
             <div class="payment-slider-actions">
                 <button type="button" class="payment-slider-cancel" onclick="closePaymentSlider()">Cancel</button>
-                <button type="button" class="payment-slider-clear" onclick="paymentSliderPreset(0)">Clear</button>
+                <button type="button" class="payment-slider-clear" onclick="markPaymentOwes()">OWES</button>
+                <button type="button" class="payment-slider-pia" onclick="markPaymentPia()">PIA</button>
                 <button type="button" class="payment-slider-save" onclick="savePaymentSlider()">Save</button>
             </div>
         </div>
