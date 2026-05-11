@@ -651,6 +651,74 @@ const DEFAULT_REGULAR_SKATERS_BY_DAY = {
 
 let regularSkatersByDay = JSON.parse(JSON.stringify(DEFAULT_REGULAR_SKATERS_BY_DAY));
 
+// Admin rating overrides are keyed by phone number when available.
+// This makes an admin-edited rating the durable source of truth for future signups/quick-return profiles.
+let playerRatingOverrides = {};
+
+function normalizePlayerRatingOverridesMap(input = {}) {
+    const normalized = {};
+    if (!input || typeof input !== 'object') return normalized;
+
+    for (const [rawKey, rawValue] of Object.entries(input)) {
+        const key = String(rawKey || '').trim().toLowerCase();
+        const rating = roundRating(rawValue && typeof rawValue === 'object' ? rawValue.rating : rawValue);
+        if (!key || !Number.isFinite(rating) || rating < 1 || rating > 10) continue;
+        normalized[key] = {
+            rating,
+            updatedAt: rawValue && rawValue.updatedAt ? String(rawValue.updatedAt) : new Date().toISOString(),
+            updatedBy: rawValue && rawValue.updatedBy ? String(rawValue.updatedBy) : 'admin'
+        };
+    }
+
+    return normalized;
+}
+
+function getPlayerRatingOverrideKeys(player = {}) {
+    const keys = [];
+    const phoneDigits = normalizePhoneDigits(player.phone);
+    if (phoneDigits && phoneDigits.length === 10) keys.push(`phone:${phoneDigits}`);
+
+    const nameKey = `${String(player.firstName || '').trim().toLowerCase()}|${String(player.lastName || '').trim().toLowerCase()}`;
+    if (nameKey !== '|') keys.push(`name:${nameKey}`);
+
+    return keys;
+}
+
+function getStaticAdminRatingOverride(player = {}) {
+    const overrides = normalizePlayerRatingOverridesMap(playerRatingOverrides);
+    for (const key of getPlayerRatingOverrideKeys(player)) {
+        if (overrides[key] && Number.isFinite(Number(overrides[key].rating))) {
+            return roundRating(overrides[key].rating);
+        }
+    }
+    return null;
+}
+
+function rememberStaticAdminRatingOverride(player = {}, rating) {
+    const ratingNum = roundRating(rating);
+    if (!Number.isFinite(ratingNum) || ratingNum < 1 || ratingNum > 10) return;
+
+    playerRatingOverrides = normalizePlayerRatingOverridesMap(playerRatingOverrides);
+    const entry = { rating: ratingNum, updatedAt: new Date().toISOString(), updatedBy: 'admin' };
+    for (const key of getPlayerRatingOverrideKeys(player)) {
+        playerRatingOverrides[key] = entry;
+    }
+}
+
+function applyStaticAdminRatingOverride(player = {}) {
+    const overrideRating = getStaticAdminRatingOverride(player);
+    if (overrideRating == null) return player;
+
+    const derivedRating = roundRating(player.derivedRating ?? player.finalRating ?? player.rating ?? overrideRating);
+    return {
+        ...player,
+        adminRating: overrideRating,
+        adminAdjustment: roundRating(overrideRating - derivedRating),
+        finalRating: overrideRating,
+        rating: overrideRating
+    };
+}
+
 function normalizeRegularSkaterEntry(input = {}) {
     const firstName = String(input.firstName || '').trim();
     const lastName = String(input.lastName || '').trim();
@@ -2079,6 +2147,7 @@ async function loadDataFromDB() {
         if (settings.cancelledRegistrations) cancelledRegistrations = Array.isArray(settings.cancelledRegistrations) ? settings.cancelledRegistrations : [];
         if (settings.customSignupCode !== undefined) customSignupCode = String(settings.customSignupCode || '').trim();
         if (settings.scheduleMode !== undefined) scheduleMode = String(settings.scheduleMode || 'auto').toLowerCase() === 'manual' ? 'manual' : 'auto';
+        if (settings.playerRatingOverrides !== undefined) playerRatingOverrides = normalizePlayerRatingOverridesMap(settings.playerRatingOverrides || {});
         if (settings.signupLockStartAt !== undefined) signupLockStartAt = settings.signupLockStartAt || '';
         if (settings.signupLockEndAt !== undefined) signupLockEndAt = settings.signupLockEndAt || '';
         if (settings.rosterReleaseAt !== undefined) rosterReleaseAt = settings.rosterReleaseAt || '';
@@ -2096,7 +2165,7 @@ async function loadDataFromDB() {
         refreshDynamicSignupCode();
         
         const playersRes = await pool.query('SELECT * FROM players ORDER BY registered_at');
-        players = playersRes.rows.map(p => hydratePlayerRatingProfile({
+        players = playersRes.rows.map(p => hydratePlayerRatingProfile(applyStaticAdminRatingOverride({
             id: Number(p.id),
             firstName: p.first_name,
             lastName: p.last_name,
@@ -2132,14 +2201,14 @@ async function loadDataFromDB() {
             subbedInForPlayerId: p.subbed_in_for_player_id == null ? null : Number(p.subbed_in_for_player_id),
             subbedInForName: p.subbed_in_for_name || null,
             subbedInAt: p.subbed_in_at || null
-        }));
+        })));
         
         // FIX: Recalculate playerSpots based on actual player count
         const nonGoalieCount = players.filter(p => !p.isGoalie).length;
         playerSpots = Math.max(0, 20 - nonGoalieCount);
                 
         const waitlistRes = await pool.query('SELECT * FROM waitlist ORDER BY joined_at');
-        waitlist = waitlistRes.rows.map(p => hydratePlayerRatingProfile({
+        waitlist = waitlistRes.rows.map(p => hydratePlayerRatingProfile(applyStaticAdminRatingOverride({
             id: Number(p.id),
             firstName: p.first_name,
             lastName: p.last_name,
@@ -2165,7 +2234,7 @@ async function loadDataFromDB() {
             isGoalie: !!p.is_goalie,
             bypassAutoPromote: !!p.bypass_auto_promote,
             joinedAt: p.joined_at
-        }));
+        })));
         
         // ============================================
         // ADD THIS: Load app settings
@@ -3022,6 +3091,7 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
             ['currentWeekData', currentWeekData],
             ['cancelledRegistrations', cancelledRegistrations],
             ['regularSkatersByDay', regularSkatersByDay],
+            ['playerRatingOverrides', playerRatingOverrides],
             ['customSignupCode', customSignupCode],
             ['scheduleMode', scheduleMode],
             ['signupLockStartAt', signupLockStartAt],
@@ -3250,6 +3320,7 @@ function buildFullDataSnapshot() {
         waitlist,
         cancelledRegistrations,
         regularSkatersByDay,
+        playerRatingOverrides,
         customSignupCode,
         scheduleMode,
         gameLocation,
@@ -3376,6 +3447,7 @@ function getSettingsSnapshot() {
         currentWeekData,
         cancelledRegistrations,
         regularSkatersByDay,
+        playerRatingOverrides,
         customSignupCode,
         scheduleMode,
         lastExactResetMinuteKey,
@@ -3477,6 +3549,9 @@ function loadDataFromFile() {
             resetWeekSchedule = data.resetWeekSchedule ?? resetWeekSchedule;
             cancelledRegistrations = Array.isArray(data.cancelledRegistrations) ? data.cancelledRegistrations : [];
             regularSkatersByDay = normalizeRegularSkatersByDayMap(data.regularSkatersByDay || {});
+            playerRatingOverrides = normalizePlayerRatingOverridesMap(data.playerRatingOverrides || {});
+            players = players.map(applyStaticAdminRatingOverride).map(hydratePlayerRatingProfile);
+            waitlist = waitlist.map(applyStaticAdminRatingOverride).map(hydratePlayerRatingProfile);
             customSignupCode = String(data.customSignupCode || '').trim();
             scheduleMode = String(data.scheduleMode || scheduleMode || 'auto').toLowerCase() === 'manual' ? 'manual' : 'auto';
             currentWeekData = data.currentWeekData ?? {
@@ -3740,6 +3815,7 @@ function normalizeSkillProfile(input = {}) {
 }
 
 function hydratePlayerRatingProfile(player = {}) {
+    player = applyStaticAdminRatingOverride(player);
     const fallbackRating = roundRating(player.rating ?? player.finalRating ?? player.derivedRating ?? 5);
     const finalRating = roundRating(player.finalRating ?? player.rating ?? player.adminRating ?? player.derivedRating ?? fallbackRating);
     const derivedRating = roundRating(player.derivedRating ?? finalRating);
@@ -4972,6 +5048,10 @@ app.post('/api/register-init', registrationLimiter, async (req, res) => {
         return res.status(400).json({ error: `Please complete: ${skillProfile.missing.join(', ')}.` });
     }
 
+    const staticAdminRating = getStaticAdminRatingOverride({ firstName: cleanFirstName, lastName: cleanLastName, phone: cleanPhone });
+    const effectiveFinalRating = staticAdminRating == null ? skillProfile.finalRating : staticAdminRating;
+    const effectiveAdminAdjustment = staticAdminRating == null ? null : roundRating(staticAdminRating - skillProfile.derivedRating);
+
     const submittedRating = Number(rating);
     if (Number.isFinite(submittedRating) && Math.abs(submittedRating - skillProfile.derivedRating) > 0.2) {
         return res.status(400).json({ error: "Skill profile changed. Please review your calculated rating and try again." });
@@ -4984,8 +5064,10 @@ app.post('/api/register-init', registrationLimiter, async (req, res) => {
             lastName: cleanLastName,
             phone: cleanPhone,
             paymentMethod,
-            rating: skillProfile.finalRating,
-            finalRating: skillProfile.finalRating,
+            rating: effectiveFinalRating,
+            finalRating: effectiveFinalRating,
+            adminRating: staticAdminRating,
+            adminAdjustment: effectiveAdminAdjustment,
             derivedRating: skillProfile.derivedRating,
             selfRatingRaw: skillProfile.selfRatingRaw,
             skatingRating: skillProfile.skatingRating,
@@ -5057,8 +5139,10 @@ app.post('/api/register-init', registrationLimiter, async (req, res) => {
             lastName: cleanLastName,
             phone: cleanPhone,
             paymentMethod,
-            rating: skillProfile.finalRating,
-            finalRating: skillProfile.finalRating,
+            rating: effectiveFinalRating,
+            finalRating: effectiveFinalRating,
+            adminRating: staticAdminRating,
+            adminAdjustment: effectiveAdminAdjustment,
             derivedRating: skillProfile.derivedRating,
             selfRatingRaw: skillProfile.selfRatingRaw,
             skatingRating: skillProfile.skatingRating,
@@ -5121,6 +5205,8 @@ app.post('/api/register-final', async (req, res) => {
         confidenceLevel: tempData.confidenceLevel,
         selfRatingRaw: tempData.selfRatingRaw,
         derivedRating: tempData.derivedRating,
+        adminRating: tempData.adminRating,
+        adminAdjustment: tempData.adminAdjustment,
         finalRating: tempData.finalRating,
         isGoalie: false,
         team: null,
@@ -6645,6 +6731,7 @@ app.post('/api/admin/update-rating', async (req, res) => {
     const derivedRating = roundRating(player.derivedRating ?? oldRating);
     try {
         await runProtectedMutation('update-rating', req, async () => {
+            rememberStaticAdminRatingOverride(player, ratingNum);
             player.adminRating = ratingNum;
             player.adminAdjustment = roundRating(ratingNum - derivedRating);
             player.finalRating = ratingNum;
