@@ -1785,9 +1785,11 @@ async function checkWeeklyReset() {
         darkTeam: []
     };
 
-    manualOverride = true;
-    manualOverrideState = `reset-lock:${nowETMinuteKey(etTime)}`;
-    requirePlayerCode = true;
+    // Weekly reset no longer creates a manual reset-lock.
+    // Signup locking is controlled only by the configured lock schedule unless admin manually overrides it.
+    manualOverride = false;
+    manualOverrideState = null;
+    requirePlayerCode = shouldBeLocked();
     maintenanceMode = false;
     clearAnnouncementState();
     refreshDynamicSignupCode();
@@ -6781,7 +6783,8 @@ app.post('/api/admin/manual-reset', async (req, res) => {
         await runProtectedMutation('manual-reset', req, async () => {
             playerSpots = 20; players = []; waitlist = []; rosterReleased = false; resetArmed = false; lastResetWeek = week; gameDate = calculateNextGameDate();
             currentWeekData = { weekNumber: week, year, releaseDate: null, whiteTeam: [], darkTeam: [] };
-            manualOverride = true; manualOverrideState = `reset-lock:${nowETMinuteKey(etTime)}`; requirePlayerCode = true; clearAnnouncementState();
+            // Manual reset follows the normal signup lock schedule; it does not force a reset-lock.
+            manualOverride = false; manualOverrideState = null; requirePlayerCode = shouldBeLocked(); clearAnnouncementState();
             syncScheduledActionRunMarker(resetWeekSchedule.at, 'reset', etTime);
             syncScheduledActionRunMarker(rosterReleaseSchedule.at, 'release', etTime);
             await addAutoPlayers();
