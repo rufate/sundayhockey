@@ -1714,6 +1714,9 @@ async function checkWeeklyReset() {
 
     await savePaymentReportSnapshot('scheduled_reset');
 
+    // Preserve all active admin-adjusted ratings before clearing the weekly roster.
+    rememberCurrentAdminRatings();
+
     if (
         rosterReleased &&
         currentWeekData.weekNumber &&
@@ -3711,6 +3714,25 @@ function rememberPersistentAdminRating(player = {}, ratingValue) {
     return true;
 }
 
+function rememberCurrentAdminRatings() {
+    let rememberedCount = 0;
+    const activeEntries = [
+        ...(Array.isArray(players) ? players : []),
+        ...(Array.isArray(waitlist) ? waitlist : [])
+    ];
+
+    for (const player of activeEntries) {
+        const ratingValue = player?.adminRating ?? player?.finalRating ?? player?.rating;
+        const before = JSON.stringify(normalizePersistentAdminRatings(persistentAdminRatings));
+        if (rememberPersistentAdminRating(player, ratingValue)) {
+            const after = JSON.stringify(normalizePersistentAdminRatings(persistentAdminRatings));
+            if (before !== after) rememberedCount += 1;
+        }
+    }
+
+    return rememberedCount;
+}
+
 function getPersistentAdminRating(player = {}) {
     persistentAdminRatings = normalizePersistentAdminRatings(persistentAdminRatings);
     const primaryKey = getPersistentRatingKeyForPlayer(player);
@@ -5289,6 +5311,9 @@ app.post('/api/register-final', async (req, res) => {
         registeredAt: new Date().toISOString(),
         rulesAgreed: true
     });
+
+    // Returning players keep the admin-adjusted rating saved from prior weeks.
+    applyPersistentAdminRating(newPlayer);
 
     try {
         await runProtectedMutation('player-signup', req, async () => {
@@ -6930,6 +6955,8 @@ app.post('/api/admin/manual-reset', async (req, res) => {
     const { week, year } = getWeekNumber(etTime);
     try {
         await runProtectedMutation('manual-reset', req, async () => {
+            // Preserve all active admin-adjusted ratings before clearing the weekly roster.
+            rememberCurrentAdminRatings();
             playerSpots = 20; players = []; waitlist = []; rosterReleased = false; resetArmed = false; lastResetWeek = week; gameDate = calculateNextGameDate();
             currentWeekData = { weekNumber: week, year, releaseDate: null, whiteTeam: [], darkTeam: [] };
             manualOverride = true; manualOverrideState = `reset-lock:${nowETMinuteKey(etTime)}`; requirePlayerCode = true; clearAnnouncementState();
