@@ -361,6 +361,26 @@
             .roster-cancel-btn { padding: 3px 6px; font-size: 0.64rem; }
             .modal-content { padding: 20px; }
         }
+
+        /* Copyright Footer */
+        .copyright-footer {
+            text-align: center;
+            font-size: 12px;
+            color: #888;
+            padding: 15px 10px;
+            margin-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+
+        .subbed-in-note {
+            display: block;
+            width: 100%;
+            margin-top: 4px;
+            color: #a8d3ff;
+            font-size: 0.74rem;
+            line-height: 1.2;
+        }
 </style>
 </head>
 <body>
@@ -593,7 +613,7 @@
                         ? `<button class="roster-cancel-btn" type="button">Cancel</button>`
                         : '';
                     li.innerHTML = `
-                        <span class="player-name">${escapeHtml(player.firstName)} ${escapeHtml(player.lastName)} ${goalieBadge} ${lateCancelBadge} ${lateAddedBadge}</span>
+                        <span class="player-name">${escapeHtml(player.firstName)} ${escapeHtml(player.lastName)} ${goalieBadge} ${lateCancelBadge} ${lateAddedBadge}</span>${player.subbedInForName ? `<span class="subbed-in-note">for ${player.subbedInForName}</span>` : ''}
                         ${cancelButton}
                     `;
                     const cancelBtn = li.querySelector('.roster-cancel-btn');
@@ -616,7 +636,7 @@
                         ? `<button class="roster-cancel-btn" type="button">Cancel</button>`
                         : '';
                     li.innerHTML = `
-                        <span class="player-name">${escapeHtml(player.firstName)} ${escapeHtml(player.lastName)} ${goalieBadge} ${lateCancelBadge} ${lateAddedBadge}</span>
+                        <span class="player-name">${escapeHtml(player.firstName)} ${escapeHtml(player.lastName)} ${goalieBadge} ${lateCancelBadge} ${lateAddedBadge}</span>${player.subbedInForName ? `<span class="subbed-in-note">for ${player.subbedInForName}</span>` : ''}
                         ${cancelButton}
                     `;
                     const cancelBtn = li.querySelector('.roster-cancel-btn');
@@ -718,7 +738,8 @@
                         ? `✅ ${playerToCancel.firstName} ${playerToCancel.lastName}'s cancellation was recorded.<br><br>Late cancel / no-show owes.`
                         : `✅ ${playerToCancel.firstName} ${playerToCancel.lastName}'s roster spot has been cancelled.`;
                     if (data.promotedPlayer) {
-                        successMsg += `<br><br>🎉 ${data.promotedPlayer.firstName} ${data.promotedPlayer.lastName} has been promoted from the waitlist.`;
+                        const replacementFor = data.promotedPlayer.subbedInForName || `${playerToCancel.firstName} ${playerToCancel.lastName}`;
+                        successMsg += `<br><br>🎉 ${data.promotedPlayer.firstName} ${data.promotedPlayer.lastName} has been promoted from the waitlist and subbed in for ${replacementFor}.`;
                     }
                     successMsg += '<br><br>Tap Continue.';
                     successDiv.innerHTML = successMsg;
@@ -756,5 +777,7 @@
         setInterval(loadRoster, 60000);
     </script>
 
+
+    <div class="copyright-footer">© 2026 Phan Anthony Ly. All Rights Reserved.</div>
 </body>
 </html>

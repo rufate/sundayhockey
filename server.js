@@ -1,3 +1,17 @@
+/*
+========================================================
+Phan Hockey Registration System
+Copyright © 2026 Phan Anthony Ly
+All Rights Reserved.
+
+Unauthorized copying, modification, distribution,
+reverse engineering, or commercial reuse prohibited
+without written permission.
+
+Created and maintained by Phan Anthony Ly.
+========================================================
+*/
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -394,6 +408,11 @@ const AUTO_SCHEDULE_RESET_MINUTE = 0;
 // Weekly reset is intentionally exact-minute only.
 // This prevents restored snapshots or Render wake-ups from replaying a missed reset via catch-up.
 const WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT = 0;
+
+// Scheduled weekly reset must happen soon after the configured game.
+// 18 hours covers Friday 9:30 PM -> Saturday 12:00 AM and Sunday morning/day -> Monday 12:00 AM,
+// but blocks stale cross-event resets such as Friday data being cleared Monday morning.
+const DEFAULT_MAX_RESET_HOURS_AFTER_GAME = 18;
 
 // Admin-configurable schedules (interpreted in America/New_York, repeats weekly)
 let signupLockSchedule = {
@@ -1017,7 +1036,7 @@ function validateResetScheduleAgainstGame(resetAt, selectedGameTime = gameTime) 
 
     // A weekly reset should happen after that week's game, not almost a full week later before the next game.
     // This blocks stale Friday reset settings such as Friday afternoon/evening for Friday hockey.
-    const maxResetHoursAfterGame = Math.max(1, Number(process.env.MAX_RESET_HOURS_AFTER_GAME || 72));
+    const maxResetHoursAfterGame = Math.max(1, Number(process.env.MAX_RESET_HOURS_AFTER_GAME || DEFAULT_MAX_RESET_HOURS_AFTER_GAME));
     if (minutesAfterGame > maxResetHoursAfterGame * 60) {
         return {
             ok: false,
@@ -1101,7 +1120,7 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime(), resetAt = resetWee
 
     const gamePoint = getGameSchedulePointFromGameTime(gameTime);
     const minutesAfterLatestGame = minutesSinceLatestWeeklyOccurrence(gamePoint, etTime);
-    const maxResetHoursAfterGame = Math.max(1, Number(process.env.MAX_RESET_HOURS_AFTER_GAME || 72));
+    const maxResetHoursAfterGame = Math.max(1, Number(process.env.MAX_RESET_HOURS_AFTER_GAME || DEFAULT_MAX_RESET_HOURS_AFTER_GAME));
     if (!Number.isFinite(minutesAfterLatestGame) || minutesAfterLatestGame <= 0 || minutesAfterLatestGame > maxResetHoursAfterGame * 60) {
         return {
             ok: false,
@@ -3975,7 +3994,7 @@ function buildPromotedRosterPlayer(waitlistPlayer, team = null, metadata = {}) {
         registeredAt: waitlistPlayer.registeredAt || waitlistPlayer.joinedAt || new Date().toISOString(),
         rulesAgreed: true,
         promotedFromWaitlist: !!metadata.promotedFromWaitlist,
-        lateAddedAfterRelease: !!metadata.promotedFromWaitlist,
+        lateAddedAfterRelease: !!metadata.lateAddedAfterRelease,
         subbedInForPlayerId: metadata.subbedInForPlayerId ?? null,
         subbedInForName: subbedInForName || null,
         subbedInAt: metadata.subbedInAt || new Date().toISOString()
@@ -4776,7 +4795,7 @@ function buildPublicRosterPayload() {
             cancellationAllowedNow,
             promotedFromWaitlist: !!p.promotedFromWaitlist,
             lateAddedAfterRelease: !!p.lateAddedAfterRelease,
-            isLateAddition: !!(p.promotedFromWaitlist || p.lateAddedAfterRelease),
+            isLateAddition: !!p.lateAddedAfterRelease,
             subbedInForName: p.subbedInForName || null,
             subbedInForPlayerId: p.subbedInForPlayerId ?? null,
             subbedInAt: p.subbedInAt || null
@@ -4832,7 +4851,14 @@ app.get('/api/status', (req, res) => {
         lastName: p.lastName,
         isGoalie: p.isGoalie,
         // Phan Ly cannot cancel from signup page - only admin can remove
-        canCancel: !p.isGoalie && !(p.firstName.toLowerCase() === 'phan' && p.lastName.toLowerCase() === 'ly')
+        canCancel: !p.isGoalie && !(String(p.firstName || '').toLowerCase() === 'phan' && String(p.lastName || '').toLowerCase() === 'ly'),
+        // Public replacement display fields only. Still excludes rating, payment, and phone.
+        promotedFromWaitlist: !!p.promotedFromWaitlist,
+        lateAddedAfterRelease: !!p.lateAddedAfterRelease,
+        isLateAddition: !!p.lateAddedAfterRelease,
+        subbedInForName: p.subbedInForName || null,
+        subbedInForPlayerId: p.subbedInForPlayerId ?? null,
+        subbedInAt: p.subbedInAt || null
         // EXCLUDED: rating, paid, paidAmount, paymentMethod, phone
     }));
 
@@ -5407,6 +5433,7 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
 
                     promotedPlayer = buildPromotedRosterPlayer(waitlistPlayer, assignedTeam, {
                         promotedFromWaitlist: true,
+                        lateAddedAfterRelease: rosterWasReleased,
                         subbedInForPlayerId: player.id,
                         subbedInForName: `${player.firstName || ''} ${player.lastName || ''}`.trim(),
                         subbedInAt: new Date().toISOString()
@@ -5436,7 +5463,10 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
             message: "Registration cancelled successfully.",
             promotedPlayer: promotedPlayer ? {
                 firstName: promotedPlayer.firstName,
-                lastName: promotedPlayer.lastName
+                lastName: promotedPlayer.lastName,
+                subbedInForName: promotedPlayer.subbedInForName || null,
+                lateAddedAfterRelease: !!promotedPlayer.lateAddedAfterRelease,
+                promotedFromWaitlist: !!promotedPlayer.promotedFromWaitlist
             } : null,
             spotsAvailable: playerSpots
         });
@@ -6608,6 +6638,7 @@ app.post('/api/admin/promote-waitlist', async (req, res) => {
     const teamForPromotion = rosterReleased ? requestedTeam : null;
     const newPlayer = buildPromotedRosterPlayer(player, teamForPromotion, {
         promotedFromWaitlist: !!rosterReleased,
+        lateAddedAfterRelease: !!rosterReleased,
         subbedInAt: new Date().toISOString()
     });
 
@@ -6720,6 +6751,7 @@ app.post('/api/admin/remove-player', async (req, res) => {
                         removedPlayer.team === 'White' || removedPlayer.team === 'Dark' ? removedPlayer.team : null,
                         {
                             promotedFromWaitlist: true,
+                            lateAddedAfterRelease: true,
                             subbedInForPlayerId: removedPlayer.id,
                             subbedInForName: `${removedPlayer.firstName || ''} ${removedPlayer.lastName || ''}`.trim(),
                             subbedInAt: new Date().toISOString()
