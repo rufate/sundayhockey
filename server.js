@@ -581,7 +581,7 @@ let currentWeekData = {
 };
 
 const MAX_GOALIES = 2;
-const NO_SHOW_POLICY_TEXT = 'Last minute cancellations must be done 3 hours before game time. Late cancel / no-show owes.';
+const NO_SHOW_POLICY_TEXT = 'Cancellations are allowed until 3 hours before game time. After that cutoff, please contact the admin.';
 
 const GAME_RULES = [
     "No contact. Board tie-ups only.",
@@ -4034,6 +4034,26 @@ function syncCurrentWeekTeamsFromPlayers() {
     };
 }
 
+function rebalanceReleasedRoster(reason = 'roster-change') {
+    if (!getEffectiveRosterReleasedState()) {
+        syncCurrentWeekTeamsFromPlayers();
+        return null;
+    }
+
+    rosterReleased = true;
+    const teams = generateFairTeams();
+    currentWeekData = {
+        ...(currentWeekData || {}),
+        releaseDate: currentWeekData?.releaseDate || new Date().toISOString(),
+        rosterReleaseTime: currentWeekData?.rosterReleaseTime || Date.now(),
+        whiteTeam: teams.whiteTeam,
+        darkTeam: teams.darkTeam,
+        lastRebalancedAt: new Date().toISOString(),
+        lastRebalanceReason: reason
+    };
+    return teams;
+}
+
 function isDuplicatePlayer(firstName, lastName, phone) {
     const normalizedName = (capitalizeFullName(firstName) + ' ' + capitalizeFullName(lastName)).toLowerCase().trim();
     const normalizedPhone = normalizePhoneDigits(phone);
@@ -4785,7 +4805,7 @@ function isLateCancelledPlayer(player = {}) {
         const entryAction = String(entry?.action || '').trim();
         const sameId = playerId && String(entry?.id ?? '').trim() === playerId;
         const sameName = firstName && lastName && String(entry?.firstName || '').trim().toLowerCase() == firstName && String(entry?.lastName || '').trim().toLowerCase() == lastName;
-        return (sameId || sameName) && (entryAction === 'late_cancel_no_show_owed' || entryAction === 'cancelled' || entryAction === 'removed');
+        return (sameId || sameName) && entryAction === 'late_cancel_no_show_owed';
     });
 }
 
@@ -4804,7 +4824,7 @@ function buildPublicRosterPayload() {
     const sanitizePlayer = (p) => {
         const cancelled = isLateCancelledPlayer(p);
         const protectedPlayer = String(p.firstName || '').toLowerCase() === 'phan' && String(p.lastName || '').toLowerCase() === 'ly';
-        const canCancel = !cancelled && cancellationAllowedNow && !p.isGoalie && !protectedPlayer;
+        const canCancel = !cancelled && cancellationAllowedNow && !protectedPlayer;
         return {
             id: p.id,
             firstName: p.firstName,
@@ -4867,13 +4887,15 @@ app.get('/api/status', (req, res) => {
     
     // STRIP all sensitive data from public players list
     // Players see: id, name, goalie status, cancel permission ONLY
+    const cancellationTiming = getCancellationTimingStatus();
+    const cancellationAllowedNow = !cancellationTiming.isLateCancelWindow;
     const publicPlayers = players.map(p => ({
         id: p.id,
         firstName: p.firstName,
         lastName: p.lastName,
         isGoalie: p.isGoalie,
         // Phan Ly cannot cancel from signup page - only admin can remove
-        canCancel: !p.isGoalie && !(String(p.firstName || '').toLowerCase() === 'phan' && String(p.lastName || '').toLowerCase() === 'ly'),
+        canCancel: cancellationAllowedNow && !(String(p.firstName || '').toLowerCase() === 'phan' && String(p.lastName || '').toLowerCase() === 'ly'),
         // Public replacement display fields only. Still excludes rating, payment, and phone.
         promotedFromWaitlist: !!p.promotedFromWaitlist,
         lateAddedAfterRelease: !!p.lateAddedAfterRelease,
@@ -4948,12 +4970,16 @@ app.get('/api/status', (req, res) => {
         resetWeekAt: dynamicScheduleDates.resetWeekAt,
         scheduleMode,
         noShowPolicy: NO_SHOW_POLICY_TEXT,
-        cancellationDeadlineLine: NO_SHOW_POLICY_TEXT
+        cancellationDeadlineLine: NO_SHOW_POLICY_TEXT,
+        cancellationAllowedNow,
+        hoursUntilGame: cancellationTiming.hoursUntilGame
     });
 });
 
 app.get('/api/waitlist', (req, res) => {
     // Waitlist view supports self-cancel, so include the id but keep private data hidden.
+    const cancellationTiming = getCancellationTimingStatus();
+    const cancellationAllowedNow = !cancellationTiming.isLateCancelWindow;
     const waitlistNames = waitlist.map((p, index) => ({
         id: p.id,
         position: index + 1,
@@ -4961,7 +4987,7 @@ app.get('/api/waitlist', (req, res) => {
         lastName: p.lastName,
         fullName: `${p.firstName} ${p.lastName}`,
         isGoalie: p.isGoalie,
-        canCancel: !rosterReleased && !(String(p.firstName || '').toLowerCase() === 'phan' && String(p.lastName || '').toLowerCase() === 'ly')
+        canCancel: cancellationAllowedNow && !(String(p.firstName || '').toLowerCase() === 'phan' && String(p.lastName || '').toLowerCase() === 'ly')
         // EXCLUDED: rating, phone, paymentMethod
     }));
     
@@ -5160,7 +5186,9 @@ app.post('/api/register-init', registrationLimiter, async (req, res) => {
         return res.status(400).json({ error: "Skill profile changed. Please review your calculated rating and try again." });
     }
 
-    if (effectiveRosterReleased || playerSpots <= 0) {
+    const shouldWaitlistNewSkater = playerSpots <= 0;
+
+    if (shouldWaitlistNewSkater) {
         const waitlistPlayer = hydratePlayerRatingProfile({
             id: Date.now(),
             firstName: cleanFirstName,
@@ -5317,12 +5345,24 @@ app.post('/api/register-final', async (req, res) => {
 
     try {
         await runProtectedMutation('player-signup', req, async () => {
+            const rosterWasReleased = getEffectiveRosterReleasedState();
+            if (rosterWasReleased) {
+                newPlayer.lateAddedAfterRelease = true;
+                newPlayer.isLateAddition = true;
+                newPlayer.subbedInAt = new Date().toISOString();
+            }
+
             players.push(newPlayer);
             playerSpots = Math.max(0, playerSpots - 1);
+
+            if (rosterWasReleased) {
+                rebalanceReleasedRoster('post-release-signup-open-spot');
+            }
         }, {
             playerId: newPlayer.id,
             firstName: newPlayer.firstName,
-            lastName: newPlayer.lastName
+            lastName: newPlayer.lastName,
+            rosterReleased: getEffectiveRosterReleasedState()
         });
     } catch (err) {
         console.error('Error saving player registration:', err.message);
@@ -5385,44 +5425,12 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
     const isLateCancelWindow = foundSource === 'players' && !!cancellationTiming.isLateCancelWindow;
 
     if (isLateCancelWindow) {
-        const alreadyLoggedLateAttempt = cancelledRegistrations.some(item =>
-            String(item?.id) === String(foundPlayer.id) &&
-            item?.action === 'late_cancel_no_show_owed'
-        );
-
-        if (!alreadyLoggedLateAttempt) {
-            try {
-                await runProtectedMutation('player-cancel-late-attempt', req, async () => {
-                    appendCancellationLog({
-                        id: foundPlayer.id,
-                        firstName: foundPlayer.firstName,
-                        lastName: foundPlayer.lastName,
-                        phone: foundPlayer.phone,
-                        rating: foundPlayer.rating,
-                        isGoalie: foundPlayer.isGoalie,
-                        paymentMethod: foundPlayer.paymentMethod,
-                        source: foundSource || 'players',
-                        action: 'late_cancel_no_show_owed',
-                        cancelledBy: 'player',
-                        cancelledAt: new Date().toISOString(),
-                        notes: NO_SHOW_POLICY_TEXT
-                    });
-                }, {
-                    playerId: foundPlayer.id,
-                    source: foundSource || 'players'
-                });
-            } catch (err) {
-                console.error('Error logging late cancel attempt:', err.message);
-                return res.status(500).json({ error: "Cancellation could not be saved safely. Please try again." });
-            }
-        }
-
-        return res.json({
-            success: true,
-            lateCancel: true,
-            noShowOwes: true,
+        return res.status(403).json({
+            error: "Cancellation cutoff has passed. Players can cancel only until 3 hours before game time. Please contact the admin.",
+            lateCancel: false,
+            cancellationAllowedNow: false,
             policy: NO_SHOW_POLICY_TEXT,
-            message: "Cancellation recorded. Late cancel / no-show owes.",
+            hoursUntilGame: cancellationTiming.hoursUntilGame,
             spotsAvailable: playerSpots
         });
     }
@@ -5467,11 +5475,11 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
                     players.push(promotedPlayer);
                     playerSpots--;
 
-                    if (assignedTeam) {
-                        syncCurrentWeekTeamsFromPlayers();
+                    if (rosterWasReleased) {
+                        rebalanceReleasedRoster('player-cancel-waitlist-auto-promotion');
                     }
                 } else if (rosterWasReleased && removedPlayerTeam) {
-                    syncCurrentWeekTeamsFromPlayers();
+                    rebalanceReleasedRoster('player-cancel-open-spot');
                 }
             }, {
                 playerId: player.id,
@@ -6673,7 +6681,7 @@ app.post('/api/admin/promote-waitlist', async (req, res) => {
             players.push(newPlayer);
             if (!player.isGoalie && playerSpots > 0) playerSpots--;
             if (rosterReleased) {
-                syncCurrentWeekTeamsFromPlayers();
+                rebalanceReleasedRoster('admin-promote-waitlist');
             }
         }, { waitlistId, promotedPlayerId: newPlayer.id, assignTeam: teamForPromotion });
     } catch (err) {
@@ -6747,7 +6755,7 @@ app.post('/api/admin/add-player', async (req, res) => {
         subbedInAt: isLateRosterAddition ? nowIso : null
     });
     applyPersistentAdminRating(newPlayer);
-    try { await runProtectedMutation('admin-add-player', req, async () => { players.push(newPlayer); if (!isGoalieBool && playerSpots > 0) playerSpots--; if (rosterReleased) syncCurrentWeekTeamsFromPlayers(); }, { playerId: newPlayer.id, rosterReleased, assignTeam: teamForLateAdd }); }
+    try { await runProtectedMutation('admin-add-player', req, async () => { players.push(newPlayer); if (!isGoalieBool && playerSpots > 0) playerSpots--; if (rosterReleased) rebalanceReleasedRoster('admin-add-player-after-release'); }, { playerId: newPlayer.id, rosterReleased, assignTeam: teamForLateAdd }); }
     catch (err) { console.error('Error adding player:', err); return res.status(500).json({ error: "Failed to add player safely" }); }
     res.json({ success: true, player: newPlayer, inWaitlist: false, assignTeam: teamForLateAdd, rosterReleased });
 });
@@ -6785,7 +6793,7 @@ app.post('/api/admin/remove-player', async (req, res) => {
                     players.push(autoPromotedPlayer);
                     if (!autoPromotedPlayer.isGoalie && playerSpots > 0) playerSpots--;
                 }
-                syncCurrentWeekTeamsFromPlayers();
+                rebalanceReleasedRoster(autoPromotedPlayer ? 'admin-remove-player-waitlist-auto-promotion' : 'admin-remove-player-open-spot');
             }
         }, { playerId: idToRemove, rosterReleased, removedTeam: player.team || null });
     } catch (err) {
