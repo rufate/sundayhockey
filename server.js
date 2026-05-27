@@ -342,19 +342,58 @@ function getGameDayName() {
 }
 
 
-const FRIDAY_SIGNUP_CODE = '9855';
-const SUNDAY_SIGNUP_CODE = '7666';
-const DEFAULT_SIGNUP_CODE = FRIDAY_SIGNUP_CODE;
+const DEFAULT_SIGNUP_CODE = '9855';
+
+// One permanent default code, plus optional temporary override.
+let editableDefaultSignupCode = DEFAULT_SIGNUP_CODE;
 let customSignupCode = '';
+
+// Default signup code by day of week. Admin editable.
+let weeklyDefaultSignupCodes = {
+    sunday: DEFAULT_SIGNUP_CODE,
+    monday: DEFAULT_SIGNUP_CODE,
+    tuesday: DEFAULT_SIGNUP_CODE,
+    wednesday: DEFAULT_SIGNUP_CODE,
+    thursday: DEFAULT_SIGNUP_CODE,
+    friday: DEFAULT_SIGNUP_CODE,
+    saturday: DEFAULT_SIGNUP_CODE
+};
 
 function getDynamicSignupCode(dayName = getGameDayName()) {
     const custom = String(customSignupCode || '').trim();
-    if (/^\d{4}$/.test(custom)) return custom;
 
-    const day = String(dayName || '').trim().toLowerCase();
-    if (day === 'friday') return FRIDAY_SIGNUP_CODE;
-    if (day === 'sunday') return SUNDAY_SIGNUP_CODE;
+    // Temporary override takes priority.
+    if (/^\d{4}$/.test(custom)) {
+        return custom;
+    }
+
+    const dayKey = String(dayName || '').trim().toLowerCase();
+    const dayCode = weeklyDefaultSignupCodes && weeklyDefaultSignupCodes[dayKey]
+        ? String(weeklyDefaultSignupCodes[dayKey]).trim()
+        : '';
+
+    // Otherwise use the saved default code for the current game day.
+    if (/^\d{4}$/.test(dayCode)) {
+        return dayCode;
+    }
+
+    // Fallback only.
+    if (/^\d{4}$/.test(editableDefaultSignupCode)) {
+        return editableDefaultSignupCode;
+    }
+
     return DEFAULT_SIGNUP_CODE;
+}
+
+
+function normalizeWeeklyDefaultSignupCodes(input = {}) {
+    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const normalized = {};
+    for (const day of days) {
+        const value = String(input?.[day] || '').trim();
+        normalized[day] = /^\d{4}$/.test(value) ? value : DEFAULT_SIGNUP_CODE;
+    }
+    return normalized;
 }
 
 function refreshDynamicSignupCode() {
@@ -383,7 +422,7 @@ function calculateNextGameDate() {
     return next.toISOString().split("T")[0];
 }
 
-// Player signup password protection - dynamic by game day
+// Player signup password protection with editable default + temporary override
 let playerSignupCode = DEFAULT_SIGNUP_CODE;
 let requirePlayerCode = true;
 let manualOverride = false;
@@ -2112,6 +2151,8 @@ async function loadDataFromDB() {
         if (settings.cancelledRegistrations) cancelledRegistrations = Array.isArray(settings.cancelledRegistrations) ? settings.cancelledRegistrations : [];
         if (settings.persistentAdminRatings) persistentAdminRatings = normalizePersistentAdminRatings(settings.persistentAdminRatings);
         if (settings.customSignupCode !== undefined) customSignupCode = String(settings.customSignupCode || '').trim();
+        if (settings.editableDefaultSignupCode !== undefined) editableDefaultSignupCode = /^\d{4}$/.test(String(settings.editableDefaultSignupCode || '').trim()) ? String(settings.editableDefaultSignupCode).trim() : DEFAULT_SIGNUP_CODE;
+        if (settings.weeklyDefaultSignupCodes !== undefined) weeklyDefaultSignupCodes = normalizeWeeklyDefaultSignupCodes(settings.weeklyDefaultSignupCodes);
         if (settings.scheduleMode !== undefined) scheduleMode = String(settings.scheduleMode || 'auto').toLowerCase() === 'manual' ? 'manual' : 'auto';
         if (settings.signupLockStartAt !== undefined) signupLockStartAt = settings.signupLockStartAt || '';
         if (settings.signupLockEndAt !== undefined) signupLockEndAt = settings.signupLockEndAt || '';
@@ -2745,6 +2786,8 @@ function applySnapshotToMemory(snapshot) {
     cancelledRegistrations = Array.isArray(snapshot.cancelledRegistrations) ? snapshot.cancelledRegistrations : [];
     regularSkatersByDay = normalizeRegularSkatersByDayMap(snapshot.regularSkatersByDay || {});
     customSignupCode = String(snapshot.customSignupCode || '').trim();
+    editableDefaultSignupCode = /^\d{4}$/.test(String(snapshot.editableDefaultSignupCode || '').trim()) ? String(snapshot.editableDefaultSignupCode).trim() : DEFAULT_SIGNUP_CODE;
+    if (snapshot.weeklyDefaultSignupCodes !== undefined) weeklyDefaultSignupCodes = normalizeWeeklyDefaultSignupCodes(snapshot.weeklyDefaultSignupCodes);
     scheduleMode = String(snapshot.scheduleMode || scheduleMode || 'auto').toLowerCase() === 'manual' ? 'manual' : 'auto';
     currentWeekData = snapshot.currentWeekData ?? {
         weekNumber: null,
@@ -3102,6 +3145,8 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
             ['regularSkatersByDay', regularSkatersByDay],
             ['persistentAdminRatings', persistentAdminRatings],
             ['customSignupCode', customSignupCode],
+            ['editableDefaultSignupCode', editableDefaultSignupCode],
+            ['weeklyDefaultSignupCodes', weeklyDefaultSignupCodes],
             ['scheduleMode', scheduleMode],
             ['signupLockStartAt', signupLockStartAt],
             ['signupLockEndAt', signupLockEndAt],
@@ -3332,6 +3377,8 @@ function buildFullDataSnapshot() {
         regularSkatersByDay,
         persistentAdminRatings,
         customSignupCode,
+        editableDefaultSignupCode,
+        weeklyDefaultSignupCodes,
         scheduleMode,
         gameLocation,
         gameTime,
@@ -3459,6 +3506,8 @@ function getSettingsSnapshot() {
         regularSkatersByDay,
         persistentAdminRatings,
         customSignupCode,
+        editableDefaultSignupCode,
+        weeklyDefaultSignupCodes,
         scheduleMode,
         lastExactResetMinuteKey,
         lastExactRosterReleaseMinuteKey
@@ -3561,6 +3610,8 @@ function loadDataFromFile() {
             regularSkatersByDay = normalizeRegularSkatersByDayMap(data.regularSkatersByDay || {});
             persistentAdminRatings = normalizePersistentAdminRatings(data.persistentAdminRatings || data.appSettings?.persistentAdminRatings || {});
             customSignupCode = String(data.customSignupCode || '').trim();
+            editableDefaultSignupCode = /^\d{4}$/.test(String(data.editableDefaultSignupCode || '').trim()) ? String(data.editableDefaultSignupCode).trim() : DEFAULT_SIGNUP_CODE;
+            if (data.weeklyDefaultSignupCodes !== undefined) weeklyDefaultSignupCodes = normalizeWeeklyDefaultSignupCodes(data.weeklyDefaultSignupCodes);
             scheduleMode = String(data.scheduleMode || scheduleMode || 'auto').toLowerCase() === 'manual' ? 'manual' : 'auto';
             currentWeekData = data.currentWeekData ?? {
                 weekNumber: null,
@@ -6421,12 +6472,8 @@ app.post('/api/admin/settings', (req, res) => {
         customSignupCode,
         usingCustomSignupCode: /^\d{4}$/.test(String(customSignupCode || '').trim()),
         regularSkatersByDay,
-        defaultSignupCode: (() => {
-            const day = String(getGameDayName() || '').trim().toLowerCase();
-            if (day === 'friday') return FRIDAY_SIGNUP_CODE;
-            if (day === 'sunday') return SUNDAY_SIGNUP_CODE;
-            return DEFAULT_SIGNUP_CODE;
-        })()
+                defaultSignupCode: getDynamicSignupCode(),
+        weeklyDefaultSignupCodes
     });
 });
 
@@ -6443,6 +6490,85 @@ app.post('/api/admin/update-details', async (req, res) => {
         return res.status(500).json({ error: 'Failed to save game details safely' });
     }
     res.json({ success: true, location: gameLocation, time: gameTime, date: gameDate, formattedDate: formatGameDate(gameDate) });
+});
+
+
+
+app.post('/api/admin/update-weekly-default-codes', async (req, res) => {
+    const { weeklyCodes } = req.body || {};
+
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: "Unauthorized - invalid session" });
+    }
+
+    const days = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    const submitted = weeklyCodes || {};
+    const normalized = {};
+    const invalidDays = [];
+
+    for (const day of days) {
+        const value = String(submitted[day] || '').trim();
+        if (!/^\d{4}$/.test(value)) {
+            invalidDays.push(day);
+        } else {
+            normalized[day] = value;
+        }
+    }
+
+    if (invalidDays.length) {
+        return res.status(400).json({ error: "Each day code must be exactly 4 digits", invalidDays });
+    }
+
+    try {
+        await runProtectedMutation('update-weekly-default-codes', req, async () => {
+            weeklyDefaultSignupCodes = normalized;
+            editableDefaultSignupCode = normalized[String(getGameDayName() || '').toLowerCase()] || DEFAULT_SIGNUP_CODE;
+            playerSignupCode = getDynamicSignupCode();
+        }, { weeklyDefaultSignupCodes: normalized });
+    } catch (err) {
+        return res.status(500).json({ error: 'Failed to save weekly default signup codes safely' });
+    }
+
+    res.json({
+        success: true,
+        code: playerSignupCode,
+        weeklyDefaultSignupCodes,
+        customSignupCode,
+        usingCustomSignupCode: /^\d{4}$/.test(String(customSignupCode || '').trim()),
+        requireCode: requirePlayerCode
+    });
+});
+
+
+app.post('/api/admin/update-default-code', async (req, res) => {
+    const { newCode } = req.body || {};
+
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: "Unauthorized - invalid session" });
+    }
+
+    if (!newCode || !/^\d{4}$/.test(String(newCode).trim())) {
+        return res.status(400).json({ error: "Default code must be exactly 4 digits" });
+    }
+
+    try {
+        await runProtectedMutation('update-default-code', req, async () => {
+            editableDefaultSignupCode = String(newCode).trim();
+            playerSignupCode = getDynamicSignupCode();
+        }, { newDefaultCode: String(newCode).trim() });
+    } catch (err) {
+        return res.status(500).json({ error: 'Failed to save default signup code safely' });
+    }
+
+    res.json({
+        success: true,
+        code: playerSignupCode,
+        defaultSignupCode: getDynamicSignupCode(),
+        weeklyDefaultSignupCodes,
+        customSignupCode,
+        usingCustomSignupCode: /^\d{4}$/.test(String(customSignupCode || '').trim()),
+        requireCode: requirePlayerCode
+    });
 });
 
 app.post('/api/admin/update-code', async (req, res) => {
@@ -6926,6 +7052,89 @@ app.post('/api/admin/update-rating', async (req, res) => {
         console.error('Error updating rating:', err);
         res.status(500).json({ error: "Failed to update rating safely" });
     }
+});
+
+
+function buildAdminRosterContactExport() {
+    const rosterPayload = buildPublicRosterPayload();
+    const fullById = new Map((Array.isArray(players) ? players : []).map(p => [String(p.id), p]));
+
+    const hydrate = (publicPlayer, teamName) => {
+        const full = fullById.get(String(publicPlayer.id)) || publicPlayer || {};
+        const firstName = String(full.firstName || publicPlayer.firstName || '').trim();
+        const lastName = String(full.lastName || publicPlayer.lastName || '').trim();
+        const phoneRaw = String(full.phone || '').trim();
+        const phoneDigits = normalizePhoneDigits(phoneRaw);
+        return {
+            id: full.id ?? publicPlayer.id,
+            firstName,
+            lastName,
+            name: `${firstName} ${lastName}`.trim(),
+            phone: phoneRaw,
+            phoneDigits,
+            team: teamName,
+            isGoalie: !!(full.isGoalie || publicPlayer.isGoalie),
+            cancelled: !!publicPlayer.cancelled
+        };
+    };
+
+    const whiteTeam = (rosterPayload.whiteTeam || []).map(p => hydrate(p, 'White')).filter(p => !p.cancelled && p.phoneDigits.length === 10);
+    const darkTeam = (rosterPayload.darkTeam || []).map(p => hydrate(p, 'Dark')).filter(p => !p.cancelled && p.phoneDigits.length === 10);
+    const all = [...whiteTeam, ...darkTeam];
+
+    const phoneOnly = all.map(p => p.phoneDigits).join(',');
+    const namePhoneLines = all.map(p => `${p.name} - ${p.phone || p.phoneDigits} (${p.team}${p.isGoalie ? ' goalie' : ''})`).join('\n');
+    const csvLines = ['Team,Name,Phone,Goalie'].concat(all.map(p => [
+        p.team,
+        `"${String(p.name).replace(/"/g, '""')}"`,
+        p.phoneDigits,
+        p.isGoalie ? 'Yes' : 'No'
+    ].join(',')));
+
+    return {
+        released: rosterPayload.released,
+        gameDate,
+        formattedDate: formatGameDate(gameDate),
+        location: gameLocation,
+        time: gameTime,
+        total: all.length,
+        whiteCount: whiteTeam.length,
+        darkCount: darkTeam.length,
+        whiteTeam,
+        darkTeam,
+        all,
+        phoneOnly,
+        namePhoneLines,
+        csv: csvLines.join('\n'),
+        smsBody: 'Roster Released.'
+    };
+}
+
+app.get('/api/admin/roster-contacts', (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).json({ error: 'Unauthorized - Admin access only' });
+    }
+
+    if (!getEffectiveRosterReleasedState()) {
+        return res.status(400).json({ error: 'Roster has not been released yet.' });
+    }
+
+    res.json(buildAdminRosterContactExport());
+});
+
+app.get('/api/admin/roster-contacts.csv', (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) {
+        return res.status(401).send('Unauthorized');
+    }
+
+    if (!getEffectiveRosterReleasedState()) {
+        return res.status(400).send('Roster has not been released yet.');
+    }
+
+    const exportData = buildAdminRosterContactExport();
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="hockey-roster-contacts-${gameDate || 'current'}.csv"`);
+    res.send(exportData.csv);
 });
 
 app.post('/api/admin/release-roster', async (req, res) => {
