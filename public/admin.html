@@ -4956,13 +4956,13 @@ th, td{padding:2px 3px !important;}
     }
     #playerList .registered-action-stack .regular-toggle-btn,
     #playerList .registered-action-stack .remove-btn {
-        width:44px !important;
-        min-width:44px !important;
-        height:16px !important;
-        min-height:16px !important;
-        font-size:0.54rem !important;
-        padding:0 3px !important;
-        border-radius:9px !important;
+        width:42px !important;
+        min-width:42px !important;
+        height:15px !important;
+        min-height:15px !important;
+        font-size:0.51rem !important;
+        padding:0 2px !important;
+        border-radius:8px !important;
     }
 }
 
@@ -5459,6 +5459,31 @@ th, td{padding:2px 3px !important;}
 @media (max-width: 700px) {
     .roster-text-export-actions { flex-direction: column; }
     .roster-text-export-actions button { width: 100%; }
+}
+</style>
+
+
+<style id="admin-mobile-action-pill-minus-extra-8-v1">
+/* Mobile only: reduce Registered Players action pillboxes by another ~8%.
+   Keeps order/layout intact. Applies to Regular, Text In, and Remove. */
+@media (max-width: 600px) {
+    #playerList .registered-action-stack .regular-toggle-btn,
+    #playerList .registered-action-stack .notify-player-btn,
+    #playerList .registered-action-stack .remove-btn {
+        width: 33px !important;
+        min-width: 33px !important;
+        max-width: 33px !important;
+        height: 16px !important;
+        min-height: 16px !important;
+        padding: 0 !important;
+        border-radius: 6px !important;
+        font-size: 0.48rem !important;
+        line-height: 1 !important;
+    }
+
+    #playerList .registered-action-stack {
+        gap: 2px !important;
+    }
 }
 </style>
 
@@ -8174,6 +8199,41 @@ ${portalLink}
             window.location.href = `sms:${data.phoneOnly}?body=${body}`;
         }
 
+        function getCurrentGameLabelForSms() {
+            const titleValue = String(document.getElementById('customTitleInput')?.value || '').trim();
+            if (titleValue) return titleValue;
+            const previewValue = String(document.getElementById('dynamicTitlePreview')?.innerText || document.getElementById('titlePreview')?.innerText || '').trim();
+            if (previewValue) return previewValue;
+            return 'Phan Hockey';
+        }
+
+        function openPlayerInRosterSms(playerId) {
+            const player = adminPlayersById ? adminPlayersById[String(playerId)] : null;
+            if (!player) {
+                alert('Player details are not loaded yet. Refresh admin and try again.');
+                return;
+            }
+
+            const phoneDigits = normalizePhoneDigitsClient(player.phone);
+            if (!phoneDigits || phoneDigits.length !== 10) {
+                alert('This player does not have a valid 10-digit phone number.');
+                return;
+            }
+
+            const firstName = String(player.firstName || '').trim() || 'there';
+            const gameLabel = getCurrentGameLabelForSms();
+            const rosterLink = `${window.location.origin}/roster`;
+
+            const smsBody = `
+${firstName}, you’re in for ${gameLabel}.
+
+Check updated roster here:
+${rosterLink}
+`.trim();
+
+            window.location.href = `sms:${phoneDigits}?body=${encodeURIComponent(smsBody)}`;
+        }
+
         async function downloadRosterContactsCsv() {
             const url = `${API_URL}/api/admin/roster-contacts.csv?sessionToken=${encodeURIComponent(sessionToken)}`;
             window.open(url, '_blank');
@@ -8418,12 +8478,18 @@ ${portalLink}
                         const regularCell = hideAdminPaymentUi
                             ? ''
                             : `<button class="control-btn ${regularClass}" onclick="togglePlayerRegular(${p.id})">${regularLabel}</button>`;
+                        const isPhanLyPlayer = String(p.firstName || '').trim().toLowerCase() === 'phan' && String(p.lastName || '').trim().toLowerCase() === 'ly';
+                        const shouldShowNotifyPlayer = !hideAdminPaymentUi && !p.isGoalie && !isPhanLyPlayer;
+                        const notifyPlayerBtn = shouldShowNotifyPlayer
+                            ? `<button class="control-btn notify-player-btn" onclick="openPlayerInRosterSms(${p.id})">Text In</button>`
+                            : '';
                         const actionCell = hideAdminPaymentUi
                             ? `<div class="action-stack registered-action-stack">
                                     <button class="remove-btn" onclick="removePlayer(${p.id})">Remove</button>
                                </div>`
                             : `<div class="action-stack registered-action-stack">
                                     ${regularCell}
+                                    ${notifyPlayerBtn}
                                     <button class="remove-btn" onclick="removePlayer(${p.id})">Remove</button>
                                </div>`;
 
@@ -10778,6 +10844,51 @@ document.addEventListener('keydown', function(e){
                 font-size: 0.82rem !important;
             }
         }
+
+
+.notify-player-btn {
+    background: #2e7d32 !important;
+    color: #fff !important;
+    white-space: nowrap;
+}
+.notify-player-btn:hover {
+    background: #3fa447 !important;
+}
+
+/* Final action pill sizing: keep Regular, Text In, and Remove identical on desktop + mobile. */
+#playerList .registered-action-stack .regular-toggle-btn,
+#playerList .registered-action-stack .notify-player-btn,
+#playerList .registered-action-stack .remove-btn {
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+    height: 22px !important;
+    min-height: 22px !important;
+    padding: 0 !important;
+    border-radius: 6px !important;
+    font-size: 0.68rem !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+@media (max-width: 600px) {
+    #playerList .registered-action-stack .regular-toggle-btn,
+    #playerList .registered-action-stack .notify-player-btn,
+    #playerList .registered-action-stack .remove-btn {
+        width: 36px !important;
+        min-width: 36px !important;
+        max-width: 36px !important;
+        height: 17px !important;
+        min-height: 17px !important;
+        font-size: 0.52rem !important;
+    }
+}
 
 </style>
 
