@@ -245,6 +245,7 @@ let playerSpots = 20;
 let players = []; 
 let waitlist = [];
 let cancelledRegistrations = [];
+const activeCancellationLocks = new Set();
 const ADMIN_PASSWORD = String(process.env.ADMIN_PASSWORD || '').trim();
 const ADMIN_TOKEN_SECRET = String(process.env.ADMIN_TOKEN_SECRET || '').trim() || crypto.randomBytes(48).toString('hex');
 if (!String(process.env.ADMIN_TOKEN_SECRET || '').trim()) {
@@ -3719,14 +3720,47 @@ function appendCancellationLog(entry) {
         cancelledBy: entry?.cancelledBy || 'player',
         notes: entry?.notes || ''
     };
+
     cancelledRegistrations = Array.isArray(cancelledRegistrations) ? cancelledRegistrations : [];
+
+    // Prevent duplicate cancellation rows from double-clicks, browser retries, or concurrent requests.
+    // Same player/source/action within this short window is treated as the same cancellation event.
+    const duplicateWindowMs = Number(process.env.CANCELLATION_LOG_DUPLICATE_WINDOW_MS || 30000);
+    const normalizedPhone = normalizePhoneDigits(normalized.phone);
+    const normalizedFirst = normalized.firstName.toLowerCase();
+    const normalizedLast = normalized.lastName.toLowerCase();
+    const normalizedSource = String(normalized.source || '').trim().toLowerCase();
+    const normalizedAction = String(normalized.action || '').trim().toLowerCase();
+    const normalizedId = String(normalized.id ?? '').trim();
+    const nowMs = Date.parse(normalized.cancelledAt) || Date.now();
+
+    const duplicate = cancelledRegistrations.find(existing => {
+        const existingTimeMs = Date.parse(existing?.cancelledAt || '') || 0;
+        if (Math.abs(nowMs - existingTimeMs) > duplicateWindowMs) return false;
+
+        const sameSource = String(existing?.source || '').trim().toLowerCase() === normalizedSource;
+        const sameAction = String(existing?.action || '').trim().toLowerCase() === normalizedAction;
+        if (!sameSource || !sameAction) return false;
+
+        const sameId = normalizedId && String(existing?.id ?? '').trim() === normalizedId;
+        const samePhone = normalizedPhone && normalizePhoneDigits(existing?.phone || '') === normalizedPhone;
+        const sameName = normalizedFirst && normalizedLast &&
+            String(existing?.firstName || '').trim().toLowerCase() === normalizedFirst &&
+            String(existing?.lastName || '').trim().toLowerCase() === normalizedLast;
+
+        return sameId || samePhone || sameName;
+    });
+
+    if (duplicate) {
+        return duplicate;
+    }
+
     cancelledRegistrations.unshift(normalized);
     if (cancelledRegistrations.length > 250) {
         cancelledRegistrations = cancelledRegistrations.slice(0, 250);
     }
     return normalized;
 }
-
 function validatePhoneNumber(phone) {
     const cleaned = normalizePhoneDigits(phone);
     return cleaned.length === 10;
@@ -5472,6 +5506,14 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
         return res.status(401).json({ error: "Phone number does not match registration." });
     }
 
+    const cancellationLockKey = `${foundSource}:${String(foundPlayer.id).trim()}:${storedPhone}`;
+    if (activeCancellationLocks.has(cancellationLockKey)) {
+        return res.status(409).json({
+            error: "Cancellation is already being processed. Please wait a moment and refresh.",
+            duplicateRequest: true
+        });
+    }
+
     const cancellationTiming = getCancellationTimingStatus();
     const isLateCancelWindow = foundSource === 'players' && !!cancellationTiming.isLateCancelWindow;
 
@@ -5489,6 +5531,7 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
     if (playerIndex !== -1) {
         const player = players[playerIndex];
         let promotedPlayer = null;
+        activeCancellationLocks.add(cancellationLockKey);
 
         try {
             await runProtectedMutation('player-cancel', req, async () => {
@@ -5539,6 +5582,8 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
         } catch (err) {
             console.error('Error cancelling registration:', err.message);
             return res.status(500).json({ error: "Cancellation could not be saved safely. Please try again." });
+        } finally {
+            activeCancellationLocks.delete(cancellationLockKey);
         }
 
         return res.json({
@@ -5558,6 +5603,7 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
 
     if (waitlistIndex !== -1) {
         const waitlistPlayer = waitlist[waitlistIndex];
+        activeCancellationLocks.add(cancellationLockKey);
 
         try {
             await runProtectedMutation('waitlist-cancel', req, async () => {
@@ -5583,6 +5629,8 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
         } catch (err) {
             console.error('Error cancelling waitlist registration:', err.message);
             return res.status(500).json({ error: "Cancellation could not be saved safely. Please try again." });
+        } finally {
+            activeCancellationLocks.delete(cancellationLockKey);
         }
 
         return res.json({
