@@ -1075,16 +1075,8 @@ function validateResetScheduleAgainstGame(resetAt, selectedGameTime = gameTime) 
         };
     }
 
-    // A weekly reset should happen after that week's game, not almost a full week later before the next game.
-    // This blocks stale Friday reset settings such as Friday afternoon/evening for Friday hockey.
-    const maxResetHoursAfterGame = Math.max(1, Number(process.env.MAX_RESET_HOURS_AFTER_GAME || DEFAULT_MAX_RESET_HOURS_AFTER_GAME));
-    if (minutesAfterGame > maxResetHoursAfterGame * 60) {
-        return {
-            ok: false,
-            reason: `Blocked weekly reset because it is ${Math.round(minutesAfterGame / 60)} hours after the configured game time. Reset must be within ${maxResetHoursAfterGame} hours after ${gamePoint.label}.`
-        };
-    }
-
+    // Reset may be scheduled any time after that game's configured game time.
+    // The separate roster-release and reset-arm checks below still prevent premature or stale resets.
     return { ok: true, reason: `Reset schedule is ${Math.round(minutesAfterGame / 60)} hours after the configured game time.` };
 }
 
@@ -1161,11 +1153,10 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime(), resetAt = resetWee
 
     const gamePoint = getGameSchedulePointFromGameTime(gameTime);
     const minutesAfterLatestGame = minutesSinceLatestWeeklyOccurrence(gamePoint, etTime);
-    const maxResetHoursAfterGame = Math.max(1, Number(process.env.MAX_RESET_HOURS_AFTER_GAME || DEFAULT_MAX_RESET_HOURS_AFTER_GAME));
-    if (!Number.isFinite(minutesAfterLatestGame) || minutesAfterLatestGame <= 0 || minutesAfterLatestGame > maxResetHoursAfterGame * 60) {
+    if (!Number.isFinite(minutesAfterLatestGame) || minutesAfterLatestGame <= 0) {
         return {
             ok: false,
-            reason: `Blocked weekly reset because it is not within ${maxResetHoursAfterGame} hours after the actual configured game time (${gamePoint.label}).`
+            reason: `Blocked weekly reset because it is before the actual configured game time (${gamePoint.label}).`
         };
     }
 
@@ -4221,6 +4212,71 @@ function countSkatersOnTeam(team = []) {
     return team.filter(p => p && !p.isGoalie).length;
 }
 
+
+function countGoaliesOnTeam(team = []) {
+    return team.filter(p => p && p.isGoalie).length;
+}
+
+function buildRosterTeamRuleValidation(teams = {}) {
+    const whiteTeam = Array.isArray(teams.whiteTeam) ? teams.whiteTeam : [];
+    const darkTeam = Array.isArray(teams.darkTeam) ? teams.darkTeam : [];
+    const whiteSkaters = countSkatersOnTeam(whiteTeam);
+    const darkSkaters = countSkatersOnTeam(darkTeam);
+    const whiteGoalies = countGoaliesOnTeam(whiteTeam);
+    const darkGoalies = countGoaliesOnTeam(darkTeam);
+    const totalSkaters = whiteSkaters + darkSkaters;
+    const totalGoalies = whiteGoalies + darkGoalies;
+    const totalPlayers = totalSkaters + totalGoalies;
+    const problems = [];
+
+    // Skaters must always be as even as mathematically possible.
+    // With an even skater count, teams must have the same number of skaters.
+    // With an odd skater count, one team may only have one extra skater.
+    if (Math.abs(whiteSkaters - darkSkaters) > 1) {
+        problems.push(`Skater count is uneven: White ${whiteSkaters}, Dark ${darkSkaters}.`);
+    }
+    if (totalSkaters % 2 === 0 && whiteSkaters !== darkSkaters) {
+        problems.push(`Even skater count must split evenly: White ${whiteSkaters}, Dark ${darkSkaters}.`);
+    }
+
+    // If two goalies are present, force one goalie per team.
+    if (totalGoalies === 2 && (whiteGoalies !== 1 || darkGoalies !== 1)) {
+        problems.push(`Two-goalie roster must have one goalie per team: White ${whiteGoalies}, Dark ${darkGoalies}.`);
+    }
+
+    // Full-capacity hockey rule: 20 skaters + 2 goalies = 10 skaters and 1 goalie per team.
+    if (totalPlayers === MAX_ROSTER_SPOTS) {
+        if (totalSkaters !== MAX_SKATERS || totalGoalies !== MAX_GOALIES) {
+            problems.push(`Full roster must be ${MAX_SKATERS} skaters and ${MAX_GOALIES} goalies; found ${totalSkaters} skaters and ${totalGoalies} goalies.`);
+        }
+        if (whiteSkaters !== 10 || darkSkaters !== 10 || whiteGoalies !== 1 || darkGoalies !== 1) {
+            problems.push(`Full roster must be White 10 skaters + 1 goalie and Dark 10 skaters + 1 goalie; found White ${whiteSkaters}+${whiteGoalies}, Dark ${darkSkaters}+${darkGoalies}.`);
+        }
+    }
+
+    return {
+        ok: problems.length === 0,
+        problems,
+        totalPlayers,
+        totalSkaters,
+        totalGoalies,
+        whiteSkaters,
+        darkSkaters,
+        whiteGoalies,
+        darkGoalies
+    };
+}
+
+function enforceRosterTeamRules(teams = {}, context = 'roster') {
+    const validation = buildRosterTeamRuleValidation(teams);
+    if (!validation.ok) {
+        const message = `[ROSTER GUARD] ${context}: ${validation.problems.join(' ')}`;
+        console.error(message);
+        throw new Error(message);
+    }
+    return validation;
+}
+
 function generateFairTeams() {
     const sortByBalance = (a, b) => {
         const diff = getPlayerBalanceScore(b) - getPlayerBalanceScore(a);
@@ -4353,8 +4409,10 @@ function generateFairTeams() {
 
     const whiteSkaterCount = countSkatersOnTeam(whiteTeam);
     const darkSkaterCount = countSkatersOnTeam(darkTeam);
-    const whiteGoalieCount = whiteTeam.filter(p => p.isGoalie).length;
-    const darkGoalieCount = darkTeam.filter(p => p.isGoalie).length;
+    const whiteGoalieCount = countGoaliesOnTeam(whiteTeam);
+    const darkGoalieCount = countGoaliesOnTeam(darkTeam);
+
+    const rosterRuleValidation = enforceRosterTeamRules({ whiteTeam, darkTeam }, 'generateFairTeams');
 
     console.log(`[TEAM BALANCE] Selected ${best.label}. White ${whiteSkaterCount} skater(s), ${whiteGoalieCount} goalie(s). Dark ${darkSkaterCount} skater(s), ${darkGoalieCount} goalie(s). White balance ${roundRating(best.whiteMetrics.totalBalance)}, Dark balance ${roundRating(best.darkMetrics.totalBalance)}, objective ${roundRating(best.objective)}.`);
 
@@ -4370,7 +4428,8 @@ function generateFairTeams() {
         whiteSkaterCount,
         darkSkaterCount,
         whiteGoalieCount,
-        darkGoalieCount
+        darkGoalieCount,
+        rosterRuleValidation
     };
 }
 
