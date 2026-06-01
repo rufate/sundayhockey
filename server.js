@@ -450,10 +450,9 @@ const AUTO_SCHEDULE_RESET_MINUTE = 0;
 // This prevents restored snapshots or Render wake-ups from replaying a missed reset via catch-up.
 const WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT = 0;
 
-// Scheduled weekly reset must happen soon after the configured game.
-// 18 hours covers Friday 9:30 PM -> Saturday 12:00 AM and Sunday morning/day -> Monday 12:00 AM,
-// but blocks stale cross-event resets such as Friday data being cleared Monday morning.
-const DEFAULT_MAX_RESET_HOURS_AFTER_GAME = 18;
+// Weekly reset may be scheduled any time after the configured game time,
+// provided the roster has been released and reset arm is ON.
+// The exact-minute scheduler and run marker prevent replay on Render wake-ups.
 
 // Admin-configurable schedules (interpreted in America/New_York, repeats weekly)
 let signupLockSchedule = {
