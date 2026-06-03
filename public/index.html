@@ -1844,6 +1844,13 @@
             <div class="hero-join-wrap">
                 <button type="button" class="hero-join-btn" id="heroJoinBtn">🏒 Join Game</button>
             </div>
+
+            <div class="rules-review-banner" id="mainRulesReviewBanner">
+                <a href="/rules" class="rules-review-link" target="_self">
+                    ⚠️ REVIEW GAME RULES & CANCELLATION POLICY
+                </a>
+            </div>
+
             <div class="game-meta-divider"></div>
             <div class="spots-container spots-container-inline">
                 <div class="spot-counter" id="playerSpotCounter">
@@ -1937,10 +1944,10 @@
                 <div class="code-entry" id="codeEntryBox">
                     <h3 id="codeTitle">🔒 Enter 4-Digit Code to Sign Up</h3>
                     <div class="code-inputs">
-                        <input type="text" class="code-digit" maxlength="1" id="code1" onkeyup="moveToNext(this, 'code2')" oninput="validateDigit(this)">
-                        <input type="text" class="code-digit" maxlength="1" id="code2" onkeyup="moveToNext(this, 'code3')" oninput="validateDigit(this)">
-                        <input type="text" class="code-digit" maxlength="1" id="code3" onkeyup="moveToNext(this, 'code4')" oninput="validateDigit(this)">
-                        <input type="text" class="code-digit" maxlength="1" id="code4" onkeyup="checkCodeEnter(event)" oninput="validateDigit(this)">
+                        <input type="tel" inputmode="numeric" pattern="[0-9]*" class="code-digit" maxlength="1" id="code1" autocomplete="one-time-code" aria-label="Code digit 1">
+                        <input type="tel" inputmode="numeric" pattern="[0-9]*" class="code-digit" maxlength="1" id="code2" autocomplete="one-time-code" aria-label="Code digit 2">
+                        <input type="tel" inputmode="numeric" pattern="[0-9]*" class="code-digit" maxlength="1" id="code3" autocomplete="one-time-code" aria-label="Code digit 3">
+                        <input type="tel" inputmode="numeric" pattern="[0-9]*" class="code-digit" maxlength="1" id="code4" autocomplete="one-time-code" aria-label="Code digit 4">
                     </div>
                     <button onclick="verifyCode()">Continue</button>
                     <p id="codeError" style="color:#ff4444; display:none; margin-top:10px;">Invalid code</p>
@@ -1959,12 +1966,11 @@
                 <div class="quick-return-list" id="quickReturnList"></div>
             </div>
 
-            
-        <div class="rules-review-banner">
-            <a href="/rules" class="rules-review-link">
-                ⚠️ REVIEW GAME RULES & CANCELLATION POLICY
-            </a>
-        </div>
+            <div class="rules-review-banner" id="signupRulesReviewBanner">
+                <a href="/rules" class="rules-review-link" target="_self">
+                    ⚠️ REVIEW GAME RULES & CANCELLATION POLICY
+                </a>
+            </div>
 
 <form id="signupForm" style="display:none;">
                 <input type="text" id="firstName" placeholder="First Name" required>
@@ -2154,9 +2160,9 @@
                 </div>
 
                 <div id="piaInfo" style="display:none; background: #1a3a3a; padding: 15px; border-radius: 5px; font-size: 0.85rem; margin-bottom: 15px; color: #4a90e2; border: 1px solid #4a90e2;">
-                    <strong>💰 PIA (Pay In Advance) - $13 per Sunday</strong><br>
+                    <strong>💰 PIA (Pay In Advance) - $13 per Game</strong><br>
                     <span id="piaCalculation">Calculating...</span><br>
-                    <span style="color: var(--accent);">* Pay once per month for all upcoming Sundays *</span>
+                    <span style="color: var(--accent);">* Pay once per month for all upcoming games *</span>
                 </div>
 
                 <div class="remember-device-row">
@@ -3746,19 +3752,114 @@ function updateCalculatedRating() {
 
         checkStatus();
 
+        function getCodeDigitInputs() {
+            return ['code1', 'code2', 'code3', 'code4']
+                .map(id => document.getElementById(id))
+                .filter(Boolean);
+        }
+
         function validateDigit(input) {
-            input.value = input.value.replace(/[^0-9]/g, '');
+            input.value = String(input.value || '').replace(/[^0-9]/g, '').slice(0, 1);
         }
 
         function moveToNext(current, nextId) {
+            validateDigit(current);
             if (current.value.length === 1) {
-                document.getElementById(nextId).focus();
+                const next = document.getElementById(nextId);
+                if (next) {
+                    next.focus();
+                    next.select();
+                }
             }
         }
 
         function checkCodeEnter(event) {
             if (event.key === 'Enter') verifyCode();
         }
+
+        function setupCodeDigitCorrection() {
+            const codeInputs = getCodeDigitInputs();
+            if (!codeInputs.length) return;
+
+            codeInputs.forEach((input, index) => {
+                input.addEventListener('focus', function() {
+                    setTimeout(() => input.select(), 0);
+                });
+
+                input.addEventListener('click', function() {
+                    input.select();
+                });
+
+                input.addEventListener('input', function() {
+                    const digits = String(input.value || '').replace(/\D/g, '');
+
+                    if (digits.length > 1) {
+                        digits.slice(0, codeInputs.length - index).split('').forEach((digit, offset) => {
+                            if (codeInputs[index + offset]) {
+                                codeInputs[index + offset].value = digit;
+                            }
+                        });
+
+                        const nextIndex = Math.min(index + digits.length, codeInputs.length - 1);
+                        codeInputs[nextIndex].focus();
+                        codeInputs[nextIndex].select();
+                        return;
+                    }
+
+                    input.value = digits.slice(0, 1);
+
+                    if (input.value && index < codeInputs.length - 1) {
+                        codeInputs[index + 1].focus();
+                        codeInputs[index + 1].select();
+                    }
+                });
+
+                input.addEventListener('keydown', function(event) {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        verifyCode();
+                        return;
+                    }
+
+                    if (event.key === 'Backspace') {
+                        event.preventDefault();
+
+                        if (input.value) {
+                            input.value = '';
+                            return;
+                        }
+
+                        if (index > 0) {
+                            codeInputs[index - 1].focus();
+                            codeInputs[index - 1].value = '';
+                            codeInputs[index - 1].select();
+                        }
+                        return;
+                    }
+
+                    if (event.key === 'Delete') {
+                        event.preventDefault();
+                        input.value = '';
+                        return;
+                    }
+
+                    if (event.key === 'ArrowLeft' && index > 0) {
+                        event.preventDefault();
+                        codeInputs[index - 1].focus();
+                        codeInputs[index - 1].select();
+                        return;
+                    }
+
+                    if (event.key === 'ArrowRight' && index < codeInputs.length - 1) {
+                        event.preventDefault();
+                        codeInputs[index + 1].focus();
+                        codeInputs[index + 1].select();
+                    }
+                });
+            });
+        }
+
+        setupCodeDigitCorrection();
 
         async function verifyCode() {
             const code = document.getElementById('code1').value + 
