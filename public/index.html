@@ -2113,9 +2113,9 @@
                 </div>
 
                 <div id="piaInfo" style="display:none; background: #1a3a3a; padding: 15px; border-radius: 5px; font-size: 0.85rem; margin-bottom: 15px; color: #4a90e2; border: 1px solid #4a90e2;">
-                    <strong>💰 PIA (Pay In Advance) - $13 per Sunday</strong><br>
+                    <strong id="piaTitle">💰 PIA (Pay In Advance) - $13 per Game</strong><br>
                     <span id="piaCalculation">Calculating...</span><br>
-                    <span style="color: var(--accent);">* Pay once per month for all upcoming Sundays *</span>
+                    <span id="piaMonthlyNote" style="color: var(--accent);">* Pay once per month for all upcoming games *</span>
                 </div>
 
                 <div class="remember-device-row">
@@ -2834,9 +2834,20 @@ function updateCalculatedRating() {
             const totalCost = numDays * 13;
 
             const piaCalc = document.getElementById('piaCalculation');
+            const piaTitle = document.getElementById('piaTitle');
+            const piaMonthlyNote = document.getElementById('piaMonthlyNote');
+            const pluralDayLabel = dayLabel + (numDays !== 1 ? 's' : '');
+
+            if (piaTitle) {
+                piaTitle.innerHTML = '💰 PIA (Pay In Advance) - $13 per Game';
+            }
+
+            if (piaMonthlyNote) {
+                piaMonthlyNote.innerHTML = '* Pay once per month for all upcoming ' + pluralDayLabel + ' *';
+            }
+
             if (piaCalc) {
-                let html = monthLabel + ' ' + numDays + ' ' + dayLabel;
-                if (numDays !== 1) html += 's';
+                let html = monthLabel + ' ' + numDays + ' ' + pluralDayLabel;
                 html += ' × $13 = <strong>$' + totalCost + '</strong> total';
                 if (isLastGameDayOrAfter) {
                     html += ' <br><small style="color:#4CAF50;">🗓️ Showing next month rate</small>';
@@ -3379,6 +3390,7 @@ function updateCalculatedRating() {
                 currentLocation = data.location;
                 currentTime = data.time;
                 currentDate = data.formattedDate;
+                updatePIACalculation();
                 currentGameDateValue = data.date || '';
                 clearGameCardPositionLockIfNeeded();
                 playerSpotsAvailable = data.playerSpotsRemaining;
