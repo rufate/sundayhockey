@@ -240,22 +240,16 @@
 
         <ul class="rules-list" id="rulesList">
     <li><span class="rule-number">1</span><span class="rule-text">No contact. Board tie-ups only.</span></li>
-    <li><span class="rule-number">2</span><span class="rule-text">No slashing. Lift sticks. Injury = done + possible ban.</span></li>
-    <li><span class="rule-number">3</span><span class="rule-text">Move the puck. Don’t hog it.</span></li>
-    <li><span class="rule-number">4</span><span class="rule-text">Control slapshots. Head shots = no more slapshots.</span></li>
-    <li><span class="rule-number">5</span><span class="rule-text">Short shifts. Be fair with ice time.</span></li>
+    <li><span class="rule-number">2</span><span class="rule-text">No slashing.</span></li>
+    <li><span class="rule-number">3</span><span class="rule-text">Don't hog the puck, pass it.</span></li>
+    <li><span class="rule-number">4</span><span class="rule-text">Your slapshots = injury = no more slapshots for you.</span></li>
+    <li><span class="rule-number">5</span><span class="rule-text">Short shifts. Be considerate of your teammates.</span></li>
     <li><span class="rule-number">6</span><span class="rule-text">No negativity. Keep it positive.</span></li>
-    <li><span class="rule-number">7</span><span class="rule-text">Skate hard, change often.</span></li>
-    <li><span class="rule-number">8</span><span class="rule-text">No excessive aggression. It’s pickup.</span></li>
-    <li><span class="rule-number">9</span><span class="rule-text">Don’t be “that guy.” You know who you are.</span></li>
-    <li><span class="rule-number">10</span><span class="rule-text">Handshake/fist bump after the game. Have fun.</span></li>
-
-    <!-- NOW RULE 11 -->
-    <li><span class="rule-number">11</span><span class="rule-text">Respect the game and players — or you’re done.</span></li>
-
-    <!-- NOW RULE 12 (IMPORTANT ONE LAST) -->
+    <li><span class="rule-number">7</span><span class="rule-text">No excessive aggression. You will feel really bad if someone ends up getting hurt.</span></li>
+    <li><span class="rule-number">8</span><span class="rule-text">Respect the game and players.</span></li>
+    <li><span class="rule-number">9</span><span class="rule-text">Don't forget handshake/fist bump after the game.</span></li>
     <li>
-        <span class="rule-number">12</span>
+        <span class="rule-number">10</span>
         <span class="rule-text" style="color:#ff4444; font-weight:bold;">
             ⚠️ Cancellation must be done prior to Roster Release. This allows waitlist players a spot. No show owes.
         </span>
@@ -324,15 +318,29 @@
         })();
 // Check for temp registration data
         const tempData = sessionStorage.getItem('tempRegData');
-        
+
+        let registrationData = null;
+
         if (!tempData) {
-            alert('No registration data found. Please start registration from the beginning.');
-            window.location.href = '/';
+            // Public rules viewing mode.
+            const agreementBox = document.querySelector('.agreement-box');
+            const completeBtn = document.getElementById('completeBtn');
+
+            if (agreementBox) {
+                agreementBox.style.display = 'none';
+            }
+
+            if (completeBtn) {
+                completeBtn.disabled = false;
+                completeBtn.innerText = 'Return to Home';
+                completeBtn.onclick = function () {
+                    window.location.href = '/';
+                };
+            }
+        } else {
+            registrationData = JSON.parse(tempData);
         }
-        
-        const registrationData = JSON.parse(tempData);
-        
-        // Enable button when checkbox is checked
+// Enable button when checkbox is checked
         document.getElementById('agreeRules').addEventListener('change', function() {
             document.getElementById('completeBtn').disabled = !this.checked;
         });
