@@ -1601,11 +1601,30 @@
             font-size: 0.95rem;
             letter-spacing: 0.4px;
             text-transform: uppercase;
-            box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+            box-shadow: 0 6px 18px rgba(255,68,68,.45);
+            animation: rulesReviewPulse 1.4s infinite;
+            will-change: transform, box-shadow;
         }
 
         .rules-review-link:hover {
             background: linear-gradient(135deg, #5a2525, #7d2525);
+        }
+
+        @keyframes rulesReviewPulse {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 6px 18px rgba(255,68,68,.45);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 0 28px rgba(255,68,68,.95);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .rules-review-link {
+                animation: none;
+            }
         }
 
         @media (max-width: 600px) {
