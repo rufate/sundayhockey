@@ -7170,8 +7170,28 @@ function buildAdminRosterContactExport() {
         };
     };
 
-    const whiteTeam = (rosterPayload.whiteTeam || []).map(p => hydrate(p, 'White')).filter(p => !p.cancelled && p.phoneDigits.length === 10);
-    const darkTeam = (rosterPayload.darkTeam || []).map(p => hydrate(p, 'Dark')).filter(p => !p.cancelled && p.phoneDigits.length === 10);
+    const shouldIncludeInAndroidMassTextExport = (player) => {
+        if (!player || player.cancelled) return false;
+        if (player.phoneDigits.length !== 10) return false;
+        if (player.isGoalie) return false;
+
+        const normalizedName = String(player.name || '')
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, ' ');
+
+        // Exclude Phan Ly from Android Mass Text Export contact lists.
+        if (normalizedName === 'phan ly') return false;
+
+        return true;
+    };
+
+    const whiteTeam = (rosterPayload.whiteTeam || [])
+        .map(p => hydrate(p, 'White'))
+        .filter(shouldIncludeInAndroidMassTextExport);
+    const darkTeam = (rosterPayload.darkTeam || [])
+        .map(p => hydrate(p, 'Dark'))
+        .filter(shouldIncludeInAndroidMassTextExport);
     const all = [...whiteTeam, ...darkTeam];
 
     const phoneOnly = all.map(p => p.phoneDigits).join(',');
