@@ -5852,16 +5852,16 @@ th, td{padding:2px 3px !important;}
             <div style="margin-top:10px; font-size: 0.85rem; color: #aaa;">
                 Click "Release Roster Now" to generate teams and make them visible to all players instantly.
             </div>
-            <div class="roster-text-export-box" id="rosterTextExportBox" style="display:none;">
-                <h4>📱 Android Mass Text Export</h4>
-                <p>After roster release, use this to extract the active roster phone numbers. Copy the phone list into your Android messaging app, or download the CSV for your contacts.</p>
+            <div class="roster-text-export-box" id="rosterTextExportBox">
+                <h4>📱 Mass Text Signup Players</h4>
+                <p>Use this anytime to text the current signup list from Android. Phan Ly and all goalies are automatically excluded.</p>
                 <div class="roster-text-export-actions">
-                    <button class="control-btn" onclick="copyRosterPhonesOnly()" style="background:#2e7d32;">Copy Phone Numbers</button>
-                    <button class="control-btn" onclick="copyRosterNamesAndPhones()" style="background:#4a90e2;">Copy Names + Phones</button>
-                    <button class="control-btn" onclick="openRosterSmsDraft()" style="background:#8e44ad;">Open Android Text</button>
-                    <button class="control-btn" onclick="downloadRosterContactsCsv()" style="background:#546e7a;">Download CSV</button>
+                    <button class="control-btn" onclick="copySignupPhonesOnly()" style="background:#2e7d32;">Copy Phone Numbers</button>
+                    <button class="control-btn" onclick="copySignupNamesAndPhones()" style="background:#4a90e2;">Copy Names + Phones</button>
+                    <button class="control-btn" onclick="openSignupSmsDraft()" style="background:#8e44ad;">Open Android Text</button>
+                    <button class="control-btn" onclick="downloadSignupContactsCsv()" style="background:#546e7a;">Download CSV</button>
                 </div>
-                <textarea id="rosterTextExportPreview" class="roster-text-export-preview" readonly placeholder="Roster contact export appears here after release."></textarea>
+                <textarea id="rosterTextExportPreview" class="roster-text-export-preview" readonly placeholder="Signup contact export appears here after players sign up."></textarea>
             </div>
         </div>
 
@@ -8112,37 +8112,96 @@ Date: ${selectedGameDate}`);
             return [header, '', white, '', dark].filter(part => String(part || '').trim()).join('\n');
         }
 
-        async function loadRosterContactExport() {
-            const box = document.getElementById('rosterTextExportBox');
-            const preview = document.getElementById('rosterTextExportPreview');
-            if (!currentRosterReleased) {
-                latestRosterContactExport = null;
-                if (box) box.style.display = 'none';
-                if (preview) preview.value = '';
-                return null;
-            }
 
-            try {
-                const res = await fetch(`${API_URL}/api/admin/roster-contacts?sessionToken=${encodeURIComponent(sessionToken)}`, {
-                    method: 'GET',
-                    headers: getAdminHeaders()
+        function isPhanLyOrProtectedPlayer(player) {
+            const name = `${String(player.firstName || '').trim()} ${String(player.lastName || '').trim()}`.trim().toLowerCase().replace(/\s+/g, ' ');
+            return !!player.protected || name === 'phan ly';
+        }
+
+        function buildSignupMassTextExport() {
+            const seenPhones = new Set();
+            const allPlayers = Object.values(adminPlayersById || {});
+            const contacts = allPlayers
+                .map(player => {
+                    const firstName = String(player.firstName || '').trim();
+                    const lastName = String(player.lastName || '').trim();
+                    const name = `${firstName} ${lastName}`.trim();
+                    const phoneDigits = normalizePhoneDigitsClient(player.phone);
+                    return { ...player, firstName, lastName, name, phoneDigits };
+                })
+                .filter(player => {
+                    if (!player.phoneDigits || player.phoneDigits.length !== 10) return false;
+                    if (seenPhones.has(player.phoneDigits)) return false;
+                    if (player.isGoalie) return false;
+                    if (isPhanLyOrProtectedPlayer(player)) return false;
+                    seenPhones.add(player.phoneDigits);
+                    return true;
                 });
 
-                if (!res.ok) {
-                    if (res.status === 401) logout();
-                    throw new Error('Could not load roster contact export.');
-                }
+            const phoneOnly = contacts.map(p => p.phoneDigits).join(',');
+            const namePhoneLines = contacts.map(p => `${p.name || 'Player'} - ${p.phone || p.phoneDigits}`).join('\n');
+            const csv = ['Name,Phone'].concat(contacts.map(p => [
+                `"${String(p.name || 'Player').replace(/"/g, '""')}"`,
+                p.phoneDigits
+            ].join(','))).join('\n');
 
-                const data = await res.json();
-                latestRosterContactExport = data;
-                if (box) box.style.display = 'block';
-                if (preview) preview.value = formatRosterExportPreview(data);
-                return data;
-            } catch (err) {
-                console.error('Roster contact export error:', err);
-                if (preview) preview.value = err.message || 'Could not load roster contact export.';
-                return null;
+            return { total: contacts.length, contacts, phoneOnly, namePhoneLines, csv };
+        }
+
+        function refreshMassTextPreview() {
+            const preview = document.getElementById('rosterTextExportPreview');
+            if (!preview) return;
+            const data = buildSignupMassTextExport();
+            preview.value = data.total
+                ? `Signup Mass Text Contacts (${data.total})\n\n${data.namePhoneLines}`
+                : 'No eligible signup players found. Phan Ly and goalies are excluded automatically.';
+        }
+
+        async function copySignupPhonesOnly() {
+            const data = buildSignupMassTextExport();
+            await copyTextToClipboard(data.phoneOnly, `Copied ${data.total || 0} signup phone numbers.`);
+        }
+
+        async function copySignupNamesAndPhones() {
+            const data = buildSignupMassTextExport();
+            await copyTextToClipboard(data.namePhoneLines, `Copied ${data.total || 0} signup names and phone numbers.`);
+        }
+
+        async function openSignupSmsDraft() {
+            const data = buildSignupMassTextExport();
+            if (!data.phoneOnly) {
+                alert('No eligible signup phone numbers available. Phan Ly and goalies are excluded automatically.');
+                return;
             }
+
+            const portalLink = window.location.origin;
+            const smsBody = `Signup is open. Join here:\n${portalLink}`;
+            window.location.href = `sms:${data.phoneOnly}?body=${encodeURIComponent(smsBody)}`;
+        }
+
+        function downloadSignupContactsCsv() {
+            const data = buildSignupMassTextExport();
+            if (!data.total) {
+                alert('No eligible signup contacts to download.');
+                return;
+            }
+            const blob = new Blob([data.csv], { type: 'text/csv;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `hockey-signup-contacts-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                URL.revokeObjectURL(a.href);
+                a.remove();
+            }, 0);
+        }
+
+        async function loadRosterContactExport() {
+            const box = document.getElementById('rosterTextExportBox');
+            if (box) box.style.display = 'block';
+            refreshMassTextPreview();
+            return null;
         }
 
         async function ensureRosterContactExport() {
@@ -8152,7 +8211,7 @@ Date: ${selectedGameDate}`);
         async function copyTextToClipboard(text, successMessage) {
             const value = String(text || '').trim();
             if (!value) {
-                alert('Nothing to copy yet. Release the roster first.');
+                alert('Nothing to copy yet.');
                 return;
             }
             try {
