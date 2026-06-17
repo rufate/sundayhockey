@@ -255,6 +255,10 @@ if (!String(process.env.ADMIN_TOKEN_SECRET || '').trim()) {
 const ADMIN_REMEMBER_TOKEN_TTL_DAYS = Number(process.env.ADMIN_TOKEN_TTL_DAYS || 30);
 const ADMIN_SESSION_TOKEN_TTL_HOURS = Number(process.env.ADMIN_SESSION_HOURS || 12);
 const ADMIN_SESSION_FILE = './admin-sessions.json';
+const PAYMENT_PASSWORD = String(process.env.PAYMENT_PASSWORD || process.env.COLLECTOR_PASSWORD || '').trim();
+const PAYMENT_TOKEN_SECRET = String(process.env.PAYMENT_TOKEN_SECRET || process.env.COLLECTOR_TOKEN_SECRET || ADMIN_TOKEN_SECRET).trim() || crypto.randomBytes(48).toString('hex');
+const PAYMENT_SESSION_TOKEN_TTL_HOURS = Number(process.env.PAYMENT_SESSION_HOURS || 12);
+
 
 // Game details - FRIDAY HOCKEY
 let gameLocation = "Capri Recreation Complex";
@@ -860,6 +864,7 @@ let announcementText = '';
 let announcementImages = [];
 let paymentEmail = String(process.env.PAYMENT_EMAIL || 'okosoff@outlook.com').trim();
 let rosterReleaseAnnouncementText = buildRosterReleasePaymentAnnouncement();
+let collectorPageEnabled = false; // Payment page ON/OFF toggle from main admin; defaults OFF until roster release
 
 // ============================================
 // END NEW CONFIGURATION SECTION
@@ -1596,6 +1601,7 @@ async function autoReleaseRoster() {
         const teams = generateFairTeams();
 
         rosterReleased = true;
+        collectorPageEnabled = true;
         resetArmed = true;
 
         announcementEnabled = true;
@@ -1766,6 +1772,7 @@ async function checkWeeklyReset() {
     players = [];
     waitlist = [];
     rosterReleased = false;
+    collectorPageEnabled = false;
     resetArmed = false;
     lastResetWeek = currentWeek;
     gameDate = calculateNextGameDate();
@@ -1782,6 +1789,7 @@ async function checkWeeklyReset() {
     manualOverrideState = `reset-lock:${nowETMinuteKey(etTime)}`;
     requirePlayerCode = true;
     maintenanceMode = false;
+    collectorPageEnabled = false;
     clearAnnouncementState();
     refreshDynamicSignupCode();
 
@@ -2252,6 +2260,8 @@ async function loadDataFromDB() {
         if (appSettings.announcementText !== undefined) announcementText = appSettings.announcementText || '';
         if (appSettings.paymentEmail !== undefined) paymentEmail = String(appSettings.paymentEmail || '').trim() || paymentEmail;
         if (appSettings.rosterReleaseAnnouncementText !== undefined) rosterReleaseAnnouncementText = String(appSettings.rosterReleaseAnnouncementText || '').trim() || buildRosterReleasePaymentAnnouncement();
+        if (appSettings.collectorPageEnabled !== undefined) collectorPageEnabled = appSettings.collectorPageEnabled !== 'false';
+        if (!rosterReleased) collectorPageEnabled = false;
         if (appSettings.announcementImages !== undefined) {
             try {
                 announcementImages = JSON.parse(appSettings.announcementImages || '[]');
@@ -2873,6 +2883,8 @@ async function restoreSnapshotItem(item, req, auditAction = 'restore-snapshot-re
         if (typeof s.announcementText === 'string') announcementText = s.announcementText;
         if (Array.isArray(s.announcementImages)) announcementImages = s.announcementImages;
         if (typeof s.paymentEmail === 'string') paymentEmail = s.paymentEmail.trim() || paymentEmail;
+        if (typeof s.collectorPageEnabled === 'boolean') collectorPageEnabled = s.collectorPageEnabled;
+        if (!rosterReleased) collectorPageEnabled = false;
         if (typeof s.requirePlayerCode === 'boolean') requirePlayerCode = s.requirePlayerCode;
         if (typeof s.playerSignupCode === 'string' && s.playerSignupCode.trim()) playerSignupCode = s.playerSignupCode.trim();
     }
@@ -3167,6 +3179,7 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
             ['announcementImages', JSON.stringify(announcementImages)],
             ['paymentEmail', paymentEmail],
             ['rosterReleaseAnnouncementText', rosterReleaseAnnouncementText],
+            ['collectorPageEnabled', String(collectorPageEnabled)],
             ['persistentAdminRatings', JSON.stringify(persistentAdminRatings)],
             ['selectedDayTime', gameTime],
             ['selectedArena', gameLocation],
@@ -3401,6 +3414,7 @@ function buildFullDataSnapshot() {
         announcementImages,
         paymentEmail,
         rosterReleaseAnnouncementText,
+        collectorPageEnabled,
         summary: {
             gameLocation,
             gameTime,
@@ -3417,6 +3431,7 @@ function buildFullDataSnapshot() {
             announcementImages,
             paymentEmail,
         rosterReleaseAnnouncementText,
+            collectorPageEnabled,
             selectedDayTime: gameTime,
             selectedArena: gameLocation,
             requirePlayerCode,
@@ -3478,6 +3493,7 @@ function getSettingsSnapshot() {
         announcementImages,
         paymentEmail,
         rosterReleaseAnnouncementText,
+        collectorPageEnabled,
         gameTime,
         gameLocation,
         gameDate,
@@ -3619,6 +3635,8 @@ function loadDataFromFile() {
             announcementText = data.announcementText ?? '';
             rosterReleaseAnnouncementText = String(data.rosterReleaseAnnouncementText || '').trim() || buildRosterReleasePaymentAnnouncement();
             announcementImages = Array.isArray(data.announcementImages) ? data.announcementImages : [];
+            collectorPageEnabled = data.collectorPageEnabled ?? data.appSettings?.collectorPageEnabled ?? false;
+            if (!rosterReleased) collectorPageEnabled = false;
             if (!isManualScheduleMode() && shouldAutoBuildMissingSchedules(data)) {
                 buildAutoSchedulesFromGameTime(gameTime, gameDate);
             }
@@ -4849,6 +4867,141 @@ app.get('/rules', (req, res) => {
     return sendPublic(res, 'rules.html');
 });
 
+
+// --- PAYMENT / COLLECTOR PAGE ---
+function createPaymentSessionToken(rememberMe = true) {
+    const expiresIn = rememberMe ? '12h' : `${PAYMENT_SESSION_TOKEN_TTL_HOURS}h`;
+    return jwt.sign({ role: 'payment', jti: crypto.randomUUID() }, PAYMENT_TOKEN_SECRET, { expiresIn });
+}
+
+function isValidPaymentSession(token) {
+    const value = String(token || '').trim();
+    if (!value) return false;
+    try {
+        const decoded = jwt.verify(value, PAYMENT_TOKEN_SECRET);
+        return decoded && decoded.role === 'payment';
+    } catch (err) {
+        return false;
+    }
+}
+
+function getPaymentAuthToken(req) {
+    const authHeader = req.headers['authorization'] || '';
+    const bearerToken = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+        ? authHeader.slice(7).trim()
+        : '';
+    return req.headers['x-payment-auth'] || req.headers['x-collector-auth'] || bearerToken || (req.body && req.body.sessionToken) || '';
+}
+
+function requirePaymentPageEnabled(req, res) {
+    if (collectorPageEnabled !== false && getEffectiveRosterReleasedState()) return true;
+    res.status(403).json({ error: 'Payment page is currently turned off or roster has not been released.' });
+    return false;
+}
+
+function requirePaymentAuth(req, res) {
+    if (isValidPaymentSession(getPaymentAuthToken(req))) return true;
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+}
+
+function isExcludedFromPaymentPage(player = {}) {
+    const first = String(player.firstName || '').trim().toLowerCase();
+    const last = String(player.lastName || '').trim().toLowerCase();
+    return !!player.isGoalie || (first === 'phan' && last === 'ly');
+}
+
+function getPaymentPlayers() {
+    return (Array.isArray(players) ? players : [])
+        .filter(player => player && !isExcludedFromPaymentPage(player))
+        .map(player => ({
+            id: player.id,
+            firstName: player.firstName,
+            lastName: player.lastName,
+            phone: player.phone,
+            rating: player.finalRating ?? player.rating,
+            team: player.team || '',
+            paid: !!player.paid,
+            paidAmount: player.paidAmount == null ? null : Number(player.paidAmount),
+            paymentStatus: normalizePaymentStatus(player.paymentStatus, player),
+            registeredAt: player.registeredAt
+        }));
+}
+
+app.get('/payment', (req, res) => {
+    if (collectorPageEnabled === false || !getEffectiveRosterReleasedState()) {
+        return res.status(403).send('<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Payment Page Off</title><style>body{margin:0;background:#1a1a1a;color:#fff;font-family:Arial;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px}.box{max-width:520px;background:#2d2d2d;border:2px solid #ff6b00;border-radius:14px;padding:24px;text-align:center}h1{color:#ff6b00}</style></head><body><div class="box"><h1>Payment Page Off</h1><p>This page is unavailable until the roster is released.</p></div></body></html>');
+    }
+    return sendPublic(res, 'collector.html');
+});
+
+app.get('/collect', (req, res) => res.redirect('/payment'));
+app.get('/collector', (req, res) => res.redirect('/payment'));
+
+app.post('/api/collector/login', adminLoginLimiter, (req, res) => {
+    if (!requirePaymentPageEnabled(req, res)) return;
+    const { password, rememberMe } = req.body || {};
+    if (!PAYMENT_PASSWORD) return res.status(503).json({ error: 'PAYMENT_PASSWORD or COLLECTOR_PASSWORD is not configured.' });
+    if (String(password || '').trim() !== PAYMENT_PASSWORD) return res.status(401).json({ error: 'Invalid password' });
+    res.json({ success: true, sessionToken: createPaymentSessionToken(rememberMe !== false) });
+});
+
+app.post('/api/collector/players', (req, res) => {
+    if (!requirePaymentPageEnabled(req, res)) return;
+    if (!requirePaymentAuth(req, res)) return;
+
+    const paymentPlayers = getPaymentPlayers();
+    const totalPaid = paymentPlayers.reduce((sum, p) => {
+        const amount = Number(p.paidAmount);
+        return Number.isFinite(amount) && amount > 0 ? sum + amount : sum;
+    }, 0);
+
+    res.json({
+        success: true,
+        rosterReleased: getEffectiveRosterReleasedState(),
+        date: gameDate,
+        time: gameTime,
+        location: gameLocation,
+        totalPaid: totalPaid.toFixed(2),
+        paidCount: paymentPlayers.filter(p => normalizePaymentStatus(p.paymentStatus, p) !== 'owes').length,
+        unpaidCount: paymentPlayers.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'owes').length,
+        playerCount: paymentPlayers.length,
+        goalieCount: 0,
+        players: paymentPlayers
+    });
+});
+
+app.post('/api/collector/update-paid-amount', async (req, res) => {
+    if (!requirePaymentPageEnabled(req, res)) return;
+    if (!requirePaymentAuth(req, res)) return;
+
+    const playerId = String(req.body?.playerId || '').trim();
+    const amountRaw = req.body?.paidAmount;
+    const statusRaw = String(req.body?.paymentStatus || '').trim().toLowerCase();
+
+    const player = (Array.isArray(players) ? players : []).find(p => String(p.id) === playerId);
+    if (!player || isExcludedFromPaymentPage(player)) {
+        return res.status(404).json({ error: 'Player not found on payment page.' });
+    }
+
+    if (statusRaw === 'owes') {
+        applyPaymentStatusToPlayer(player, 'owes', { clearAmount: true });
+    } else if (statusRaw === 'pia') {
+        applyPaymentStatusToPlayer(player, 'pia');
+    } else {
+        const amount = Number(amountRaw);
+        player.paidAmount = Number.isFinite(amount) && amount >= 0 ? amount : 15;
+        applyPaymentStatusToPlayer(player, 'paid', { ensureAmount: true, defaultAmount: player.paidAmount || 15 });
+    }
+
+    const saveResult = await saveData('collector-payment-update');
+    if (!saveResult || !saveResult.ok) {
+        return res.status(500).json({ error: saveResult?.error || 'Payment update was not saved.' });
+    }
+
+    res.json({ success: true, player });
+});
+
 // Root route must be last among HTML routes
 app.get('/', (req, res) => {
     return sendPublic(res, 'index.html');
@@ -5787,6 +5940,7 @@ app.post('/api/admin/app-settings', (req, res) => {
         announcementImages,
         paymentEmail,
         rosterReleaseAnnouncementText,
+        collectorPageEnabled,
         selectedDayTime: gameTime,
         selectedArena: gameLocation,
         gameDate,
@@ -5802,7 +5956,7 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
     const { sessionToken, maintenanceMode: newMaintenance, customTitle: newTitle,
             announcementEnabled: newAnnouncementEnabled, announcementText: newAnnouncementText, announcementImages: newAnnouncementImages,
             rosterReleaseAnnouncementText: newRosterReleaseAnnouncementText, paymentEmail: newPaymentEmail, selectedDayTime, selectedArena, gameDate: newGameDate,
-            regularSkatersByDay: newRegularSkatersByDay } = req.body;
+            regularSkatersByDay: newRegularSkatersByDay, collectorPageEnabled: newCollectorPageEnabled } = req.body;
 
     if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -5816,6 +5970,7 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
             if (newAnnouncementText !== undefined) announcementText = String(newAnnouncementText || '').trim();
             if (newRosterReleaseAnnouncementText !== undefined) rosterReleaseAnnouncementText = String(newRosterReleaseAnnouncementText || '').trim() || buildRosterReleasePaymentAnnouncement();
             if (newPaymentEmail !== undefined) paymentEmail = String(newPaymentEmail || '').trim();
+            if (newCollectorPageEnabled !== undefined) collectorPageEnabled = !!newCollectorPageEnabled;
             if (newAnnouncementImages !== undefined) {
                 announcementImages = normalizeAnnouncementImages(newAnnouncementImages);
             }
@@ -5855,6 +6010,7 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
             rosterReleaseAnnouncementText,
             announcementImages,
             regularSkatersByDay,
+            collectorPageEnabled,
             gameTime,
             gameLocation,
             gameDate
@@ -7259,6 +7415,7 @@ app.post('/api/admin/release-roster', async (req, res) => {
         const teams = generateFairTeams();
         await runProtectedMutation('release-roster', req, async () => {
             rosterReleased = true;
+            collectorPageEnabled = true;
             resetArmed = true;
             syncScheduledActionRunMarker(rosterReleaseSchedule.at, 'release', etTime);
             announcementEnabled = true;
@@ -7286,7 +7443,7 @@ app.post('/api/admin/manual-reset', async (req, res) => {
         await runProtectedMutation('manual-reset', req, async () => {
             // Preserve all active admin-adjusted ratings before clearing the weekly roster.
             rememberCurrentAdminRatings();
-            playerSpots = MAX_SKATERS; players = []; waitlist = []; rosterReleased = false; resetArmed = false; lastResetWeek = week; gameDate = calculateNextGameDate();
+            playerSpots = MAX_SKATERS; players = []; waitlist = []; rosterReleased = false; collectorPageEnabled = false; resetArmed = false; lastResetWeek = week; gameDate = calculateNextGameDate();
             currentWeekData = { weekNumber: week, year, releaseDate: null, whiteTeam: [], darkTeam: [] };
             manualOverride = true; manualOverrideState = `reset-lock:${nowETMinuteKey(etTime)}`; requirePlayerCode = true; clearAnnouncementState();
             syncScheduledActionRunMarker(resetWeekSchedule.at, 'reset', etTime);

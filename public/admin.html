@@ -5534,6 +5534,14 @@ th, td{padding:2px 3px !important;}
                 <div class="maintenance-status inactive" id="maintenanceStatus">PORTAL ACTIVE</div>
             </div>
 </div>
+
+<div class="maintenance-control" id="collectorPageControl" style="margin-top:10px;">
+    <div class="maintenance-toggle">
+        <input type="checkbox" id="collectorPageCheckbox" class="maintenance-checkbox" onchange="togglePaymentPage()">
+        <label for="collectorPageCheckbox" class="maintenance-label" id="collectorPageLabel">Payment Page OFF</label>
+        <div class="maintenance-status inactive" id="collectorPageStatus">/payment OFF</div>
+    </div>
+</div>
             </div>
         </div>
 
@@ -7073,6 +7081,24 @@ th, td{padding:2px 3px !important;}
                     maintenanceBulletin.classList.remove('active');
                 }
                 
+
+                const collectorPageCheckbox = document.getElementById('collectorPageCheckbox');
+                const collectorPageStatus = document.getElementById('collectorPageStatus');
+                const collectorPageLabel = document.getElementById('collectorPageLabel');
+                const collectorEnabled = data.collectorPageEnabled === true;
+
+                if (collectorPageCheckbox) collectorPageCheckbox.checked = collectorEnabled;
+
+                if (collectorPageStatus) {
+                    collectorPageStatus.innerText = collectorEnabled ? '/payment ACTIVE' : '/payment OFF';
+                    collectorPageStatus.className = collectorEnabled ? 'maintenance-status active' : 'maintenance-status inactive';
+                }
+
+                if (collectorPageLabel) {
+                    collectorPageLabel.innerText = collectorEnabled ? 'Payment Page ON' : 'Payment Page OFF';
+                    collectorPageLabel.classList.toggle('active', !collectorEnabled);
+                }
+
                 // Update title editor
                 if (data.selectedDayTime) {
                     const parsed = parseSelectedDayTime(data.selectedDayTime);
@@ -7175,6 +7201,38 @@ th, td{padding:2px 3px !important;}
         }
 
         // Toggle maintenance mode
+        
+        async function togglePaymentPage() {
+            const checkbox = document.getElementById('collectorPageCheckbox');
+            const newState = checkbox.checked;
+
+            try {
+                checkbox.disabled = true;
+                const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({
+                        sessionToken: sessionToken,
+                        collectorPageEnabled: newState
+                    })
+                });
+
+                const result = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    await loadAppSettings();
+                    alert(newState ? '✅ Payment Page ON' : '🚫 Payment Page OFF');
+                } else {
+                    checkbox.checked = !newState;
+                    alert(result.error || 'Failed to update payment page setting');
+                }
+            } catch (err) {
+                checkbox.checked = !newState;
+                alert('Failed to update payment page setting');
+            } finally {
+                checkbox.disabled = false;
+            }
+        }
+
         async function toggleMaintenance() {
             const checkbox = document.getElementById('maintenanceCheckbox');
             const newState = checkbox.checked;
