@@ -255,10 +255,6 @@ if (!String(process.env.ADMIN_TOKEN_SECRET || '').trim()) {
 const ADMIN_REMEMBER_TOKEN_TTL_DAYS = Number(process.env.ADMIN_TOKEN_TTL_DAYS || 30);
 const ADMIN_SESSION_TOKEN_TTL_HOURS = Number(process.env.ADMIN_SESSION_HOURS || 12);
 const ADMIN_SESSION_FILE = './admin-sessions.json';
-const PAYMENT_PASSWORD = String(process.env.PAYMENT_PASSWORD || process.env.COLLECTOR_PASSWORD || '').trim();
-const PAYMENT_TOKEN_SECRET = String(process.env.PAYMENT_TOKEN_SECRET || process.env.COLLECTOR_TOKEN_SECRET || ADMIN_TOKEN_SECRET).trim() || crypto.randomBytes(48).toString('hex');
-const PAYMENT_SESSION_TOKEN_TTL_HOURS = Number(process.env.PAYMENT_SESSION_HOURS || 12);
-
 
 // Game details - FRIDAY HOCKEY
 let gameLocation = "Capri Recreation Complex";
@@ -864,7 +860,7 @@ let announcementText = '';
 let announcementImages = [];
 let paymentEmail = String(process.env.PAYMENT_EMAIL || 'okosoff@outlook.com').trim();
 let rosterReleaseAnnouncementText = buildRosterReleasePaymentAnnouncement();
-let collectorPageEnabled = false; // Payment page ON/OFF toggle from main admin; defaults OFF until roster release
+let collectorPageEnabled = false; // Payment page ON/OFF toggle from main admin; defaults OFF until enabled
 
 // ============================================
 // END NEW CONFIGURATION SECTION
@@ -1601,6 +1597,7 @@ async function autoReleaseRoster() {
         const teams = generateFairTeams();
 
         rosterReleased = true;
+       collectorPageEnabled = true;
         collectorPageEnabled = true;
         resetArmed = true;
 
@@ -1862,7 +1859,8 @@ function buildPersistedStateFingerprint(snapshot = null) {
         announcementText: payload.announcementText,
         announcementImages: payload.announcementImages,
         paymentEmail: payload.paymentEmail,
-        rosterReleaseAnnouncementText: payload.rosterReleaseAnnouncementText
+        rosterReleaseAnnouncementText: payload.rosterReleaseAnnouncementText,
+        collectorPageEnabled: payload.collectorPageEnabled
     });
 }
 
@@ -2150,6 +2148,7 @@ async function loadDataFromDB() {
         if (settings.currentWeekData) currentWeekData = settings.currentWeekData;
         if (settings.cancelledRegistrations) cancelledRegistrations = Array.isArray(settings.cancelledRegistrations) ? settings.cancelledRegistrations : [];
         if (settings.persistentAdminRatings) persistentAdminRatings = normalizePersistentAdminRatings(settings.persistentAdminRatings);
+        if (settings.extraGoalieContacts) extraGoalieContacts = Array.isArray(settings.extraGoalieContacts) ? settings.extraGoalieContacts.map(normalizeGoalieContact).filter(g => g.firstName && g.lastName) : EXTRA_GOALIE_CONTACTS.map(goalie => ({ ...goalie }));
         if (settings.customSignupCode !== undefined) customSignupCode = String(settings.customSignupCode || '').trim();
         if (settings.editableDefaultSignupCode !== undefined) editableDefaultSignupCode = /^\d{4}$/.test(String(settings.editableDefaultSignupCode || '').trim()) ? String(settings.editableDefaultSignupCode).trim() : DEFAULT_SIGNUP_CODE;
         if (settings.weeklyDefaultSignupCodes !== undefined) weeklyDefaultSignupCodes = normalizeWeeklyDefaultSignupCodes(settings.weeklyDefaultSignupCodes);
@@ -2261,7 +2260,6 @@ async function loadDataFromDB() {
         if (appSettings.paymentEmail !== undefined) paymentEmail = String(appSettings.paymentEmail || '').trim() || paymentEmail;
         if (appSettings.rosterReleaseAnnouncementText !== undefined) rosterReleaseAnnouncementText = String(appSettings.rosterReleaseAnnouncementText || '').trim() || buildRosterReleasePaymentAnnouncement();
         if (appSettings.collectorPageEnabled !== undefined) collectorPageEnabled = appSettings.collectorPageEnabled !== 'false';
-        if (!rosterReleased) collectorPageEnabled = false;
         if (appSettings.announcementImages !== undefined) {
             try {
                 announcementImages = JSON.parse(appSettings.announcementImages || '[]');
@@ -2277,11 +2275,20 @@ async function loadDataFromDB() {
                 regularSkatersByDay = normalizeRegularSkatersByDayMap({});
             }
         }
-        if (appSettings.persistentAdminRatings !== undefined) {
+                if (!rosterReleased) collectorPageEnabled = false; // weekly reset/default guard
+if (appSettings.persistentAdminRatings !== undefined) {
             try {
                 persistentAdminRatings = normalizePersistentAdminRatings(JSON.parse(appSettings.persistentAdminRatings || '{}'));
             } catch {
                 persistentAdminRatings = normalizePersistentAdminRatings(persistentAdminRatings);
+            }
+        }
+        if (appSettings.extraGoalieContacts !== undefined) {
+            try {
+                const parsedExtraGoalies = JSON.parse(appSettings.extraGoalieContacts || '[]');
+                extraGoalieContacts = Array.isArray(parsedExtraGoalies) ? parsedExtraGoalies.map(normalizeGoalieContact).filter(g => g.firstName && g.lastName) : extraGoalieContacts;
+            } catch {
+                extraGoalieContacts = Array.isArray(extraGoalieContacts) ? extraGoalieContacts : EXTRA_GOALIE_CONTACTS.map(goalie => ({ ...goalie }));
             }
         }
 
@@ -2774,6 +2781,7 @@ function applySnapshotToMemory(snapshot) {
     lastResetWeek = snapshot.lastResetWeek ?? lastResetWeek;
     rosterReleased = snapshot.rosterReleased ?? rosterReleased;
     resetArmed = snapshot.resetArmed ?? resetArmed;
+    if (!rosterReleased) collectorPageEnabled = false; // payment page must stay OFF when roster is not released
     signupLockStartAt = snapshot.signupLockStartAt ?? signupLockStartAt;
     signupLockEndAt = snapshot.signupLockEndAt ?? signupLockEndAt;
     rosterReleaseAt = snapshot.rosterReleaseAt ?? rosterReleaseAt;
@@ -2883,8 +2891,7 @@ async function restoreSnapshotItem(item, req, auditAction = 'restore-snapshot-re
         if (typeof s.announcementText === 'string') announcementText = s.announcementText;
         if (Array.isArray(s.announcementImages)) announcementImages = s.announcementImages;
         if (typeof s.paymentEmail === 'string') paymentEmail = s.paymentEmail.trim() || paymentEmail;
-        if (typeof s.collectorPageEnabled === 'boolean') collectorPageEnabled = s.collectorPageEnabled;
-        if (!rosterReleased) collectorPageEnabled = false;
+                if (typeof s.collectorPageEnabled === 'boolean') collectorPageEnabled = s.collectorPageEnabled;
         if (typeof s.requirePlayerCode === 'boolean') requirePlayerCode = s.requirePlayerCode;
         if (typeof s.playerSignupCode === 'string' && s.playerSignupCode.trim()) playerSignupCode = s.playerSignupCode.trim();
     }
@@ -3147,6 +3154,7 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
             ['currentWeekData', currentWeekData],
             ['cancelledRegistrations', cancelledRegistrations],
             ['regularSkatersByDay', regularSkatersByDay],
+            ['extraGoalieContacts', extraGoalieContacts],
             ['persistentAdminRatings', persistentAdminRatings],
             ['customSignupCode', customSignupCode],
             ['editableDefaultSignupCode', editableDefaultSignupCode],
@@ -3180,6 +3188,7 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
             ['paymentEmail', paymentEmail],
             ['rosterReleaseAnnouncementText', rosterReleaseAnnouncementText],
             ['collectorPageEnabled', String(collectorPageEnabled)],
+            ['extraGoalieContacts', JSON.stringify(extraGoalieContacts)],
             ['persistentAdminRatings', JSON.stringify(persistentAdminRatings)],
             ['selectedDayTime', gameTime],
             ['selectedArena', gameLocation],
@@ -3431,7 +3440,7 @@ function buildFullDataSnapshot() {
             announcementImages,
             paymentEmail,
         rosterReleaseAnnouncementText,
-            collectorPageEnabled,
+        collectorPageEnabled,
             selectedDayTime: gameTime,
             selectedArena: gameLocation,
             requirePlayerCode,
@@ -3636,10 +3645,10 @@ function loadDataFromFile() {
             rosterReleaseAnnouncementText = String(data.rosterReleaseAnnouncementText || '').trim() || buildRosterReleasePaymentAnnouncement();
             announcementImages = Array.isArray(data.announcementImages) ? data.announcementImages : [];
             collectorPageEnabled = data.collectorPageEnabled ?? data.appSettings?.collectorPageEnabled ?? false;
-            if (!rosterReleased) collectorPageEnabled = false;
             if (!isManualScheduleMode() && shouldAutoBuildMissingSchedules(data)) {
                 buildAutoSchedulesFromGameTime(gameTime, gameDate);
             }
+            if (!rosterReleased) collectorPageEnabled = false; // file-mode weekly reset/default guard
             refreshDynamicSignupCode();
         } else {
             gameDate = calculateNextGameDate();
@@ -4102,6 +4111,7 @@ function rebalanceReleasedRoster(reason = 'roster-change') {
     }
 
     rosterReleased = true;
+    collectorPageEnabled = true;
     const teams = generateFairTeams();
     currentWeekData = {
         ...(currentWeekData || {}),
@@ -4865,141 +4875,6 @@ app.get('/history', (req, res) => {
 
 app.get('/rules', (req, res) => {
     return sendPublic(res, 'rules.html');
-});
-
-
-// --- PAYMENT / COLLECTOR PAGE ---
-function createPaymentSessionToken(rememberMe = true) {
-    const expiresIn = rememberMe ? '12h' : `${PAYMENT_SESSION_TOKEN_TTL_HOURS}h`;
-    return jwt.sign({ role: 'payment', jti: crypto.randomUUID() }, PAYMENT_TOKEN_SECRET, { expiresIn });
-}
-
-function isValidPaymentSession(token) {
-    const value = String(token || '').trim();
-    if (!value) return false;
-    try {
-        const decoded = jwt.verify(value, PAYMENT_TOKEN_SECRET);
-        return decoded && decoded.role === 'payment';
-    } catch (err) {
-        return false;
-    }
-}
-
-function getPaymentAuthToken(req) {
-    const authHeader = req.headers['authorization'] || '';
-    const bearerToken = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-        ? authHeader.slice(7).trim()
-        : '';
-    return req.headers['x-payment-auth'] || req.headers['x-collector-auth'] || bearerToken || (req.body && req.body.sessionToken) || '';
-}
-
-function requirePaymentPageEnabled(req, res) {
-    if (collectorPageEnabled !== false && getEffectiveRosterReleasedState()) return true;
-    res.status(403).json({ error: 'Payment page is currently turned off or roster has not been released.' });
-    return false;
-}
-
-function requirePaymentAuth(req, res) {
-    if (isValidPaymentSession(getPaymentAuthToken(req))) return true;
-    res.status(401).json({ error: 'Unauthorized' });
-    return false;
-}
-
-function isExcludedFromPaymentPage(player = {}) {
-    const first = String(player.firstName || '').trim().toLowerCase();
-    const last = String(player.lastName || '').trim().toLowerCase();
-    return !!player.isGoalie || (first === 'phan' && last === 'ly');
-}
-
-function getPaymentPlayers() {
-    return (Array.isArray(players) ? players : [])
-        .filter(player => player && !isExcludedFromPaymentPage(player))
-        .map(player => ({
-            id: player.id,
-            firstName: player.firstName,
-            lastName: player.lastName,
-            phone: player.phone,
-            rating: player.finalRating ?? player.rating,
-            team: player.team || '',
-            paid: !!player.paid,
-            paidAmount: player.paidAmount == null ? null : Number(player.paidAmount),
-            paymentStatus: normalizePaymentStatus(player.paymentStatus, player),
-            registeredAt: player.registeredAt
-        }));
-}
-
-app.get('/payment', (req, res) => {
-    if (collectorPageEnabled === false || !getEffectiveRosterReleasedState()) {
-        return res.status(403).send('<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Payment Page Off</title><style>body{margin:0;background:#1a1a1a;color:#fff;font-family:Arial;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px}.box{max-width:520px;background:#2d2d2d;border:2px solid #ff6b00;border-radius:14px;padding:24px;text-align:center}h1{color:#ff6b00}</style></head><body><div class="box"><h1>Payment Page Off</h1><p>This page is unavailable until the roster is released.</p></div></body></html>');
-    }
-    return sendPublic(res, 'collector.html');
-});
-
-app.get('/collect', (req, res) => res.redirect('/payment'));
-app.get('/collector', (req, res) => res.redirect('/payment'));
-
-app.post('/api/collector/login', adminLoginLimiter, (req, res) => {
-    if (!requirePaymentPageEnabled(req, res)) return;
-    const { password, rememberMe } = req.body || {};
-    if (!PAYMENT_PASSWORD) return res.status(503).json({ error: 'PAYMENT_PASSWORD or COLLECTOR_PASSWORD is not configured.' });
-    if (String(password || '').trim() !== PAYMENT_PASSWORD) return res.status(401).json({ error: 'Invalid password' });
-    res.json({ success: true, sessionToken: createPaymentSessionToken(rememberMe !== false) });
-});
-
-app.post('/api/collector/players', (req, res) => {
-    if (!requirePaymentPageEnabled(req, res)) return;
-    if (!requirePaymentAuth(req, res)) return;
-
-    const paymentPlayers = getPaymentPlayers();
-    const totalPaid = paymentPlayers.reduce((sum, p) => {
-        const amount = Number(p.paidAmount);
-        return Number.isFinite(amount) && amount > 0 ? sum + amount : sum;
-    }, 0);
-
-    res.json({
-        success: true,
-        rosterReleased: getEffectiveRosterReleasedState(),
-        date: gameDate,
-        time: gameTime,
-        location: gameLocation,
-        totalPaid: totalPaid.toFixed(2),
-        paidCount: paymentPlayers.filter(p => normalizePaymentStatus(p.paymentStatus, p) !== 'owes').length,
-        unpaidCount: paymentPlayers.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'owes').length,
-        playerCount: paymentPlayers.length,
-        goalieCount: 0,
-        players: paymentPlayers
-    });
-});
-
-app.post('/api/collector/update-paid-amount', async (req, res) => {
-    if (!requirePaymentPageEnabled(req, res)) return;
-    if (!requirePaymentAuth(req, res)) return;
-
-    const playerId = String(req.body?.playerId || '').trim();
-    const amountRaw = req.body?.paidAmount;
-    const statusRaw = String(req.body?.paymentStatus || '').trim().toLowerCase();
-
-    const player = (Array.isArray(players) ? players : []).find(p => String(p.id) === playerId);
-    if (!player || isExcludedFromPaymentPage(player)) {
-        return res.status(404).json({ error: 'Player not found on payment page.' });
-    }
-
-    if (statusRaw === 'owes') {
-        applyPaymentStatusToPlayer(player, 'owes', { clearAmount: true });
-    } else if (statusRaw === 'pia') {
-        applyPaymentStatusToPlayer(player, 'pia');
-    } else {
-        const amount = Number(amountRaw);
-        player.paidAmount = Number.isFinite(amount) && amount >= 0 ? amount : 15;
-        applyPaymentStatusToPlayer(player, 'paid', { ensureAmount: true, defaultAmount: player.paidAmount || 15 });
-    }
-
-    const saveResult = await saveData('collector-payment-update');
-    if (!saveResult || !saveResult.ok) {
-        return res.status(500).json({ error: saveResult?.error || 'Payment update was not saved.' });
-    }
-
-    res.json({ success: true, player });
 });
 
 // Root route must be last among HTML routes
@@ -5947,7 +5822,9 @@ app.post('/api/admin/app-settings', (req, res) => {
         arenaOptions: ARENA_OPTIONS,
         dayTimeOptions: DAY_TIME_OPTIONS,
         backupGoalies: BACKUP_GOALIES,
-        regularSkatersByDay
+        extraGoalieContacts,
+        regularSkatersByDay,
+        collectorPageEnabled
     });
 });
 
@@ -6257,7 +6134,8 @@ app.post('/api/admin/players-full', (req, res) => {
         currentWeekData, 
         playerSignupCode, 
         requirePlayerCode,
-        regularSkatersByDay 
+        regularSkatersByDay,
+        extraGoalieContacts 
     });
 });
 
@@ -6591,6 +6469,7 @@ app.post('/api/admin/restore-backup', async (req, res) => {
                 if (typeof s.rosterReleaseAnnouncementText === 'string') rosterReleaseAnnouncementText = s.rosterReleaseAnnouncementText.trim() || buildRosterReleasePaymentAnnouncement();
                 if (Array.isArray(s.announcementImages)) announcementImages = s.announcementImages;
                 if (typeof s.paymentEmail === 'string') paymentEmail = s.paymentEmail.trim() || paymentEmail;
+                if (typeof s.collectorPageEnabled === 'boolean') collectorPageEnabled = s.collectorPageEnabled;
                 if (typeof s.requirePlayerCode === 'boolean') requirePlayerCode = s.requirePlayerCode;
                 if (typeof s.playerSignupCode === 'string') playerSignupCode = s.playerSignupCode;
             }
@@ -7303,6 +7182,119 @@ app.post('/api/admin/update-rating', async (req, res) => {
 });
 
 
+// Admin-only add/update for spare goalie contacts used by both Admin and the goalie panel
+app.post('/api/admin/save-spare-goalie-contact', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) return res.status(401).json({ error: 'Unauthorized' });
+
+    const goalie = normalizeGoalieContact(req.body?.goalie || req.body || {});
+    if (!goalie.firstName || !goalie.lastName || normalizePhoneDigits(goalie.phone).length !== 10) {
+        return res.status(400).json({ error: 'First name, last name, and a valid 10-digit phone number are required.' });
+    }
+
+    try {
+        let updatedExisting = false;
+        await runProtectedMutation('admin-save-spare-goalie-contact', req, async () => {
+            extraGoalieContacts = Array.isArray(extraGoalieContacts) ? extraGoalieContacts : [];
+            const key = normalizeGoalieContactKey(goalie);
+            const index = extraGoalieContacts.findIndex(g => normalizeGoalieContactKey(g) === key);
+            if (index >= 0) {
+                extraGoalieContacts[index] = normalizeGoalieContact({
+                    ...extraGoalieContacts[index],
+                    ...goalie
+                });
+                updatedExisting = true;
+            } else {
+                extraGoalieContacts.push(goalie);
+            }
+        }, { goalie });
+
+        res.json({
+            success: true,
+            updatedExisting,
+            goalie,
+            extraGoalieContacts
+        });
+    } catch (err) {
+        console.error('Error saving spare goalie contact from admin:', err.message);
+        res.status(500).json({ error: 'Could not save spare goalie contact.' });
+    }
+});
+
+
+// Admin-only rating update for spare goalie contacts saved from the goalie panel
+app.post('/api/admin/update-spare-goalie-rating', async (req, res) => {
+    const { index, newRating } = req.body || {};
+    if (!isAuthorizedAdminRequest(req)) return res.status(401).json({ error: 'Unauthorized' });
+
+    const goalieIndex = Number(index);
+    const ratingNum = roundRating(parseFloat(newRating));
+    if (!Number.isInteger(goalieIndex) || goalieIndex < 0) {
+        return res.status(400).json({ error: 'Invalid spare goalie selection.' });
+    }
+    if (!Number.isFinite(ratingNum) || ratingNum < 1 || ratingNum > 10) {
+        return res.status(400).json({ error: 'Rating must be a number between 1 and 10.' });
+    }
+
+    extraGoalieContacts = Array.isArray(extraGoalieContacts) ? extraGoalieContacts : [];
+    const goalie = extraGoalieContacts[goalieIndex];
+    if (!goalie) return res.status(404).json({ error: 'Spare goalie not found.' });
+
+    const oldRating = goalie.rating;
+    try {
+        await runProtectedMutation('update-spare-goalie-rating', req, async () => {
+            extraGoalieContacts[goalieIndex] = normalizeGoalieContact({
+                ...goalie,
+                rating: ratingNum
+            });
+        }, { goalieIndex, oldRating, newRating: ratingNum });
+
+        res.json({
+            success: true,
+            goalie: extraGoalieContacts[goalieIndex],
+            extraGoalieContacts,
+            oldRating,
+            newRating: ratingNum
+        });
+    } catch (err) {
+        console.error('Error updating spare goalie rating:', err);
+        res.status(500).json({ error: 'Failed to update spare goalie rating safely.' });
+    }
+});
+
+
+// Admin-only delete for spare goalie contacts used by both Admin and the goalie panel
+app.post('/api/admin/delete-spare-goalie-contact', async (req, res) => {
+    const { index } = req.body || {};
+    if (!isAuthorizedAdminRequest(req)) return res.status(401).json({ error: 'Unauthorized' });
+
+    const goalieIndex = Number(index);
+    if (!Number.isInteger(goalieIndex) || goalieIndex < 0) {
+        return res.status(400).json({ error: 'Invalid spare goalie selection.' });
+    }
+
+    extraGoalieContacts = Array.isArray(extraGoalieContacts) ? extraGoalieContacts : [];
+    const goalie = extraGoalieContacts[goalieIndex];
+    if (!goalie) return res.status(404).json({ error: 'Spare goalie not found.' });
+
+    try {
+        let deleted = null;
+        await runProtectedMutation('delete-spare-goalie-contact', req, async () => {
+            const removed = extraGoalieContacts.splice(goalieIndex, 1);
+            deleted = removed && removed[0] ? removed[0] : null;
+        }, { goalieIndex, goalie });
+
+        res.json({
+            success: true,
+            deleted,
+            extraGoalieContacts
+        });
+    } catch (err) {
+        console.error('Error deleting spare goalie contact:', err);
+        res.status(500).json({ error: 'Failed to delete spare goalie safely.' });
+    }
+});
+
+
 function buildAdminRosterContactExport() {
     const rosterPayload = buildPublicRosterPayload();
     const fullById = new Map((Array.isArray(players) ? players : []).map(p => [String(p.id), p]));
@@ -7443,7 +7435,7 @@ app.post('/api/admin/manual-reset', async (req, res) => {
         await runProtectedMutation('manual-reset', req, async () => {
             // Preserve all active admin-adjusted ratings before clearing the weekly roster.
             rememberCurrentAdminRatings();
-            playerSpots = MAX_SKATERS; players = []; waitlist = []; rosterReleased = false; collectorPageEnabled = false; resetArmed = false; lastResetWeek = week; gameDate = calculateNextGameDate();
+            playerSpots = MAX_SKATERS; players = []; waitlist = []; rosterReleased = false; resetArmed = false; lastResetWeek = week; gameDate = calculateNextGameDate();
             currentWeekData = { weekNumber: week, year, releaseDate: null, whiteTeam: [], darkTeam: [] };
             manualOverride = true; manualOverrideState = `reset-lock:${nowETMinuteKey(etTime)}`; requirePlayerCode = true; clearAnnouncementState();
             syncScheduledActionRunMarker(resetWeekSchedule.at, 'reset', etTime);
@@ -7765,6 +7757,456 @@ process.on('unhandledRejection', (err) => {
 });
 
 // Initialize and start
+// PAYMENT PAGE: limited collector access for Kyle/Brad
+const PAYMENT_PASSWORD = String(process.env.PAYMENT_PASSWORD || process.env.COLLECTOR_PASSWORD || '').trim();
+function isPaymentExcludedPlayer(player = {}) {
+    const first = String(player.firstName || '').trim().toLowerCase();
+    const last = String(player.lastName || '').trim().toLowerCase();
+    return !!player.isGoalie || (first === 'phan' && last === 'ly');
+}
+function getPaymentPlayers() {
+    return (Array.isArray(players) ? players : []).filter(p => !isPaymentExcludedPlayer(p));
+}
+function createPaymentSessionToken(rememberMe = true) {
+    const expiresIn = rememberMe ? `${ADMIN_REMEMBER_TOKEN_TTL_DAYS}d` : `${ADMIN_SESSION_TOKEN_TTL_HOURS}h`;
+    return jwt.sign({ role: 'payment', jti: crypto.randomUUID(), remember: !!rememberMe }, ADMIN_TOKEN_SECRET, { expiresIn });
+}
+function isValidPaymentSession(token) {
+    if (isValidAdminSession(token)) return true;
+    try {
+        const decoded = jwt.verify(String(token || '').trim(), ADMIN_TOKEN_SECRET);
+        return !!decoded && decoded.role === 'payment';
+    } catch (err) {
+        return false;
+    }
+}
+function getPaymentAuthToken(req) {
+    const authHeader = req.headers['authorization'] || '';
+    const bearerToken = typeof authHeader === 'string' && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    return req.headers['x-admin-auth'] || req.headers['x-admin-token'] || bearerToken || (req.body && req.body.sessionToken) || '';
+}
+function requirePaymentPageEnabled(req, res) {
+    if (collectorPageEnabled !== false) return true;
+    res.status(403).json({ error: 'Payment page is currently turned off by admin.' });
+    return false;
+}
+function requirePaymentAuth(req, res) {
+    if (isValidPaymentSession(getPaymentAuthToken(req))) return true;
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+}
+
+
+// GOALIE CONTACT PAGE: private access for substitute goalie contacts
+const GOALIE_PASSWORD = String(process.env.GOALIE_PASSWORD || '').trim();
+const EXTRA_GOALIE_CONTACTS = [
+    {
+        firstName: "Lilly",
+        lastName: "Isberg",
+        phone: "(289) 808-4633",
+        rating: 7,
+        note: "Quick goalie contact"
+    }
+];
+
+let extraGoalieContacts = EXTRA_GOALIE_CONTACTS.map(goalie => ({ ...goalie }));
+
+function normalizeGoalieContact(input = {}) {
+    const firstName = capitalizeFullName(String(input.firstName || '').trim());
+    const lastName = capitalizeFullName(String(input.lastName || '').trim());
+    const phoneDigits = normalizePhoneDigits(input.phone);
+    const phone = formatPhoneNumber(phoneDigits || String(input.phone || '').trim());
+    const ratingNumber = Number(input.rating);
+    const rating = Number.isFinite(ratingNumber) ? Math.max(1, Math.min(10, Number(ratingNumber.toFixed(1)))) : 7;
+    const note = String(input.note || '').trim();
+    return { firstName, lastName, phone, rating, note };
+}
+
+function formatSmsPhone(phone) {
+    const digits = normalizePhoneDigits(phone);
+    return digits ? `+1${digits}` : '';
+}
+
+function buildGoalieInText(goalie = {}) {
+    const name = `${goalie.firstName || ''} ${goalie.lastName || ''}`.trim() || 'Goalie';
+    return `${name}, you're in for ${gameTime || 'hockey'} at ${gameLocation || 'the rink'}. Please confirm you can make it.`;
+}
+
+function createGoalieSessionToken(rememberMe = true) {
+    const expiresIn = rememberMe ? `${ADMIN_REMEMBER_TOKEN_TTL_DAYS}d` : `${ADMIN_SESSION_TOKEN_TTL_HOURS}h`;
+    return jwt.sign({ role: 'goalie', jti: crypto.randomUUID(), remember: !!rememberMe }, ADMIN_TOKEN_SECRET, { expiresIn });
+}
+
+function isValidGoalieSession(token) {
+    if (isValidAdminSession(token)) return true;
+    try {
+        const decoded = jwt.verify(String(token || '').trim(), ADMIN_TOKEN_SECRET);
+        return !!decoded && decoded.role === 'goalie';
+    } catch (err) {
+        return false;
+    }
+}
+
+function getGoalieAuthToken(req) {
+    const authHeader = req.headers['authorization'] || '';
+    const bearerToken = typeof authHeader === 'string' && authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    return req.headers['x-goalie-auth'] || req.headers['x-admin-auth'] || req.headers['x-admin-token'] || bearerToken || (req.body && req.body.sessionToken) || '';
+}
+
+function requireGoalieAuth(req, res) {
+    if (isValidGoalieSession(getGoalieAuthToken(req))) return true;
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+}
+
+function normalizeGoalieContactKey(goalie = {}) {
+    const phoneDigits = String(goalie.phone || '').replace(/\D/g, '');
+    if (phoneDigits) return `phone:${phoneDigits}`;
+    return `name:${String(goalie.firstName || '').trim().toLowerCase()}-${String(goalie.lastName || '').trim().toLowerCase()}`;
+}
+
+function addUniqueGoalieContact(map, goalie = {}, extras = {}) {
+    const firstName = String(goalie.firstName || '').trim();
+    const lastName = String(goalie.lastName || '').trim();
+    if (!firstName && !lastName) return;
+    const key = normalizeGoalieContactKey(goalie);
+    if (!key || map.has(key)) return;
+    map.set(key, {
+        firstName,
+        lastName,
+        phone: String(goalie.phone || '').trim(),
+        rating: Number(goalie.finalRating ?? goalie.rating ?? 7),
+        note: String(goalie.note || extras.note || '').trim(),
+        ...extras
+    });
+}
+
+function getCurrentGoalieContacts() {
+    const map = new Map();
+    for (const goalie of (Array.isArray(players) ? players : []).filter(p => !!p.isGoalie)) {
+        addUniqueGoalieContact(map, goalie, {
+            id: goalie.id,
+            source: 'registered',
+            team: goalie.team || null,
+            registeredAt: goalie.registeredAt || null
+        });
+    }
+    for (const goalie of (Array.isArray(waitlist) ? waitlist : []).filter(p => !!p.isGoalie)) {
+        addUniqueGoalieContact(map, goalie, {
+            source: 'waitlist',
+            note: 'Currently on waitlist',
+            registeredAt: goalie.registeredAt || null
+        });
+    }
+    return Array.from(map.values()).sort(sortGoalieContacts);
+}
+
+function getRegularGoalieContacts() {
+    const list = [];
+    for (const [day, goalies] of Object.entries(REGULAR_GOALIES_BY_DAY || {})) {
+        for (const goalie of (Array.isArray(goalies) ? goalies : [])) {
+            list.push({
+                ...goalie,
+                dayLabel: `${day.charAt(0).toUpperCase()}${day.slice(1)} regular goalie`
+            });
+        }
+    }
+    return list.sort(sortGoalieContacts);
+}
+
+function getBackupGoalieContacts() {
+    const map = new Map();
+    for (const goalie of BACKUP_GOALIES || []) {
+        addUniqueGoalieContact(map, goalie, { note: 'Backup / substitute goalie' });
+    }
+    for (const goalie of extraGoalieContacts || []) {
+        const key = normalizeGoalieContactKey(goalie);
+        // Saved admin/goalie-panel records override the built-in backup defaults by phone/name.
+        if (key && map.has(key)) map.delete(key);
+        addUniqueGoalieContact(map, goalie, { note: goalie.note || 'Extra goalie contact' });
+    }
+    return Array.from(map.values()).sort(sortGoalieContacts);
+}
+
+function sortGoalieContacts(a, b) {
+    const lastCompare = String(a.lastName || '').localeCompare(String(b.lastName || ''));
+    if (lastCompare !== 0) return lastCompare;
+    return String(a.firstName || '').localeCompare(String(b.firstName || ''));
+}
+
+
+app.get('/goalies', (req, res) => {
+    return sendPublic(res, 'goalies.html');
+});
+
+app.post('/api/goalies/login', adminLoginLimiter, (req, res) => {
+    const { password, rememberMe } = req.body || {};
+    if (!GOALIE_PASSWORD) return res.status(503).json({ error: 'GOALIE_PASSWORD is not configured.' });
+    if (String(password || '').trim() !== GOALIE_PASSWORD) return res.status(401).json({ error: 'Invalid password' });
+    res.json({ success: true, sessionToken: createGoalieSessionToken(rememberMe !== false) });
+});
+
+app.post('/api/goalies/list', (req, res) => {
+    if (!requireGoalieAuth(req, res)) return;
+    res.json({
+        success: true,
+        date: gameDate,
+        time: gameTime,
+        location: gameLocation,
+        currentGoalies: getCurrentGoalieContacts(),
+        regularGoalies: getRegularGoalieContacts(),
+        backupGoalies: getBackupGoalieContacts(),
+        rosterReleased: getEffectiveRosterReleasedState()
+    });
+});
+
+
+app.post('/api/goalies/add-contact', async (req, res) => {
+    if (!requireGoalieAuth(req, res)) return;
+    const goalie = normalizeGoalieContact(req.body?.goalie || req.body || {});
+    if (!goalie.firstName || !goalie.lastName || normalizePhoneDigits(goalie.phone).length !== 10) {
+        return res.status(400).json({ error: 'First name, last name, and a valid 10-digit phone number are required.' });
+    }
+
+    const key = normalizeGoalieContactKey(goalie);
+    const existing = (extraGoalieContacts || []).some(g => normalizeGoalieContactKey(g) === key)
+        || (BACKUP_GOALIES || []).some(g => normalizeGoalieContactKey(g) === key);
+    if (existing) {
+        return res.json({ success: true, alreadyExists: true, backupGoalies: getBackupGoalieContacts() });
+    }
+
+    try {
+        await runProtectedMutation('goalie-add-spare-contact', req, async () => {
+            extraGoalieContacts = Array.isArray(extraGoalieContacts) ? extraGoalieContacts : [];
+            extraGoalieContacts.push(goalie);
+        }, { goalie });
+        res.json({ success: true, goalie, backupGoalies: getBackupGoalieContacts() });
+    } catch (err) {
+        console.error('Error adding spare goalie contact:', err.message);
+        res.status(500).json({ error: 'Could not save spare goalie contact.' });
+    }
+});
+
+
+app.post('/api/goalies/cancel', async (req, res) => {
+    if (!requireGoalieAuth(req, res)) return;
+    const cancelGoalieId = String(req.body?.cancelGoalieId || '').trim();
+    if (!cancelGoalieId) return res.status(400).json({ error: 'Select the goalie who is cancelling.' });
+
+    const goalieIndex = players.findIndex(p => String(p.id) === cancelGoalieId && !!p.isGoalie);
+    if (goalieIndex === -1) return res.status(404).json({ error: 'Registered goalie not found.' });
+
+    const cancellingGoalie = players[goalieIndex];
+
+    const nowIso = new Date().toISOString();
+    const rosterWasReleased = getEffectiveRosterReleasedState();
+    const cancelledTeam = cancellingGoalie.team === 'White' || cancellingGoalie.team === 'Dark' ? cancellingGoalie.team : null;
+
+    try {
+        await runProtectedMutation('goalie-self-cancel-immediate', req, async () => {
+            appendCancellationLog({
+                id: cancellingGoalie.id,
+                firstName: cancellingGoalie.firstName,
+                lastName: cancellingGoalie.lastName,
+                phone: cancellingGoalie.phone,
+                rating: cancellingGoalie.rating,
+                isGoalie: true,
+                paymentMethod: cancellingGoalie.paymentMethod,
+                source: 'players',
+                action: 'goalie-self-cancel-immediate',
+                cancelledBy: 'goalie-panel',
+                cancelledAt: nowIso
+            });
+
+            players.splice(goalieIndex, 1);
+
+            if (rosterWasReleased) {
+                syncCurrentWeekTeamsFromPlayers();
+            }
+        }, { cancelledGoalieId: cancellingGoalie.id, rosterWasReleased, cancelledTeam });
+    } catch (err) {
+        console.error('Error cancelling goalie immediately:', err.message);
+        return res.status(500).json({ error: 'Goalie cancellation could not be saved safely.' });
+    }
+
+    res.json({
+        success: true,
+        cancelledGoalie: { firstName: cancellingGoalie.firstName, lastName: cancellingGoalie.lastName, team: cancelledTeam },
+        rosterReleased: rosterWasReleased,
+        currentGoalies: getCurrentGoalieContacts(),
+        backupGoalies: getBackupGoalieContacts()
+    });
+});
+
+app.post('/api/goalies/substitute', async (req, res) => {
+    if (!requireGoalieAuth(req, res)) return;
+    const cancelGoalieId = String(req.body?.cancelGoalieId || '').trim();
+    const substitute = normalizeGoalieContact(req.body?.substitute || {});
+
+    if (!cancelGoalieId) return res.status(400).json({ error: 'Select the goalie who is cancelling.' });
+    if (!substitute.firstName || !substitute.lastName || normalizePhoneDigits(substitute.phone).length !== 10) {
+        return res.status(400).json({ error: 'Substitute goalie first name, last name, and 10-digit phone are required.' });
+    }
+
+    const goalieIndex = players.findIndex(p => String(p.id) === cancelGoalieId && !!p.isGoalie);
+    if (goalieIndex === -1) return res.status(404).json({ error: 'Registered goalie not found.' });
+
+    const cancellingGoalie = players[goalieIndex];
+
+    const substitutePhone = normalizePhoneDigits(substitute.phone);
+    const duplicate = players.find(p => normalizePhoneDigits(p.phone) === substitutePhone && String(p.id) !== cancelGoalieId);
+    if (duplicate) return res.status(400).json({ error: 'That substitute is already registered.' });
+
+    let newGoalie = null;
+    const nowIso = new Date().toISOString();
+    const rosterWasReleased = getEffectiveRosterReleasedState();
+    const cancelledTeam = cancellingGoalie.team === 'White' || cancellingGoalie.team === 'Dark' ? cancellingGoalie.team : null;
+
+    try {
+        await runProtectedMutation('goalie-self-cancel-substitute', req, async () => {
+            appendCancellationLog({
+                id: cancellingGoalie.id,
+                firstName: cancellingGoalie.firstName,
+                lastName: cancellingGoalie.lastName,
+                phone: cancellingGoalie.phone,
+                rating: cancellingGoalie.rating,
+                isGoalie: true,
+                paymentMethod: cancellingGoalie.paymentMethod,
+                source: 'players',
+                action: 'goalie-subbed-out',
+                cancelledBy: 'goalie-panel',
+                cancelledAt: nowIso
+            });
+
+            players.splice(goalieIndex, 1);
+            newGoalie = hydratePlayerRatingProfile({
+                id: Date.now(),
+                firstName: substitute.firstName,
+                lastName: substitute.lastName,
+                phone: substitute.phone,
+                paymentMethod: 'N/A',
+                paid: true,
+                paidAmount: 0,
+                paymentStatus: 'paid',
+                rating: substitute.rating,
+                derivedRating: substitute.rating,
+                finalRating: substitute.rating,
+                selfRatingRaw: substitute.rating,
+                isGoalie: true,
+                team: rosterWasReleased ? cancelledTeam : null,
+                registeredAt: nowIso,
+                rulesAgreed: true,
+                promotedFromWaitlist: false,
+                lateAddedAfterRelease: rosterWasReleased,
+                isLateAddition: rosterWasReleased,
+                subbedInForPlayerId: cancellingGoalie.id,
+                subbedInForName: `${cancellingGoalie.firstName || ''} ${cancellingGoalie.lastName || ''}`.trim(),
+                subbedInAt: nowIso
+            });
+            players.push(newGoalie);
+
+            const spareKey = normalizeGoalieContactKey(substitute);
+            extraGoalieContacts = Array.isArray(extraGoalieContacts) ? extraGoalieContacts : [];
+            if (!extraGoalieContacts.some(g => normalizeGoalieContactKey(g) === spareKey) && !(BACKUP_GOALIES || []).some(g => normalizeGoalieContactKey(g) === spareKey)) {
+                extraGoalieContacts.push({ ...substitute, note: 'Added from goalie substitute panel' });
+            }
+
+            if (rosterWasReleased && cancelledTeam) {
+                syncCurrentWeekTeamsFromPlayers();
+            } else if (rosterWasReleased) {
+                rebalanceReleasedRoster('goalie-substitute-no-team');
+            }
+        }, { cancelledGoalieId: cancellingGoalie.id, substitutePhone, rosterWasReleased, cancelledTeam });
+    } catch (err) {
+        console.error('Error substituting goalie:', err.message);
+        return res.status(500).json({ error: 'Goalie substitution could not be saved safely.' });
+    }
+
+    const smsBody = buildGoalieInText(newGoalie);
+    const smsPhone = formatSmsPhone(newGoalie.phone);
+    const smsLink = smsPhone ? `sms:${smsPhone}?&body=${encodeURIComponent(smsBody)}` : '';
+    res.json({
+        success: true,
+        cancelledGoalie: { firstName: cancellingGoalie.firstName, lastName: cancellingGoalie.lastName, team: cancelledTeam },
+        subbedInGoalie: newGoalie,
+        rosterReleased: rosterWasReleased,
+        smsBody,
+        smsLink,
+        currentGoalies: getCurrentGoalieContacts(),
+        backupGoalies: getBackupGoalieContacts()
+    });
+});
+
+app.get('/payment', (req, res) => {
+    if (collectorPageEnabled === false) {
+        return res.status(403).send('<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>Payment Page Off</title><style>body{margin:0;background:#1a1a1a;color:#fff;font-family:Arial;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px}.box{max-width:520px;background:#2d2d2d;border:2px solid #ff6b00;border-radius:14px;padding:24px;text-align:center}h1{color:#ff6b00}</style></head><body><div class="box"><h1>Payment Page Off</h1><p>This page is currently turned off by admin.</p></div></body></html>');
+    }
+    return sendPublic(res, 'collector.html');
+});
+
+app.post('/api/collector/login', adminLoginLimiter, (req, res) => {
+    if (!requirePaymentPageEnabled(req, res)) return;
+    const { password, rememberMe } = req.body || {};
+    if (!PAYMENT_PASSWORD) return res.status(503).json({ error: 'PAYMENT_PASSWORD or COLLECTOR_PASSWORD is not configured.' });
+    if (String(password || '').trim() !== PAYMENT_PASSWORD) return res.status(401).json({ error: 'Invalid password' });
+    res.json({ success: true, sessionToken: createPaymentSessionToken(rememberMe !== false) });
+});
+
+app.post('/api/collector/players', (req, res) => {
+    if (!requirePaymentPageEnabled(req, res)) return;
+    if (!requirePaymentAuth(req, res)) return;
+    const paymentPlayers = getPaymentPlayers();
+    const totalPaid = paymentPlayers.reduce((sum, p) => {
+        const amount = Number(p.paidAmount);
+        return Number.isFinite(amount) && amount > 0 ? sum + amount : sum;
+    }, 0);
+    const paidCount = paymentPlayers.filter(p => normalizePaymentStatus(p.paymentStatus, p) !== 'owes').length;
+    const unpaidCount = paymentPlayers.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'owes').length;
+    res.json({
+        success: true,
+        rosterReleased,
+        date: gameDate,
+        time: gameTime,
+        location: gameLocation,
+        totalPaid: totalPaid.toFixed(2),
+        paidCount,
+        unpaidCount,
+        playerCount: paymentPlayers.length,
+        goalieCount: 0,
+        players: rosterReleased ? paymentPlayers : []
+    });
+});
+
+app.post('/api/collector/update-paid-amount', async (req, res) => {
+    if (!requirePaymentPageEnabled(req, res)) return;
+    if (!requirePaymentAuth(req, res)) return;
+    if (!rosterReleased) return res.status(403).json({ error: 'Payment page opens after roster release.' });
+    const playerId = String(req.body?.playerId || '').trim();
+    const player = (Array.isArray(players) ? players : []).find(p => String(p.id) === playerId);
+    if (!player || isPaymentExcludedPlayer(player)) return res.status(404).json({ error: 'Player not found on payment list.' });
+    const amountRaw = req.body?.amount;
+    try {
+        await runProtectedMutation('payment-page-update-paid-amount', req, async () => {
+            if (amountRaw === null || amountRaw === '' || amountRaw === undefined) {
+                applyPaymentStatusToPlayer(player, 'owes');
+            } else {
+                const amount = Number(amountRaw);
+                if (!Number.isFinite(amount) || amount < 0) throw new Error('Enter a valid payment amount.');
+                player.paidAmount = amount;
+                player.paid = amount > 0;
+                player.paymentStatus = amount > 0 ? 'paid' : 'owes';
+            }
+            if (pool) {
+                await pool.query('UPDATE players SET paid = $1, paid_amount = $2, payment_status = $3 WHERE id = $4', [!!player.paid, player.paidAmount == null ? null : Number(player.paidAmount), normalizePaymentStatus(player.paymentStatus, player), player.id]);
+            }
+        });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err && err.message ? err.message : 'Payment update failed.' });
+    }
+});
+
+
 initDatabase().then(async () => {
     if (!STRICT_DATABASE_MODE) {
         await reconcileFromFileBackup();
@@ -7788,7 +8230,14 @@ initDatabase().then(async () => {
         }, WARM_TICK_MS);
     }
     
-    app.listen(PORT, () => {
+    
+
+
+// Backward-compatible redirects for old payment collection URLs
+app.get('/collect', (req, res) => res.redirect('/payment'));
+app.get('/collector', (req, res) => res.redirect('/payment'));
+
+app.listen(PORT, () => {
         console.log(`Phan's Friday Hockey server running on port ${PORT}`);
         console.log(`Location: ${gameLocation}`);
         console.log(`Time: ${gameTime}`);
