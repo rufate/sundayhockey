@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Goalie Contacts - Phan's Hockey</title>
+<style>
+:root{--bg:#1a1a1a;--card:#2d2d2d;--text:#fff;--accent:#ff6b00;--success:#4CAF50;--danger:#ff4444;--blue:#4a90e2;--muted:#aaa;--purple:#9c27b0;}
+*{box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif}
+body{background:var(--bg);color:var(--text);margin:0;padding:20px;min-height:100vh;display:flex;justify-content:center;align-items:flex-start}
+.container{width:100%;max-width:980px;background:var(--card);border:1px solid #444;border-radius:15px;padding:26px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+h1{color:var(--accent);text-align:center;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 8px}.sub{text-align:center;color:#bbb;margin-bottom:18px;line-height:1.4}.hidden{display:none!important}
+.login-box,.section{border-radius:12px;padding:18px;margin:16px 0}.login-box{background:linear-gradient(135deg,#2a1a3a,#3d2d4d);border:2px solid var(--accent)}.section{background:linear-gradient(135deg,#202020,#303030);border:2px solid #555}.section h3{margin:0 0 12px;color:var(--accent)}
+input,select{width:100%;padding:12px;margin:8px 0;background:#3d3d3d;border:1px solid #555;color:#fff;border-radius:8px;font-size:1rem}button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer}button:hover{background:#ff8533}.logout{background:#666;float:right}.refresh{background:var(--blue)}.danger{background:var(--danger)}.success{background:var(--success)}.secondary{background:#666}.error{display:none;background:var(--danger);padding:10px;border-radius:8px;text-align:center;margin-top:10px}.top-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}.card{background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:14px}.card.current{border-color:var(--success)}.card.regular{border-color:var(--blue)}.card.backup{border-color:var(--accent)}.name{font-size:1.08rem;font-weight:900;margin-bottom:6px}.meta{color:#ddd;font-size:.92rem;line-height:1.5}.phone-link{display:inline-block;color:#8fd1ff;font-weight:900;text-decoration:none;margin-top:4px}.phone-link:hover{text-decoration:underline}.pill{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:3px 8px;font-size:.72rem;font-weight:900;margin-left:6px}.pill.current{background:var(--success)}.pill.regular{background:var(--blue)}.pill.backup{background:var(--accent)}.pill.waitlist{background:var(--purple)}.note{color:#bbb;font-size:.84rem;margin-top:6px}.empty{color:#888;text-align:center;padding:18px;border:1px dashed #555;border-radius:10px}.card-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.card-actions button{flex:1;margin:0;font-size:.82rem;padding:8px 10px}.form-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}.form-grid input{margin:0}.result-box{display:none;background:#173524;border:1px solid var(--success);border-radius:10px;padding:14px;margin:12px 0;color:#d9ffe0}.result-box.active{display:block}.sms-box{background:rgba(0,0,0,.25);border-radius:8px;padding:10px;margin-top:10px;word-break:break-word}.sms-link{display:block;text-align:center;background:var(--blue);color:white;text-decoration:none;border-radius:8px;padding:12px;margin-top:10px;font-weight:900}.footer{text-align:center;font-size:12px;color:#888;padding:15px 10px;margin-top:20px;border-top:1px solid rgba(255,255,255,.1)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.78);display:none;align-items:center;justify-content:center;z-index:10000;padding:18px}.modal.active{display:flex}.modal-card{width:min(440px,100%);background:linear-gradient(135deg,#222,#2f2f2f);border:2px solid var(--accent);border-radius:16px;padding:18px;box-shadow:0 18px 40px rgba(0,0,0,.45)}.modal-title{color:var(--accent);font-weight:900;text-align:center;margin-bottom:10px}.modal-actions{display:flex;gap:10px;margin-top:10px}.modal-actions button{flex:1}.small{font-size:.82rem;color:#bbb;line-height:1.35}
+@media(max-width:650px){body{padding:10px}.container{padding:16px}h1{font-size:1.55rem}.grid,.form-grid{grid-template-columns:1fr}.top-actions{justify-content:stretch}.top-actions button{width:100%}.modal-actions{flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="container">
+<button class="logout hidden" id="logoutBtn" onclick="logout()">Logout</button>
+<h1>Goalie Contacts</h1>
+<div class="sub">Private substitute goalie page. Current goalies can be replaced on the fly and the public roster updates immediately.</div>
+
+<div class="login-box" id="loginBox">
+  <h3>Enter Goalie Password</h3>
+  <input type="password" id="passwordInput" placeholder="Password" autocomplete="current-password">
+  <button onclick="login()">Login</button>
+  <div class="error" id="loginError"></div>
+</div>
+
+<div id="goaliePanel" class="hidden">
+  <div class="top-actions"><button class="refresh" onclick="loadData()">Refresh</button></div>
+  <div id="gameInfo" class="sub"></div>
+
+  <div class="result-box" id="resultBox"></div>
+
+  <div class="section">
+    <h3>🥅 Current Registered Goalies</h3>
+    <div class="grid" id="currentGoalies"></div>
+  </div>
+
+  <div class="section">
+    <h3>📅 Regular Goalies by Game Day</h3>
+    <div class="grid" id="regularGoalies"></div>
+  </div>
+
+  <div class="section">
+    <h3>🔄 Backup / Substitute Goalies</h3>
+    <div class="grid" id="backupGoalies"></div>
+  </div>
+</div>
+
+<div class="footer">© 2026 Phan Anthony Ly. All Rights Reserved.</div>
+</div>
+
+<div class="modal" id="subModal">
+  <div class="modal-card">
+    <div class="modal-title">Substitute Goalie</div>
+    <div class="small" id="cancelGoalieLabel"></div>
+    <div class="small">Choose <strong>Cancel Only</strong> to remove the goalie immediately, or select an existing replacement goalie below and choose <strong>Cancel + Sub In</strong>.</div>
+    <select id="subGoalieSelect" onchange="applySelectedSubGoalie()">
+      <option value="">-- Select replacement goalie --</option>
+    </select>
+    <input id="subFirst" type="hidden">
+    <input id="subLast" type="hidden">
+    <input id="subPhone" type="hidden">
+    <input id="subRating" type="hidden" value="7">
+    <div class="error" id="subError"></div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeSubModal()">Close</button>
+      <button class="danger" onclick="submitCancelOnly()">Cancel Only</button>
+      <button class="success" onclick="submitSubstitution()">Cancel + Sub In</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_URL = window.location.origin;
+const TOKEN_KEY = 'phansGoalieSessionToken';
+let sessionToken = localStorage.getItem(TOKEN_KEY) || '';
+let currentData = {currentGoalies:[], regularGoalies:[], backupGoalies:[]};
+let selectedCancelGoalie = null;
+let selectedSubGoalie = null;
+function headers(){return {'Content-Type':'application/json','Authorization':'Bearer '+sessionToken,'X-Goalie-Auth':sessionToken};}
+function escapeHtml(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+function phoneDigits(phone){let d=String(phone||'').replace(/\D/g,''); if(d.length===11&&d.startsWith('1')) d=d.slice(1); return d.slice(0,10);}
+function phoneHref(phone){const d=phoneDigits(phone);return d ? 'tel:+1'+d : '#';}
+function smsHref(phone, body){const d=phoneDigits(phone);return d ? `sms:+1${d}?&body=${encodeURIComponent(body||'')}` : '#';}
+function fmtTime(v){try{return v ? new Date(v).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true}) : '';}catch(e){return '';}}
+function getGameDateTimeForSms(){
+  const rawDate = String(currentData.date || '').trim();
+  const rawTime = String(currentData.time || '').trim();
+  const timeOnly = rawTime.replace(/^(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\s+/i,'').trim();
+  let dateText = '';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(rawDate)){
+    const d = new Date(rawDate + 'T00:00:00');
+    if(!Number.isNaN(d.getTime())){
+      dateText = d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+    }
+  }
+  if(dateText && timeOnly) return `${dateText} at ${timeOnly}`;
+  if(dateText && rawTime) return `${dateText} at ${rawTime}`;
+  return rawTime || rawDate || 'the next game';
+}
+function buildAvailabilitySms(goalie){
+  return `Are you available to sub for Phan's Hockey this ${getGameDateTimeForSms()}?`;
+}
+function textAvailability(goalie){
+  const body = buildAvailabilitySms(goalie || {});
+  const href = smsHref(goalie?.phone || '', body);
+  if(!phoneDigits(goalie?.phone || '')){
+    alert('No phone number listed for this goalie.');
+    return;
+  }
+  window.location.href = href;
+}
+function showError(id,msg){const el=document.getElementById(id);el.textContent=msg;el.style.display='block';}
+function hideError(id){const el=document.getElementById(id);el.textContent='';el.style.display='none';}
+async function login(){
+  const password = document.getElementById('passwordInput').value.trim();
+  hideError('loginError');
+  try{
+    const res = await fetch(`${API_URL}/api/goalies/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password,rememberMe:true})});
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error || 'Invalid password');
+    sessionToken = data.sessionToken; localStorage.setItem(TOKEN_KEY, sessionToken);
+    showPanel(); await loadData();
+  }catch(e){showError('loginError', e.message || 'Login failed');}
+}
+function showPanel(){document.getElementById('loginBox').classList.add('hidden');document.getElementById('goaliePanel').classList.remove('hidden');document.getElementById('logoutBtn').classList.remove('hidden');}
+function logout(){localStorage.removeItem(TOKEN_KEY); sessionToken=''; location.reload();}
+function goalieName(g){return `${g.firstName||''} ${g.lastName||''}`.trim();}
+function renderCard(g, kind){
+  const classes = `card ${kind||''}`;
+  const label = kind === 'current' ? 'CURRENT' : kind === 'regular' ? 'REGULAR' : 'BACKUP';
+  const wait = g.source === 'waitlist' ? '<span class="pill waitlist">WAITLIST</span>' : '';
+  const notes = [g.dayLabel, g.team ? `Team: ${g.team}` : '', g.note, g.registeredAt ? `Registered: ${fmtTime(g.registeredAt)}` : ''].filter(Boolean).join('<br>');
+  const safeGoaliePayload = JSON.stringify(g).replace(/'/g,"&#39;");
+  const textAvailabilityBtn = kind !== 'current' ? `<button class="refresh" onclick='textAvailability(${safeGoaliePayload})'>Text Availability</button>` : '';
+  const subBtn = kind !== 'current' ? `<button class="success" onclick='chooseSub(${safeGoaliePayload})'>Use as Sub</button>` : '';
+  const cancelBtn = kind === 'current' ? `<button class="danger" onclick='chooseCancel(${safeGoaliePayload})'>Self Cancel / Replace</button>` : '';
+  return `<div class="${classes}"><div class="name">${escapeHtml(goalieName(g))} <span class="pill ${kind}">${label}</span>${wait}</div><div class="meta"><a class="phone-link" href="${phoneHref(g.phone)}">${escapeHtml(g.phone || 'No phone listed')}</a>${notes?`<div class="note">${notes}</div>`:''}</div><div class="card-actions">${textAvailabilityBtn}${subBtn}${cancelBtn}</div></div>`;
+}
+function renderList(id, list, kind){
+  const el = document.getElementById(id);
+  if(!Array.isArray(list) || !list.length){el.innerHTML='<div class="empty">No goalies listed.</div>';return;}
+  el.innerHTML = list.map(g=>renderCard(g, kind)).join('');
+}
+async function loadData(){
+  if(!sessionToken) return;
+  const res = await fetch(`${API_URL}/api/goalies/list`,{method:'POST',headers:headers(),body:JSON.stringify({sessionToken})});
+  if(res.status===401){logout(); return;}
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok){alert(data.error || 'Could not load goalie contacts'); return;}
+  currentData = data;
+  document.getElementById('gameInfo').innerHTML = `${escapeHtml(data.date || '')} ${escapeHtml(data.time || '')}<br><strong>${escapeHtml(data.location || '')}</strong>${data.rosterReleased?'<br><span style="color:#8fd18f;font-weight:900">Roster is released — substitutions update roster immediately.</span>':''}`;
+  renderList('currentGoalies', data.currentGoalies || [], 'current');
+  renderList('regularGoalies', data.regularGoalies || [], 'regular');
+
+  const regularPhones = new Set(
+    (data.regularGoalies || [])
+      .map(g => phoneDigits(g.phone || ''))
+      .filter(Boolean)
+  );
+
+  const filteredBackups = (data.backupGoalies || []).filter(g => {
+    const phone = phoneDigits(g.phone || '');
+    return !phone || !regularPhones.has(phone);
+  });
+
+  renderList('backupGoalies', filteredBackups, 'backup');
+}
+function getSubGoalieOptions(){
+  const all = [
+    ...(Array.isArray(currentData.regularGoalies) ? currentData.regularGoalies : []),
+    ...(Array.isArray(currentData.backupGoalies) ? currentData.backupGoalies : [])
+  ];
+  const seen = new Set();
+  const cancelPhone = phoneDigits(selectedCancelGoalie?.phone || '');
+  const cancelId = selectedCancelGoalie?.id == null ? '' : String(selectedCancelGoalie.id);
+  return all.filter(g => {
+    const key = phoneDigits(g.phone || '') || `${String(g.firstName||'').toLowerCase()}|${String(g.lastName||'').toLowerCase()}`;
+    if(!key || seen.has(key)) return false;
+    seen.add(key);
+    if(cancelPhone && phoneDigits(g.phone || '') === cancelPhone) return false;
+    if(cancelId && String(g.id || '') === cancelId) return false;
+    return true;
+  }).sort((a,b)=>goalieName(a).localeCompare(goalieName(b)));
+}
+function populateSubGoalieSelect(){
+  const select = document.getElementById('subGoalieSelect');
+  const options = getSubGoalieOptions();
+  const selectedKey = selectedSubGoalie ? (phoneDigits(selectedSubGoalie.phone || '') || `${selectedSubGoalie.firstName||''}|${selectedSubGoalie.lastName||''}`) : '';
+  select.innerHTML = '<option value="">-- Select replacement goalie --</option>';
+  options.forEach((g, index) => {
+    const opt = document.createElement('option');
+    opt.value = String(index);
+    opt.textContent = `${goalieName(g)}${g.phone ? ' — ' + g.phone : ''}${g.note ? ' — ' + g.note : ''}`;
+    const key = phoneDigits(g.phone || '') || `${g.firstName||''}|${g.lastName||''}`;
+    if(selectedKey && key === selectedKey) opt.selected = true;
+    select.appendChild(opt);
+  });
+  select.dataset.options = JSON.stringify(options);
+  applySelectedSubGoalie();
+}
+function applySelectedSubGoalie(){
+  const select = document.getElementById('subGoalieSelect');
+  let options = [];
+  try{ options = JSON.parse(select.dataset.options || '[]'); }catch(e){ options = []; }
+  const g = options[Number(select.value)] || null;
+  selectedSubGoalie = g;
+  document.getElementById('subFirst').value=g?.firstName||'';
+  document.getElementById('subLast').value=g?.lastName||'';
+  document.getElementById('subPhone').value=g?.phone||'';
+  document.getElementById('subRating').value=g?.rating||7;
+}
+function chooseCancel(g){selectedCancelGoalie=g; selectedSubGoalie=null; openSubModal();}
+function chooseSub(g){selectedSubGoalie=g; selectedCancelGoalie=(currentData.currentGoalies||[])[0]||null; openSubModal();}
+function openSubModal(){
+  if(!selectedCancelGoalie){alert('Select the current goalie who is cancelling first.');return;}
+  document.getElementById('cancelGoalieLabel').textContent=`Cancelling: ${goalieName(selectedCancelGoalie)}${selectedCancelGoalie.team?' — Team '+selectedCancelGoalie.team:''}`;
+  hideError('subError');
+  populateSubGoalieSelect();
+  document.getElementById('subModal').classList.add('active');
+}
+function closeSubModal(){document.getElementById('subModal').classList.remove('active');}
+async function submitCancelOnly(){
+  hideError('subError');
+  if(!selectedCancelGoalie?.id){showError('subError','Cancelling goalie is missing an ID. Refresh and try again.');return;}
+  const payload={
+    sessionToken,
+    cancelGoalieId:selectedCancelGoalie.id
+  };
+  try{
+    const res=await fetch(`${API_URL}/api/goalies/cancel`,{method:'POST',headers:headers(),body:JSON.stringify(payload)});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error||'Goalie cancel failed');
+    closeSubModal();
+    const box=document.getElementById('resultBox');
+    box.classList.add('active');
+    box.innerHTML=`<strong>${escapeHtml(data.cancelledGoalie?.firstName||'Goalie')} ${escapeHtml(data.cancelledGoalie?.lastName||'')} is cancelled immediately.</strong><div class="sms-box">Public roster/player page has been updated.</div>`;
+    box.scrollIntoView({behavior:'smooth',block:'start'});
+    await loadData();
+  }catch(e){showError('subError', e.message||'Goalie cancel failed');}
+}
+async function submitSubstitution(){
+  hideError('subError');
+  if(!selectedCancelGoalie?.id){showError('subError','Cancelling goalie is missing an ID. Refresh and try again.');return;}
+  applySelectedSubGoalie();
+  if(!selectedSubGoalie){showError('subError','Select a replacement goalie from the dropdown.');return;}
+  const payload={
+    sessionToken,
+    cancelGoalieId:selectedCancelGoalie.id,
+    substitute:{firstName:subFirst.value,lastName:subLast.value,phone:subPhone.value,rating:subRating.value}
+  };
+  try{
+    const res=await fetch(`${API_URL}/api/goalies/substitute`,{method:'POST',headers:headers(),body:JSON.stringify(payload)});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error||'Substitution failed');
+    closeSubModal();
+    showResult(data);
+    await loadData();
+  }catch(e){showError('subError', e.message||'Substitution failed');}
+}
+function showResult(data){
+  const g=data.subbedInGoalie||{};
+  const body=data.smsBody||'';
+  const href=data.smsLink||smsHref(g.phone,body);
+  const box=document.getElementById('resultBox');
+  box.classList.add('active');
+  box.innerHTML=`<strong>${escapeHtml(goalieName(g))} is now subbed in${g.team?' on Team '+escapeHtml(g.team):''}.</strong><div class="sms-box">${escapeHtml(body)}</div>${href?`<a class="sms-link" href="${href}">Text ${escapeHtml(goalieName(g))} They're In</a>`:''}`;
+  box.scrollIntoView({behavior:'smooth',block:'start'});
+}
+if(sessionToken){showPanel();loadData();}
+setInterval(()=>{if(sessionToken) loadData();},30000);
+document.getElementById('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+</script>
+</body>
+</html>
