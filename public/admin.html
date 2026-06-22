@@ -1704,7 +1704,7 @@
         }
         .spare-goalie-rating-card {
             display: grid;
-            grid-template-columns: 1fr 90px auto;
+            grid-template-columns: 1fr 74px 74px auto;
             gap: 10px;
             align-items: center;
             background: rgba(0,0,0,0.24);
@@ -6856,7 +6856,7 @@ th, td{padding:2px 3px !important;}
         let selectedSnapshotKey = null;
         let selectedSnapshotFingerprint = "";
         let latestSnapshotKey = null;
-        let currentRegularSkatersByDay = normalizeRegularDayBucketMap(loadLocalRegularSkaters());
+        let currentRegularSkatersByDay = normalizeRegularDayBucketMap({});
         let adminPlayersById = {};
         let adminWaitlist = [];
         let latestRosterContactExport = null;
@@ -7882,6 +7882,7 @@ Date: ${selectedGameDate}`);
                     throw new Error(data.error || 'Failed to remove regular player');
                 }
                 currentRegularSkatersByDay = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
+                saveLocalRegularSkaters(currentRegularSkatersByDay);
                 renderRegularSkatersList();
                 await loadData();
             } catch (err) {
@@ -7899,7 +7900,7 @@ Date: ${selectedGameDate}`);
                 });
                 if (!res.ok) return;
                 const data = await res.json();
-                currentRegularSkatersByDay = mergeRegularMaps(data.regularSkatersByDay || {}, loadLocalRegularSkaters());
+                currentRegularSkatersByDay = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
                 saveLocalRegularSkaters(currentRegularSkatersByDay);
                 renderRegularSkatersList();
             } catch (err) {
@@ -7926,7 +7927,9 @@ Date: ${selectedGameDate}`);
                     });
                     const data = await res.json().catch(() => ({}));
                     if (res.ok && data.success !== false) {
-                        currentRegularSkatersByDay = mergeRegularMaps(data.regularSkatersByDay || {}, currentRegularSkatersByDay);
+                        if (data.regularSkatersByDay) {
+                            currentRegularSkatersByDay = normalizeRegularDayBucketMap(data.regularSkatersByDay);
+                        }
                         saveLocalRegularSkaters(currentRegularSkatersByDay);
                         renderRegularSkatersList();
                         return true;
@@ -8642,24 +8645,9 @@ ${rosterLink}
                 renderWaitlistRosterPicker();
 
                 const serverRegularMap = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
-                const localRegularMap = normalizeRegularDayBucketMap(loadLocalRegularSkaters());
-                const serverRegularCount = getRegularEntriesFlatFromMap(serverRegularMap).length;
-                const localRegularCount = getRegularEntriesFlatFromMap(localRegularMap).length;
-
-                if (serverRegularCount === 0 && localRegularCount > 0) {
-                    currentRegularSkatersByDay = localRegularMap;
-                    saveLocalRegularSkaters(currentRegularSkatersByDay);
-                    renderRegularSkatersList();
-                    try {
-                        await saveRegularSkatersSettings();
-                    } catch (syncErr) {
-                        console.error('Regular skater sync error:', syncErr);
-                    }
-                } else {
-                    currentRegularSkatersByDay = serverRegularMap;
-                    saveLocalRegularSkaters(currentRegularSkatersByDay);
-                    renderRegularSkatersList();
-                }
+                currentRegularSkatersByDay = serverRegularMap;
+                saveLocalRegularSkaters(currentRegularSkatersByDay);
+                renderRegularSkatersList();
 
                 playersCount = data.players.length;
                 maxGoalies = data.maxGoalies || 2;
@@ -9133,6 +9121,9 @@ ${rosterLink}
                 map.set(key, { ...clean, note: goalie.note || '', source: 'saved', extraIndex });
             });
             return Array.from(map.values()).sort((a, b) => {
+                const ap = Number.isFinite(Number(a.priority)) ? Number(a.priority) : 99;
+                const bp = Number.isFinite(Number(b.priority)) ? Number(b.priority) : 99;
+                if (ap !== bp) return ap - bp;
                 const last = String(a.lastName || '').localeCompare(String(b.lastName || ''));
                 if (last !== 0) return last;
                 return String(a.firstName || '').localeCompare(String(b.firstName || ''));
@@ -9156,6 +9147,7 @@ ${rosterLink}
                 const phone = g.phone || '';
                 const note = g.note ? `<div class="spare-goalie-rating-meta">${escapeHtml(g.note)}</div>` : '';
                 const rating = Number(g.rating || 7);
+                const priority = Number.isFinite(Number(g.priority)) ? Number(g.priority) : 99;
                 const sourceLabel = g.source === 'saved' ? 'Saved spare goalie' : 'Built-in quick goalie';
                 const deleteButton = g.source === 'saved'
                     ? `<button class="remove-btn" onclick="deleteSpareGoalieContact(${g.extraIndex})">Delete</button>`
@@ -9168,8 +9160,9 @@ ${rosterLink}
                             <div class="spare-goalie-rating-meta">${escapeHtml(sourceLabel)}</div>
                             ${note}
                         </div>
-                        <input type="number" id="spareGoalieRating-${index}" class="spare-goalie-rating-input rating-pill-input" value="${Number.isFinite(rating) ? rating.toFixed(1) : '7.0'}" min="1" max="10" step="0.1">
-                        <button class="control-btn" style="background:#4a90e2;" onclick='saveCombinedGoalieRating(${JSON.stringify(g).replace(/'/g,"&#39;")}, ${index})'>Save Rating</button>
+                        <input type="number" id="spareGoalieRating-${index}" class="spare-goalie-rating-input rating-pill-input" value="${Number.isFinite(rating) ? rating.toFixed(1) : '7.0'}" min="1" max="10" step="0.1" title="Rating">
+                        <input type="number" id="spareGoaliePriority-${index}" class="spare-goalie-rating-input rating-pill-input" value="${priority}" min="1" max="999" step="1" title="Priority">
+                        <button class="control-btn" style="background:#4a90e2;" onclick='saveCombinedGoalieRating(${JSON.stringify(g).replace(/'/g,"&#39;")}, ${index})'>Save</button>
                         ${deleteButton}
                     </div>
                 `;
@@ -9178,12 +9171,18 @@ ${rosterLink}
 
         async function saveCombinedGoalieRating(goalie, displayIndex) {
             const input = document.getElementById(`spareGoalieRating-${displayIndex}`);
+            const priorityInput = document.getElementById(`spareGoaliePriority-${displayIndex}`);
             const ratingNum = parseFloat(input ? input.value : '');
+            const priorityNum = parseInt(priorityInput ? priorityInput.value : '', 10);
             if (!Number.isFinite(ratingNum) || ratingNum < 1 || ratingNum > 10) {
                 alert('Rating must be between 1 and 10');
                 return;
             }
-            await saveSpareGoalieObject({ ...goalie, rating: ratingNum });
+            if (!Number.isFinite(priorityNum) || priorityNum < 1 || priorityNum > 999) {
+                alert('Priority must be between 1 and 999');
+                return;
+            }
+            await saveSpareGoalieObject({ ...goalie, rating: ratingNum, priority: priorityNum });
         }
 
         async function saveBuiltInGoalieAsSpare(goalie) {
@@ -9383,12 +9382,12 @@ ${rosterLink}
 
         const QUICK_GOALIES_STORAGE_KEY = 'phansQuickGoaliesV1';
         const DEFAULT_QUICK_GOALIES = [
-            { firstName: 'Craig', lastName: 'Scolack', phone: '(519) 982-6311', rating: 9 },
-            { firstName: 'Hao', lastName: 'Chau', phone: '(519) 995-9884', rating: 8 },
-            { firstName: 'Mat', lastName: 'Carriere', phone: '(226) 350-0217', rating: 7 },
-            { firstName: 'Jesse', lastName: 'Laframboise', phone: '(519) 566-6711', rating: 7 },
-            { firstName: 'Kent', lastName: 'Nelson', phone: '(250) 884-6609', rating: 7 },
-            { firstName: 'Lilly', lastName: 'Isberg', phone: '(289) 808-4633', rating: 7 }
+            { firstName: 'Craig', priority: 99, lastName: 'Scolack', phone: '(519) 982-6311', rating: 9 },
+            { firstName: 'Hao', priority: 99, lastName: 'Chau', phone: '(519) 995-9884', rating: 8 },
+            { firstName: 'Mat', priority: 4, lastName: 'Carriere', phone: '(226) 350-0217', rating: 7 },
+            { firstName: 'Jesse', priority: 5, lastName: 'Laframboise', phone: '(519) 566-6711', rating: 7 },
+            { firstName: 'Kent', priority: 6, lastName: 'Nelson', phone: '(250) 884-6609', rating: 7 },
+            { firstName: 'Lilly', priority: 3, lastName: 'Isberg', phone: '(289) 808-4633', rating: 7 }
         ];
 
         function normalizeQuickGoalie(raw) {
@@ -9399,8 +9398,10 @@ ${rosterLink}
             const phone = String(raw?.phone || '').trim();
             const ratingNumber = Number(raw?.rating);
             const rating = Number.isFinite(ratingNumber) ? Math.max(1, Math.min(10, ratingNumber)) : 7;
+            const priorityNumber = Number(raw?.priority);
+            const priority = Number.isFinite(priorityNumber) && priorityNumber > 0 ? Math.max(1, Math.min(999, Math.round(priorityNumber))) : 99;
             if (!firstName || !lastName) return null;
-            return { firstName, lastName, phone, rating };
+            return { firstName, lastName, phone, rating, priority };
         }
 
         function getQuickGoalies() {
@@ -9408,7 +9409,8 @@ ${rosterLink}
                 firstName: goalie.firstName,
                 lastName: goalie.lastName,
                 phone: goalie.phone,
-                rating: goalie.rating
+                rating: goalie.rating,
+                priority: goalie.priority
             }));
         }
 

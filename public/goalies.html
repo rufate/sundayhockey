@@ -157,7 +157,8 @@ function renderCard(g, kind){
   const classes = `card ${kind||''}`;
   const label = kind === 'current' ? 'CURRENT' : kind === 'regular' ? 'REGULAR' : 'BACKUP';
   const wait = g.source === 'waitlist' ? '<span class="pill waitlist">WAITLIST</span>' : '';
-  const notes = [g.dayLabel, g.team ? `Team: ${g.team}` : '', g.note, g.registeredAt ? `Registered: ${fmtTime(g.registeredAt)}` : ''].filter(Boolean).join('<br>');
+  const priorityLine = kind === 'backup' && Number.isFinite(Number(g.priority)) ? `Priority: ${Number(g.priority)}` : '';
+  const notes = [priorityLine, g.dayLabel, g.team ? `Team: ${g.team}` : '', g.note, g.registeredAt ? `Registered: ${fmtTime(g.registeredAt)}` : ''].filter(Boolean).join('<br>');
   const safeGoaliePayload = JSON.stringify(g).replace(/'/g,"&#39;");
   const textAvailabilityBtn = kind !== 'current' ? `<button class="refresh flashing-notify" onclick='textAvailability(${safeGoaliePayload})'>Text Availability</button>` : '';
   const subBtn = kind !== 'current' ? `<button class="success" onclick='chooseSub(${safeGoaliePayload})'>Use as Sub</button>` : '';
@@ -191,6 +192,12 @@ async function loadData(){
     return !phone || !regularPhones.has(phone);
   });
 
+  filteredBackups.sort((a,b)=>{
+    const ap = Number.isFinite(Number(a.priority)) ? Number(a.priority) : 99;
+    const bp = Number.isFinite(Number(b.priority)) ? Number(b.priority) : 99;
+    if(ap !== bp) return ap - bp;
+    return goalieName(a).localeCompare(goalieName(b));
+  });
   renderList('backupGoalies', filteredBackups, 'backup');
 }
 function getSubGoalieOptions(){
@@ -208,7 +215,12 @@ function getSubGoalieOptions(){
     if(cancelPhone && phoneDigits(g.phone || '') === cancelPhone) return false;
     if(cancelId && String(g.id || '') === cancelId) return false;
     return true;
-  }).sort((a,b)=>goalieName(a).localeCompare(goalieName(b)));
+  }).sort((a,b)=>{
+    const ap = Number.isFinite(Number(a.priority)) ? Number(a.priority) : 99;
+    const bp = Number.isFinite(Number(b.priority)) ? Number(b.priority) : 99;
+    if(ap !== bp) return ap - bp;
+    return goalieName(a).localeCompare(goalieName(b));
+  });
 }
 function populateSubGoalieSelect(){
   const select = document.getElementById('subGoalieSelect');
