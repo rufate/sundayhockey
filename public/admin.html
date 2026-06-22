@@ -2174,7 +2174,13 @@ button {
     background:#c62828;
 }
 .compact-pay.is-paid{
+    background:#1565c0;
+}
+.compact-pay.is-paid-cash{
     background:#2e7d32;
+}
+.compact-pay.is-paid-etransfer{
+    background:#1565c0;
 }
 .compact-pay.is-pia{
     background:#1565c0;
@@ -2267,9 +2273,7 @@ button {
     margin-bottom:14px;
 }
 .payment-slider-input{
-    width:100%;
-    margin:0 0 14px 0 !important;
-    accent-color:#ff6b00;
+    display:none !important;
 }
 .payment-slider-presets{
     display:grid;
@@ -2277,6 +2281,28 @@ button {
     gap:8px;
     margin-bottom:14px;
 }
+.payment-method-options{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+    margin:10px 0 14px 0;
+}
+.payment-method-option{
+    background:#3d3d3d !important;
+    border:1px solid #555 !important;
+    color:#fff !important;
+    border-radius:10px !important;
+    margin:0 !important;
+}
+.payment-method-option.active{
+    background:#1565c0 !important;
+    border-color:#4a90e2 !important;
+}
+.payment-method-option.cash.active{
+    background:#2e7d32 !important;
+    border-color:#4CAF50 !important;
+}
+
 .payment-slider-preset{
     padding:8px 0 !important;
     margin:0 !important;
@@ -8700,14 +8726,18 @@ ${rosterLink}
                                 : (p.paidAmount && parseFloat(p.paidAmount) > 0 ? 'paid' : 'owes');
                             const isPaid = paymentStatus === 'paid';
                             const isPia = paymentStatus === 'pia';
+                            const rawMethod = String(p.paymentMethod || '').toLowerCase();
+                            const isCashPaid = isPaid && rawMethod.includes('cash');
                             const compactAmount = isPia
                                 ? 0
                                 : (isPaid ? parseFloat(p.paidAmount) : 15);
-                            const compactLabel = isPia ? 'PIA' : (isPaid ? `$${compactAmount}` : 'OWES');
-                            const compactClass = isPia ? 'is-pia' : (isPaid ? 'is-paid' : 'is-unpaid');
+                            const amountText = Number.isInteger(compactAmount) ? String(compactAmount) : compactAmount.toFixed(2).replace(/\.00$/, '').replace(/0$/, '');
+                            const compactLabel = isPia ? 'PIA' : (isPaid ? `${isCashPaid ? '' : 'E'}$${amountText}` : 'OWES');
+                            const compactClass = isPia ? 'is-pia' : (isPaid ? (isCashPaid ? 'is-paid-cash' : 'is-paid-etransfer') : 'is-unpaid');
+                            const compactMethod = isCashPaid ? 'Cash' : 'E-Transfer';
                             paidInput = `
-                                <div class="compact-pay ${compactClass}" data-player-id="${p.id}" data-payment-status="${paymentStatus}">
-                                    <button class="compact-pay-btn compact-pay-main" title="Tap to mark paid/open payment options. PIA is paid in advance." onclick="compactPayToggle(${p.id})" data-amount="${compactAmount}">
+                                <div class="compact-pay ${compactClass}" data-player-id="${p.id}" data-payment-status="${paymentStatus}" data-payment-method="${compactMethod}">
+                                    <button class="compact-pay-btn compact-pay-main" title="Tap OWES to mark E-Transfer. Tap paid to edit method/amount. Double tap OWES for options." onclick="compactPayToggle(${p.id}, event)" ondblclick="compactPayDoubleTap(${p.id}, event)" data-amount="${compactAmount}">
                                         ${compactLabel}
                                     </button>
                                 </div>
@@ -8900,7 +8930,7 @@ ${rosterLink}
             loadData();
         }
 
-        async function updatePaidAmount(playerId, amount) {
+        async function updatePaidAmount(playerId, amount, paymentMethod) {
             try {
                 const res = await fetch(`${API_URL}/api/admin/update-paid-amount`, {
                     method: 'POST',
@@ -8908,7 +8938,8 @@ ${rosterLink}
                     body: JSON.stringify({ 
                         sessionToken: sessionToken, 
                         playerId: playerId, 
-                        amount: amount 
+                        amount: amount,
+                        paymentMethod: paymentMethod || 'E-Transfer'
                     })
                 });
 
@@ -10762,6 +10793,8 @@ This backup has fewer records than live data.
 
 <script>
 let activePaymentSliderPlayerId = null;
+let activePaymentMethod = 'E-Transfer';
+let compactPayClickTimers = {};
 
 function compactPayFind(playerId){
     return document.querySelector('.compact-pay[data-player-id="' + playerId + '"]');
@@ -10776,26 +10809,36 @@ function getCompactPayAmount(playerId){
     if(!Number.isFinite(amount) || amount < 0) amount = 15;
     return amount;
 }
+function getCompactPayMethod(playerId){
+    const wrap = compactPayFind(playerId);
+    const method = String(wrap?.dataset.paymentMethod || '').toLowerCase();
+    return method.includes('cash') ? 'Cash' : 'E-Transfer';
+}
+function setPaymentMethod(method){
+    activePaymentMethod = String(method || '').toLowerCase().includes('cash') ? 'Cash' : 'E-Transfer';
+    document.querySelectorAll('.payment-method-option').forEach(btn => {
+        const isCash = btn.dataset.method === 'Cash';
+        btn.classList.toggle('active', (isCash && activePaymentMethod === 'Cash') || (!isCash && activePaymentMethod === 'E-Transfer'));
+    });
+}
 function setPaymentSliderAmount(amount){
-    const slider = document.getElementById('paymentSliderInput');
     const valueLabel = document.getElementById('paymentSliderAmount');
     const numberInput = document.getElementById('paymentSliderNumber');
     const parsed = Number(amount);
     const safe = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
     const display = Number.isInteger(safe) ? String(safe) : safe.toFixed(2).replace(/\.00$/, '').replace(/0$/, '');
 
-    // Keep the existing slider UI, but do not let it cap manually typed payments.
-    // The slider can move up to its visual max; the number box can hold any higher amount.
-    if(slider){
-        const sliderMax = Number(slider.max || 500);
-        slider.value = String(Math.min(safe, Number.isFinite(sliderMax) ? sliderMax : safe));
-    }
     if(numberInput) numberInput.value = display;
     if(valueLabel) valueLabel.textContent = '$' + display;
 }
-function openPaymentSlider(playerId){
+function openPaymentSlider(playerId, forceMethod){
+    if (compactPayClickTimers[playerId]) {
+        clearTimeout(compactPayClickTimers[playerId]);
+        delete compactPayClickTimers[playerId];
+    }
     activePaymentSliderPlayerId = playerId;
     setPaymentSliderAmount(getCompactPayAmount(playerId));
+    setPaymentMethod(forceMethod || getCompactPayMethod(playerId) || 'E-Transfer');
     const modal = document.getElementById('paymentSliderModal');
     if(modal) modal.classList.add('active');
 }
@@ -10821,7 +10864,7 @@ async function savePaymentSlider(){
         wrap.style.opacity = '0.7';
     }
     try {
-        await updatePaidAmount(activePaymentSliderPlayerId, amount);
+        await updatePaidAmount(activePaymentSliderPlayerId, amount, activePaymentMethod);
         closePaymentSlider();
         await loadData();
     } finally {
@@ -10831,25 +10874,51 @@ async function savePaymentSlider(){
         }
     }
 }
-async function compactPayToggle(playerId){
+async function markPaymentCash(){
+    setPaymentMethod('Cash');
+    await savePaymentSlider();
+}
+async function markPaymentETransfer(){
+    setPaymentMethod('E-Transfer');
+    await savePaymentSlider();
+}
+async function compactPayToggle(playerId, event){
+    if (event && event.detail > 1) return;
     const main = compactPayMain(playerId);
     const wrap = compactPayFind(playerId);
     if(!main || !wrap || wrap.dataset.busy === '1') return;
 
-    if(wrap.classList.contains('is-paid') || wrap.classList.contains('is-pia')){
+    if(wrap.classList.contains('is-paid-cash') || wrap.classList.contains('is-paid-etransfer') || wrap.classList.contains('is-paid') || wrap.classList.contains('is-pia')){
         openPaymentSlider(playerId);
         return;
     }
 
-    wrap.dataset.busy = '1';
-    wrap.style.opacity = '0.7';
-    try {
-        await updatePaymentStatus(playerId, 'paid');
-        await loadData();
-    } finally {
-        delete wrap.dataset.busy;
-        wrap.style.opacity = '';
+    if (compactPayClickTimers[playerId]) clearTimeout(compactPayClickTimers[playerId]);
+    compactPayClickTimers[playerId] = setTimeout(async () => {
+        delete compactPayClickTimers[playerId];
+        const activeWrap = compactPayFind(playerId);
+        if(!activeWrap || activeWrap.dataset.busy === '1') return;
+        activeWrap.dataset.busy = '1';
+        activeWrap.style.opacity = '0.7';
+        try {
+            await updatePaidAmount(playerId, 15, 'E-Transfer');
+            await loadData();
+        } finally {
+            delete activeWrap.dataset.busy;
+            activeWrap.style.opacity = '';
+        }
+    }, 220);
+}
+function compactPayDoubleTap(playerId, event){
+    if(event) {
+        event.preventDefault();
+        event.stopPropagation();
     }
+    if (compactPayClickTimers[playerId]) {
+        clearTimeout(compactPayClickTimers[playerId]);
+        delete compactPayClickTimers[playerId];
+    }
+    openPaymentSlider(playerId, getCompactPayMethod(playerId) || 'E-Transfer');
 }
 
 async function markPaymentPia(){
@@ -10885,8 +10954,7 @@ document.addEventListener('keydown', function(e){
     if(e.key === 'Escape'){
         closePaymentSlider();
     }
-});
-</script>
+});</script>
 
 
 
@@ -10894,8 +10962,11 @@ document.addEventListener('keydown', function(e){
         <div class="payment-slider-card">
             <div class="payment-slider-title">Set Payment Amount</div>
             <div class="payment-slider-amount" id="paymentSliderAmount">$15</div>
-            <input type="range" id="paymentSliderInput" class="payment-slider-input" min="0" max="500" step="1" value="15" oninput="handlePaymentSliderInput(this.value)">
             <input type="number" id="paymentSliderNumber" min="0" step="1" value="15" placeholder="Enter any amount" oninput="handlePaymentSliderInput(this.value)">
+            <div class="payment-method-options">
+                <button type="button" class="payment-method-option active" data-method="E-Transfer" onclick="setPaymentMethod('E-Transfer')">E-Transfer</button>
+                <button type="button" class="payment-method-option cash" data-method="Cash" onclick="setPaymentMethod('Cash')">Cash</button>
+            </div>
             <div class="payment-slider-presets">
                 <button type="button" class="payment-slider-preset" onclick="paymentSliderPreset(10)">$10</button>
                 <button type="button" class="payment-slider-preset" onclick="paymentSliderPreset(15)">$15</button>

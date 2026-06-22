@@ -3107,6 +3107,13 @@ function normalizePaymentStatus(status, player = {}) {
     return 'owes';
 }
 
+function normalizeCollectionPaymentMethod(method, fallback = 'E-Transfer') {
+    const raw = String(method || fallback || '').trim().toLowerCase();
+    if (raw === 'cash' || raw.includes('cash')) return 'Cash';
+    if (raw === 'etransfer' || raw === 'e-transfer' || raw.includes('transfer')) return 'E-Transfer';
+    return String(fallback || 'E-Transfer').toLowerCase().includes('cash') ? 'Cash' : 'E-Transfer';
+}
+
 function applyPaymentStatusToPlayer(player, status, options = {}) {
     if (!player) return player;
     const normalized = normalizePaymentStatus(status, player);
@@ -7068,7 +7075,7 @@ app.post('/api/admin/update-spots', async (req, res) => {
 
 // Update paid amount endpoint
 app.post('/api/admin/update-paid-amount', async (req, res) => {
-    const { password, sessionToken, playerId, amount } = req.body;
+    const { password, sessionToken, playerId, amount, paymentMethod } = req.body;
     if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
 
     const normalizedPlayerId = parseInt(playerId, 10);
@@ -7087,6 +7094,7 @@ app.post('/api/admin/update-paid-amount', async (req, res) => {
         player.paidAmount = paidAmount;
 
         if (paidAmount !== null && paidAmount > 0) {
+            player.paymentMethod = normalizeCollectionPaymentMethod(paymentMethod, player.paymentMethod || 'E-Transfer');
             applyPaymentStatusToPlayer(player, 'paid');
         } else if (normalizePaymentStatus(player.paymentStatus, player) === 'pia') {
             applyPaymentStatusToPlayer(player, 'pia');
@@ -7096,8 +7104,8 @@ app.post('/api/admin/update-paid-amount', async (req, res) => {
 
         if (pool) {
             await pool.query(
-                'UPDATE players SET paid = $1, paid_amount = $2, payment_status = $3 WHERE id = $4',
-                [player.paid, player.paidAmount, normalizePaymentStatus(player.paymentStatus, player), normalizedPlayerId]
+                'UPDATE players SET paid = $1, paid_amount = $2, payment_status = $3, payment_method = $4 WHERE id = $5',
+                [player.paid, player.paidAmount, normalizePaymentStatus(player.paymentStatus, player), player.paymentMethod || null, normalizedPlayerId]
             );
         }
 
@@ -7128,6 +7136,7 @@ app.post('/api/admin/update-payment-status', async (req, res) => {
 
     try {
         if (paymentStatus === 'paid') {
+            player.paymentMethod = normalizeCollectionPaymentMethod(req.body?.paymentMethod, player.paymentMethod || 'E-Transfer');
             applyPaymentStatusToPlayer(player, 'paid', { ensureAmount: true, defaultAmount: 15 });
         } else if (paymentStatus === 'pia') {
             applyPaymentStatusToPlayer(player, 'pia');
@@ -7137,8 +7146,8 @@ app.post('/api/admin/update-payment-status', async (req, res) => {
 
         if (pool) {
             await pool.query(
-                'UPDATE players SET paid = $1, paid_amount = $2, payment_status = $3 WHERE id = $4',
-                [player.paid, player.paidAmount, normalizePaymentStatus(player.paymentStatus, player), normalizedPlayerId]
+                'UPDATE players SET paid = $1, paid_amount = $2, payment_status = $3, payment_method = $4 WHERE id = $5',
+                [player.paid, player.paidAmount, normalizePaymentStatus(player.paymentStatus, player), player.paymentMethod || null, normalizedPlayerId]
             );
         }
 
@@ -7827,9 +7836,35 @@ function formatSmsPhone(phone) {
     return digits ? `+1${digits}` : '';
 }
 
-function buildGoalieInText(goalie = {}) {
+function getPublicBaseUrl(req = null) {
+    const envUrl = String(
+        process.env.PUBLIC_BASE_URL ||
+        process.env.APP_BASE_URL ||
+        process.env.RENDER_EXTERNAL_URL ||
+        ''
+    ).trim().replace(/\/+$/, '');
+
+    if (envUrl) return envUrl;
+
+    const forwardedProto = String(req?.headers?.['x-forwarded-proto'] || '').split(',')[0].trim();
+    const forwardedHost = String(req?.headers?.['x-forwarded-host'] || '').split(',')[0].trim();
+    const proto = forwardedProto || req?.protocol || 'https';
+    const host = forwardedHost || (typeof req?.get === 'function' ? req.get('host') : '') || String(req?.headers?.host || '').trim();
+
+    return host ? `${proto}://${host}` : '';
+}
+
+function buildGoalieInText(goalie = {}, req = null) {
+    const firstName = String(goalie.firstName || '').trim();
     const name = `${goalie.firstName || ''} ${goalie.lastName || ''}`.trim() || 'Goalie';
-    return `${name}, you're in for ${gameTime || 'hockey'} at ${gameLocation || 'the rink'}. Please confirm you can make it.`;
+    const greeting = firstName ? `Hi ${firstName},` : `Hi ${name},`;
+    const portalUrl = getPublicBaseUrl(req);
+
+    if (portalUrl) {
+        return `${greeting} you're in. Check ${portalUrl} for details.`;
+    }
+
+    return `${greeting} you're in. Check the Hockey Portal for details.`;
 }
 
 function createGoalieSessionToken(rememberMe = true) {
@@ -7901,10 +7936,23 @@ function getCurrentGoalieContacts() {
     return Array.from(map.values()).sort(sortGoalieContacts);
 }
 
+function isCurrentlyRegisteredGoalieContact(goalie = {}) {
+    const targetPhone = normalizePhoneDigits(goalie.phone || '');
+    const targetName = `${goalie.firstName || ''} ${goalie.lastName || ''}`.trim().toLowerCase();
+
+    return (Array.isArray(players) ? players : []).some(player => {
+        if (!player || !player.isGoalie) return false;
+        const playerPhone = normalizePhoneDigits(player.phone || '');
+        const playerName = `${player.firstName || ''} ${player.lastName || ''}`.trim().toLowerCase();
+        return (targetPhone && playerPhone === targetPhone) || (!!targetName && playerName === targetName);
+    });
+}
+
 function getRegularGoalieContacts() {
     const list = [];
     for (const [day, goalies] of Object.entries(REGULAR_GOALIES_BY_DAY || {})) {
         for (const goalie of (Array.isArray(goalies) ? goalies : [])) {
+            if (isCurrentlyRegisteredGoalieContact(goalie)) continue;
             list.push({
                 ...goalie,
                 dayLabel: `${day.charAt(0).toUpperCase()}${day.slice(1)} regular goalie`
@@ -7917,9 +7965,11 @@ function getRegularGoalieContacts() {
 function getBackupGoalieContacts() {
     const map = new Map();
     for (const goalie of BACKUP_GOALIES || []) {
+        if (isCurrentlyRegisteredGoalieContact(goalie)) continue;
         addUniqueGoalieContact(map, goalie, { note: 'Backup / substitute goalie' });
     }
     for (const goalie of extraGoalieContacts || []) {
+        if (isCurrentlyRegisteredGoalieContact(goalie)) continue;
         const key = normalizeGoalieContactKey(goalie);
         // Saved admin/goalie-panel records override the built-in backup defaults by phone/name.
         if (key && map.has(key)) map.delete(key);
@@ -7990,51 +8040,13 @@ app.post('/api/goalies/add-contact', async (req, res) => {
 
 app.post('/api/goalies/cancel', async (req, res) => {
     if (!requireGoalieAuth(req, res)) return;
-    const cancelGoalieId = String(req.body?.cancelGoalieId || '').trim();
-    if (!cancelGoalieId) return res.status(400).json({ error: 'Select the goalie who is cancelling.' });
 
-    const goalieIndex = players.findIndex(p => String(p.id) === cancelGoalieId && !!p.isGoalie);
-    if (goalieIndex === -1) return res.status(404).json({ error: 'Registered goalie not found.' });
-
-    const cancellingGoalie = players[goalieIndex];
-
-    const nowIso = new Date().toISOString();
-    const rosterWasReleased = getEffectiveRosterReleasedState();
-    const cancelledTeam = cancellingGoalie.team === 'White' || cancellingGoalie.team === 'Dark' ? cancellingGoalie.team : null;
-
-    try {
-        await runProtectedMutation('goalie-self-cancel-immediate', req, async () => {
-            appendCancellationLog({
-                id: cancellingGoalie.id,
-                firstName: cancellingGoalie.firstName,
-                lastName: cancellingGoalie.lastName,
-                phone: cancellingGoalie.phone,
-                rating: cancellingGoalie.rating,
-                isGoalie: true,
-                paymentMethod: cancellingGoalie.paymentMethod,
-                source: 'players',
-                action: 'goalie-self-cancel-immediate',
-                cancelledBy: 'goalie-panel',
-                cancelledAt: nowIso
-            });
-
-            players.splice(goalieIndex, 1);
-
-            if (rosterWasReleased) {
-                syncCurrentWeekTeamsFromPlayers();
-            }
-        }, { cancelledGoalieId: cancellingGoalie.id, rosterWasReleased, cancelledTeam });
-    } catch (err) {
-        console.error('Error cancelling goalie immediately:', err.message);
-        return res.status(500).json({ error: 'Goalie cancellation could not be saved safely.' });
-    }
-
-    res.json({
-        success: true,
-        cancelledGoalie: { firstName: cancellingGoalie.firstName, lastName: cancellingGoalie.lastName, team: cancelledTeam },
-        rosterReleased: rosterWasReleased,
-        currentGoalies: getCurrentGoalieContacts(),
-        backupGoalies: getBackupGoalieContacts()
+    // Goalie panel rule:
+    // There must always be 2 registered goalies.
+    // Do not allow "cancel only" from the goalie panel. Use /api/goalies/substitute
+    // so the cancelling goalie is removed and the replacement goalie is added in one safe mutation.
+    return res.status(400).json({
+        error: 'Goalies cannot be cancelled without a replacement. Two goalies are required at all times. Please select a substitute goalie and use Cancel + Sub In.'
     });
 });
 
@@ -8055,7 +8067,7 @@ app.post('/api/goalies/substitute', async (req, res) => {
 
     const substitutePhone = normalizePhoneDigits(substitute.phone);
     const duplicate = players.find(p => normalizePhoneDigits(p.phone) === substitutePhone && String(p.id) !== cancelGoalieId);
-    if (duplicate) return res.status(400).json({ error: 'That substitute is already registered.' });
+    if (duplicate) return res.status(400).json({ error: 'That substitute is already registered as a goalie/player. Select a goalie who is not currently registered.' });
 
     let newGoalie = null;
     const nowIso = new Date().toISOString();
@@ -8122,7 +8134,7 @@ app.post('/api/goalies/substitute', async (req, res) => {
         return res.status(500).json({ error: 'Goalie substitution could not be saved safely.' });
     }
 
-    const smsBody = buildGoalieInText(newGoalie);
+    const smsBody = buildGoalieInText(newGoalie, req);
     const smsPhone = formatSmsPhone(newGoalie.phone);
     const smsLink = smsPhone ? `sms:${smsPhone}?&body=${encodeURIComponent(smsBody)}` : '';
     res.json({
@@ -8185,6 +8197,7 @@ app.post('/api/collector/update-paid-amount', async (req, res) => {
     const player = (Array.isArray(players) ? players : []).find(p => String(p.id) === playerId);
     if (!player || isPaymentExcludedPlayer(player)) return res.status(404).json({ error: 'Player not found on payment list.' });
     const amountRaw = req.body?.amount;
+    const paymentMethodRaw = req.body?.paymentMethod;
     try {
         await runProtectedMutation('payment-page-update-paid-amount', req, async () => {
             if (amountRaw === null || amountRaw === '' || amountRaw === undefined) {
@@ -8195,9 +8208,10 @@ app.post('/api/collector/update-paid-amount', async (req, res) => {
                 player.paidAmount = amount;
                 player.paid = amount > 0;
                 player.paymentStatus = amount > 0 ? 'paid' : 'owes';
+                if (amount > 0) player.paymentMethod = normalizeCollectionPaymentMethod(paymentMethodRaw, player.paymentMethod || 'E-Transfer');
             }
             if (pool) {
-                await pool.query('UPDATE players SET paid = $1, paid_amount = $2, payment_status = $3 WHERE id = $4', [!!player.paid, player.paidAmount == null ? null : Number(player.paidAmount), normalizePaymentStatus(player.paymentStatus, player), player.id]);
+                await pool.query('UPDATE players SET paid = $1, paid_amount = $2, payment_status = $3, payment_method = $4 WHERE id = $5', [!!player.paid, player.paidAmount == null ? null : Number(player.paidAmount), normalizePaymentStatus(player.paymentStatus, player), player.paymentMethod || null, player.id]);
             }
         });
         res.json({ success: true });
