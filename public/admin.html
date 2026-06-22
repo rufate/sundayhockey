@@ -6053,10 +6053,7 @@ th, td{padding:2px 3px !important;}
             </p>
             <div class="backup-goalie-select">
                 <select id="backupGoalieSelect">
-                    <option value="">-- Select Backup Goalie --</option>
-                    <option value="0">Mat Carriere (Rating: 7, 226-350-0217)</option>
-                    <option value="1">Jesse Laframboise (Rating: 7, 519-566-6711)</option>
-                    <option value="2">Kent Nelson (Rating: 7, 250-884-6609)</option>
+                    <option value="">Backup goalies are managed in Spare / Quick Goalies</option>
                 </select>
                 <button class="add-backup-btn" onclick="addBackupGoalie()">Add as Substitute</button>
             </div>
@@ -9381,14 +9378,7 @@ ${rosterLink}
         }
 
         const QUICK_GOALIES_STORAGE_KEY = 'phansQuickGoaliesV1';
-        const DEFAULT_QUICK_GOALIES = [
-            { firstName: 'Craig', priority: 99, lastName: 'Scolack', phone: '(519) 982-6311', rating: 9 },
-            { firstName: 'Hao', priority: 99, lastName: 'Chau', phone: '(519) 995-9884', rating: 8 },
-            { firstName: 'Mat', priority: 4, lastName: 'Carriere', phone: '(226) 350-0217', rating: 7 },
-            { firstName: 'Jesse', priority: 5, lastName: 'Laframboise', phone: '(519) 566-6711', rating: 7 },
-            { firstName: 'Kent', priority: 6, lastName: 'Nelson', phone: '(250) 884-6609', rating: 7 },
-            { firstName: 'Lilly', priority: 3, lastName: 'Isberg', phone: '(289) 808-4633', rating: 7 }
-        ];
+        const DEFAULT_QUICK_GOALIES = [];
 
         function normalizeQuickGoalie(raw) {
             const name = String(raw && raw.name ? raw.name : `${raw?.firstName || ''} ${raw?.lastName || ''}`).trim().replace(/\s+/g, ' ');

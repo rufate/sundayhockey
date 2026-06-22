@@ -801,32 +801,9 @@ function clearAnnouncementState() {
 }
 
 // --- BACKUP GOALIES FOR SUBSTITUTION ---
-const BACKUP_GOALIES = [
-    {
-        firstName: "Mat",
-        priority: 4,
-        lastName: "Carriere",
-        phone: "(226) 350-0217",
-        rating: 7,
-        isGoalie: true
-    },
-    {
-        firstName: "Jesse",
-        priority: 5,
-        lastName: "Laframboise",
-        phone: "(519) 566-6711",
-        rating: 7,
-        isGoalie: true
-    },
-    {
-        firstName: "Kent",
-        priority: 6,
-        lastName: "Nelson",
-        phone: "(250) 884-6609",
-        rating: 7,
-        isGoalie: true
-    }
-];
+// Backup/substitute goalies are admin-managed through extraGoalieContacts.
+// Keep this empty so deleted backup goalies do not reappear from code.
+const BACKUP_GOALIES = [];
 
 // --- ARENA OPTIONS ---
 const ARENA_OPTIONS = [
@@ -7811,16 +7788,7 @@ function requirePaymentAuth(req, res) {
 
 // GOALIE CONTACT PAGE: private access for substitute goalie contacts
 const GOALIE_PASSWORD = String(process.env.GOALIE_PASSWORD || '').trim();
-const EXTRA_GOALIE_CONTACTS = [
-    {
-        firstName: "Lilly",
-        priority: 3,
-        lastName: "Isberg",
-        phone: "(289) 808-4633",
-        rating: 7,
-        note: "Quick goalie contact"
-    }
-];
+const EXTRA_GOALIE_CONTACTS = [];
 
 let extraGoalieContacts = EXTRA_GOALIE_CONTACTS.map(goalie => ({ ...goalie }));
 
