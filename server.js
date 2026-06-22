@@ -804,6 +804,7 @@ function clearAnnouncementState() {
 const BACKUP_GOALIES = [
     {
         firstName: "Mat",
+        priority: 4,
         lastName: "Carriere",
         phone: "(226) 350-0217",
         rating: 7,
@@ -811,6 +812,7 @@ const BACKUP_GOALIES = [
     },
     {
         firstName: "Jesse",
+        priority: 5,
         lastName: "Laframboise",
         phone: "(519) 566-6711",
         rating: 7,
@@ -818,6 +820,7 @@ const BACKUP_GOALIES = [
     },
     {
         firstName: "Kent",
+        priority: 6,
         lastName: "Nelson",
         phone: "(250) 884-6609",
         rating: 7,
@@ -7811,6 +7814,7 @@ const GOALIE_PASSWORD = String(process.env.GOALIE_PASSWORD || '').trim();
 const EXTRA_GOALIE_CONTACTS = [
     {
         firstName: "Lilly",
+        priority: 3,
         lastName: "Isberg",
         phone: "(289) 808-4633",
         rating: 7,
@@ -7827,8 +7831,10 @@ function normalizeGoalieContact(input = {}) {
     const phone = formatPhoneNumber(phoneDigits || String(input.phone || '').trim());
     const ratingNumber = Number(input.rating);
     const rating = Number.isFinite(ratingNumber) ? Math.max(1, Math.min(10, Number(ratingNumber.toFixed(1)))) : 7;
+    const priorityNumber = Number(input.priority);
+    const priority = Number.isFinite(priorityNumber) && priorityNumber > 0 ? Math.max(1, Math.min(999, Math.round(priorityNumber))) : 99;
     const note = String(input.note || '').trim();
-    return { firstName, lastName, phone, rating, note };
+    return { firstName, lastName, phone, rating, priority, note };
 }
 
 function formatSmsPhone(phone) {
@@ -7911,6 +7917,7 @@ function addUniqueGoalieContact(map, goalie = {}, extras = {}) {
         lastName,
         phone: String(goalie.phone || '').trim(),
         rating: Number(goalie.finalRating ?? goalie.rating ?? 7),
+        priority: Number.isFinite(Number(goalie.priority ?? extras.priority)) ? Math.max(1, Math.min(999, Math.round(Number(goalie.priority ?? extras.priority)))) : 99,
         note: String(goalie.note || extras.note || '').trim(),
         ...extras
     });
@@ -7979,6 +7986,9 @@ function getBackupGoalieContacts() {
 }
 
 function sortGoalieContacts(a, b) {
+    const ap = Number.isFinite(Number(a.priority)) ? Number(a.priority) : 99;
+    const bp = Number.isFinite(Number(b.priority)) ? Number(b.priority) : 99;
+    if (ap !== bp) return ap - bp;
     const lastCompare = String(a.lastName || '').localeCompare(String(b.lastName || ''));
     if (lastCompare !== 0) return lastCompare;
     return String(a.firstName || '').localeCompare(String(b.firstName || ''));
