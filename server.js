@@ -2248,7 +2248,9 @@ async function loadDataFromDB() {
                 announcementImages = [];
             }
         }
-        if (appSettings.regularSkatersByDay !== undefined) {
+        if (settings.regularSkatersByDay !== undefined) {
+            regularSkatersByDay = normalizeRegularSkatersByDayMap(settings.regularSkatersByDay);
+        } else if (appSettings.regularSkatersByDay !== undefined) {
             try {
                 regularSkatersByDay = normalizeRegularSkatersByDayMap(JSON.parse(appSettings.regularSkatersByDay || '{}'));
             } catch {
@@ -3177,6 +3179,7 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
             ['collectorPageEnabled', String(collectorPageEnabled)],
             ['extraGoalieContacts', JSON.stringify(extraGoalieContacts)],
             ['persistentAdminRatings', JSON.stringify(persistentAdminRatings)],
+            ['regularSkatersByDay', JSON.stringify(regularSkatersByDay)],
             ['selectedDayTime', gameTime],
             ['selectedArena', gameLocation],
             ['gameDate', gameDate]
