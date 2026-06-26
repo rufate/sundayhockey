@@ -8381,7 +8381,7 @@ Date: ${selectedGameDate}`);
             }
 
             const portalLink = window.location.origin;
-            const smsBody = `Heeere's roster:\n${portalLink}`;
+            const smsBody = `Game day roster released. Recheck at the rink. Roster updates in real time for last-minute changes.\n${portalLink}`;
             window.location.href = `sms:${data.phoneOnly}?body=${encodeURIComponent(smsBody)}`;
         }
 
