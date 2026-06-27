@@ -12,7 +12,7 @@ body{background:var(--bg);color:var(--text);margin:0;padding:20px;min-height:100
 h1{color:var(--accent);text-align:center;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 8px}
 .sub{text-align:center;color:#bbb;margin-bottom:18px}.login-box,.registered-players-box,.pending-box,.summary-box{border-radius:12px;padding:18px;margin:16px 0}.login-box{background:linear-gradient(135deg,#2a1a3a,#3d2d4d);border:2px solid var(--accent)}.pending-box{background:linear-gradient(135deg,#3a2a1a,#4d3d2d);border:2px solid var(--warning);text-align:center;color:#ffd18a}.registered-players-box{background:linear-gradient(135deg,#2a1a1a,#332222);border:2px solid var(--accent)}.summary-box{background:linear-gradient(135deg,#1a3a1a,#2d4d2d);border:2px solid var(--success);display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center}.stat{background:rgba(0,0,0,.2);border-radius:10px;padding:12px}.stat strong{display:block;font-size:1.45rem;color:var(--success)}.stat span{font-size:.8rem;color:#bbb}
 input{width:100%;padding:12px;margin:8px 0;background:#3d3d3d;border:1px solid #555;color:#fff;border-radius:8px;font-size:1rem}button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer}button:hover{background:#ff8533}.logout{background:#666;float:right}.refresh{background:#4a90e2}.error{display:none;background:var(--danger);padding:10px;border-radius:8px;text-align:center;margin-top:10px}.top-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:10px}
-table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px solid #444;padding:7px 6px;text-align:center;vertical-align:middle}th{color:var(--accent)}td:first-child{text-align:left}.name-main{font-weight:800}.phone,.time{display:block;color:#aaa;font-size:.76rem;margin-top:2px}.rating-pill{display:inline-block;background:#4a4a4a;border:1px solid #777;border-radius:8px;padding:4px 9px;font-weight:800}.pay-pill{display:inline-flex;align-items:center;justify-content:center;min-width:78px;min-height:30px;border-radius:9px;font-weight:900}.paid{background:#2e7d32}.paid-cash{background:#2e7d32}.paid-etransfer{background:#1565c0}.owes{background:#c62828}.pia{background:#1565c0}.action-stack{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}.paid-btn{background:#2e7d32}.cash-btn{background:#795548}.owes-btn{background:#b71c1c}.amount-btn{background:#1565c0}.goalie-note{color:#ffb366;font-size:.78rem;font-weight:800}.hidden{display:none!important}
+table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px solid #444;padding:7px 6px;text-align:center;vertical-align:middle}th{color:var(--accent)}td:first-child{text-align:left}.name-main{font-weight:800}.phone,.time{display:block;color:#aaa;font-size:.76rem;margin-top:2px}.rating-pill{display:inline-block;background:#4a4a4a;border:1px solid #777;border-radius:8px;padding:4px 9px;font-weight:800}.pay-pill{display:inline-flex;align-items:center;justify-content:center;min-width:78px;min-height:30px;border-radius:9px;font-weight:900}.paid{background:#2e7d32}.paid-cash{background:#2e7d32}.paid-etransfer{background:#1565c0}.owes{background:#c62828}.pia{background:#fff;color:#111}.action-stack{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}.paid-btn{background:#2e7d32}.cash-btn{background:#795548}.owes-btn{background:#b71c1c}.amount-btn{background:#1565c0}.goalie-note{color:#ffb366;font-size:.78rem;font-weight:800}.hidden{display:none!important}
 @media(max-width:700px){body{padding:10px}.container{padding:16px}.summary-box{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.stat{padding:9px}.stat strong{font-size:1.05rem}th,td{font-size:.78rem;padding:6px 3px}.phone{font-size:.66rem}.action-stack button{font-size:.7rem;padding:7px 8px}.hide-mobile{display:none}}
 </style>
 </head>
@@ -111,10 +111,13 @@ function paymentState(p){
 function renderPlayers(players){
   const tbody = document.getElementById('playerList'); tbody.innerHTML='';
   const sorted = [...players].sort((a,b)=>{
-    const ap = String(a.firstName||'').toLowerCase()==='phan', bp = String(b.firstName||'').toLowerCase()==='phan';
-    if(ap && !bp) return -1; if(!ap && bp) return 1;
-    if(a.isGoalie && !b.isGoalie) return -1; if(!a.isGoalie && b.isGoalie) return 1;
-    return String(a.lastName||'').localeCompare(String(b.lastName||''));
+    const aPia = String(a.paymentStatus || '').toLowerCase() === 'pia';
+    const bPia = String(b.paymentStatus || '').toLowerCase() === 'pia';
+    if(aPia && !bPia) return -1;
+    if(!aPia && bPia) return 1;
+    const firstCompare = String(a.firstName || '').localeCompare(String(b.firstName || ''), undefined, {sensitivity:'base'});
+    if(firstCompare !== 0) return firstCompare;
+    return String(a.lastName || '').localeCompare(String(b.lastName || ''), undefined, {sensitivity:'base'});
   });
   for(const p of sorted){
     const isPhan = String(p.firstName||'').toLowerCase()==='phan' && String(p.lastName||'').toLowerCase()==='ly';
