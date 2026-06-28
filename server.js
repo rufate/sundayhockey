@@ -4195,11 +4195,44 @@ function summarizeTeamMetrics(team = []) {
     };
 }
 
+function getExtremeSkaterSeparationProblems(whiteTeam = [], darkTeam = []) {
+    const allSkaters = [
+        ...whiteTeam.filter(p => p && !p.isGoalie).map(p => ({ ...p, team: 'White' })),
+        ...darkTeam.filter(p => p && !p.isGoalie).map(p => ({ ...p, team: 'Dark' }))
+    ];
+
+    if (allSkaters.length < 2) return [];
+
+    const byStrength = allSkaters
+        .map(p => ({ ...p, balanceScore: getPlayerBalanceScore(p) }))
+        .sort((a, b) => {
+            const diff = b.balanceScore - a.balanceScore;
+            if (Math.abs(diff) > 0.001) return diff;
+            return `${a.firstName || ''} ${a.lastName || ''}`.toLowerCase().localeCompare(`${b.firstName || ''} ${b.lastName || ''}`.toLowerCase());
+        });
+
+    const problems = [];
+    const topTwo = byStrength.slice(0, 2);
+    const bottomTwo = byStrength.slice(-2);
+
+    if (topTwo.length === 2 && topTwo[0].team === topTwo[1].team) {
+        problems.push(`Two strongest skaters must be split: ${topTwo.map(p => `${p.firstName || ''} ${p.lastName || ''}`.trim()).join(' and ')} are both on ${topTwo[0].team}.`);
+    }
+
+    if (bottomTwo.length === 2 && bottomTwo[0].team === bottomTwo[1].team) {
+        problems.push(`Two weakest skaters must be split: ${bottomTwo.map(p => `${p.firstName || ''} ${p.lastName || ''}`.trim()).join(' and ')} are both on ${bottomTwo[0].team}.`);
+    }
+
+    return problems;
+}
+
 function computeTeamBalanceObjective(whiteTeam = [], darkTeam = []) {
     const white = summarizeTeamMetrics(whiteTeam);
     const dark = summarizeTeamMetrics(darkTeam);
+    const extremePenalty = getExtremeSkaterSeparationProblems(whiteTeam, darkTeam).length * 10000;
 
     return (
+        extremePenalty +
         Math.abs(white.totalBalance - dark.totalBalance) * 1.0 +
         Math.abs(white.skating - dark.skating) * 0.9 +
         Math.abs(white.hockeySense - dark.hockeySense) * 1.1 +
@@ -4260,6 +4293,8 @@ function buildRosterTeamRuleValidation(teams = {}) {
     if (totalGoalies === 2 && (whiteGoalies !== 1 || darkGoalies !== 1)) {
         problems.push(`Two-goalie roster must have one goalie per team: White ${whiteGoalies}, Dark ${darkGoalies}.`);
     }
+
+    problems.push(...getExtremeSkaterSeparationProblems(whiteTeam, darkTeam));
 
     // Full-capacity hockey rule: 20 skaters + 2 goalies = 10 skaters and 1 goalie per team.
     if (totalPlayers === MAX_ROSTER_SPOTS) {
@@ -7411,6 +7446,93 @@ app.post('/api/admin/release-roster', async (req, res) => {
     } catch (error) {
         console.error('Release roster error:', error);
         res.status(500).json({ error: "Server error: " + error.message });
+    }
+});
+
+
+function rebuildCurrentWeekTeamsFromPlayers() {
+    const whiteTeam = players.filter(p => p && p.team === 'White').map(p => ({ ...p, team: 'White' }));
+    const darkTeam = players.filter(p => p && p.team === 'Dark').map(p => ({ ...p, team: 'Dark' }));
+    const sortedWhite = whiteTeam.sort((a, b) => {
+        if (a.isGoalie && !b.isGoalie) return -1;
+        if (!a.isGoalie && b.isGoalie) return 1;
+        return `${a.firstName || ''} ${a.lastName || ''}`.toLowerCase().localeCompare(`${b.firstName || ''} ${b.lastName || ''}`.toLowerCase());
+    });
+    const sortedDark = darkTeam.sort((a, b) => {
+        if (a.isGoalie && !b.isGoalie) return -1;
+        if (!a.isGoalie && b.isGoalie) return 1;
+        return `${a.firstName || ''} ${a.lastName || ''}`.toLowerCase().localeCompare(`${b.firstName || ''} ${b.lastName || ''}`.toLowerCase());
+    });
+    const whiteMetrics = summarizeTeamMetrics(sortedWhite);
+    const darkMetrics = summarizeTeamMetrics(sortedDark);
+    return {
+        whiteTeam: sortedWhite,
+        darkTeam: sortedDark,
+        whiteRating: whiteMetrics.averageFinalRating,
+        darkRating: darkMetrics.averageFinalRating,
+        whiteBalance: roundRating(whiteMetrics.totalBalance),
+        darkBalance: roundRating(darkMetrics.totalBalance),
+        balanceObjective: roundRating(computeTeamBalanceObjective(sortedWhite, sortedDark)),
+        rosterRuleValidation: enforceRosterTeamRules({ whiteTeam: sortedWhite, darkTeam: sortedDark }, 'manual-rebalance')
+    };
+}
+
+app.post('/api/admin/rebalance-roster', async (req, res) => {
+    const { mode, whitePlayerId, darkPlayerId } = req.body || {};
+    if (!isAuthorizedAdminRequest(req)) return res.status(401).json({ error: 'Unauthorized' });
+    if (!getEffectiveRosterReleasedState()) return res.status(400).json({ error: 'Roster must be released before rebalancing.' });
+
+    try {
+        let teams = null;
+        await runProtectedMutation('admin-rebalance-roster', req, async () => {
+            if (String(mode || '').toLowerCase() === 'auto') {
+                teams = generateFairTeams();
+            } else {
+                const whiteId = String(whitePlayerId || '').trim();
+                const darkId = String(darkPlayerId || '').trim();
+                const whitePlayer = players.find(p => String(p.id) === whiteId && p.team === 'White');
+                const darkPlayer = players.find(p => String(p.id) === darkId && p.team === 'Dark');
+                if (!whitePlayer || !darkPlayer) throw new Error('Select one White player and one Dark player to swap.');
+                const whiteOriginal = whitePlayer.team;
+                const darkOriginal = darkPlayer.team;
+                whitePlayer.team = 'Dark';
+                darkPlayer.team = 'White';
+                try {
+                    teams = rebuildCurrentWeekTeamsFromPlayers();
+                } catch (err) {
+                    whitePlayer.team = whiteOriginal;
+                    darkPlayer.team = darkOriginal;
+                    throw err;
+                }
+            }
+
+            currentWeekData = {
+                ...(currentWeekData || {}),
+                whiteTeam: teams.whiteTeam,
+                darkTeam: teams.darkTeam,
+                rosterReleaseTime: currentWeekData?.rosterReleaseTime || Date.now(),
+                releaseDate: currentWeekData?.releaseDate || new Date().toISOString()
+            };
+        }, { mode: mode || 'swap', whitePlayerId, darkPlayerId });
+
+        if (currentWeekData && currentWeekData.weekNumber && currentWeekData.year) {
+            await saveWeekHistory(currentWeekData.year, currentWeekData.weekNumber, currentWeekData.whiteTeam, currentWeekData.darkTeam);
+        }
+
+        res.json({
+            success: true,
+            message: 'Roster rebalanced successfully.',
+            whiteTeam: teams.whiteTeam,
+            darkTeam: teams.darkTeam,
+            whiteRating: Number(teams.whiteRating || 0).toFixed(1),
+            darkRating: Number(teams.darkRating || 0).toFixed(1),
+            whiteBalance: teams.whiteBalance,
+            darkBalance: teams.darkBalance,
+            rosterRuleValidation: teams.rosterRuleValidation
+        });
+    } catch (error) {
+        console.error('Roster rebalance error:', error);
+        res.status(400).json({ error: error.message || 'Could not rebalance roster.' });
     }
 });
 
