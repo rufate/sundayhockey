@@ -416,6 +416,49 @@
             color: var(--success);
             font-size: 1.1rem;
         }
+        .team-rebalance-box {
+            background: rgba(0,0,0,0.22);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 10px;
+            padding: 14px;
+            margin-top: 14px;
+        }
+
+        .team-rebalance-box h4 {
+            margin: 0 0 8px 0;
+            color: #fff;
+        }
+
+        .team-rebalance-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto auto;
+            gap: 10px;
+            align-items: end;
+        }
+
+        .team-rebalance-grid label {
+            display: block;
+            color: #bbb;
+            font-size: 0.82rem;
+            margin-bottom: 4px;
+        }
+
+        .team-rebalance-grid select {
+            margin: 0;
+        }
+
+        .team-rebalance-note {
+            color: #aaa;
+            font-size: 0.82rem;
+            line-height: 1.35;
+            margin-top: 8px;
+        }
+
+        @media (max-width: 800px) {
+            .team-rebalance-grid { grid-template-columns: 1fr; }
+            .team-rebalance-grid button { width: 100%; }
+        }
+
 
         .roster-released {
             color: var(--success);
@@ -5991,6 +6034,22 @@ th, td{padding:2px 3px !important;}
             <div style="margin-top:10px; font-size: 0.85rem; color: #aaa;">
                 Click "Release Roster Now" to generate teams and make them visible to all players instantly.
             </div>
+            <div class="team-rebalance-box" id="teamRebalanceBox" style="display:none;">
+                <h4>⚖️ Manual Team Rebalance</h4>
+                <div class="team-rebalance-grid">
+                    <div>
+                        <label for="rebalanceWhiteSelect">White player</label>
+                        <select id="rebalanceWhiteSelect"><option value="">Select White player</option></select>
+                    </div>
+                    <div>
+                        <label for="rebalanceDarkSelect">Dark player</label>
+                        <select id="rebalanceDarkSelect"><option value="">Select Dark player</option></select>
+                    </div>
+                    <button class="control-btn" onclick="swapSelectedRosterPlayers()" style="background:#4a90e2;">Swap Players</button>
+                    <button class="control-btn" onclick="autoRebalanceRoster()" style="background:#6f42c1;">Auto Rebalance</button>
+                </div>
+                <div class="team-rebalance-note">The server blocks any rebalance that puts the 2 strongest skaters together or the 2 weakest skaters together.</div>
+            </div>
             <div class="roster-text-export-box" id="rosterTextExportBox">
                 <h4>📱 Mass Text Signup Players</h4>
                 <p>Use this anytime to text the current signup list from Android. Phan Ly and all goalies are automatically excluded.</p>
@@ -6857,6 +6916,7 @@ th, td{padding:2px 3px !important;}
         let adminPlayersById = {};
         let adminWaitlist = [];
         let latestRosterContactExport = null;
+        let latestAdminPlayers = [];
 
         // Pre-defined goalie data
         const PREDEFINED_GOALIES = [
@@ -8504,6 +8564,80 @@ ${rosterLink}
             window.open(url, '_blank');
         }
 
+        function formatRebalancePlayerOption(player) {
+            const name = `${player.firstName || ''} ${player.lastName || ''}`.trim() || 'Unknown player';
+            const rating = Number(player.rating || player.finalRating || 0);
+            const ratingText = rating ? ` - ${rating}` : '';
+            const goalieText = player.isGoalie ? ' (G)' : '';
+            return `${name}${goalieText}${ratingText}`;
+        }
+
+        function renderTeamRebalanceControls() {
+            const box = document.getElementById('teamRebalanceBox');
+            const whiteSelect = document.getElementById('rebalanceWhiteSelect');
+            const darkSelect = document.getElementById('rebalanceDarkSelect');
+            if (!box || !whiteSelect || !darkSelect) return;
+
+            box.style.display = currentRosterReleased ? 'block' : 'none';
+            whiteSelect.innerHTML = '<option value="">Select White player</option>';
+            darkSelect.innerHTML = '<option value="">Select Dark player</option>';
+
+            if (!currentRosterReleased) return;
+
+            const byName = (a, b) => `${a.firstName || ''} ${a.lastName || ''}`.toLowerCase().localeCompare(`${b.firstName || ''} ${b.lastName || ''}`.toLowerCase());
+            latestAdminPlayers.filter(p => p.team === 'White').sort(byName).forEach(player => {
+                const opt = document.createElement('option');
+                opt.value = String(player.id);
+                opt.textContent = formatRebalancePlayerOption(player);
+                whiteSelect.appendChild(opt);
+            });
+            latestAdminPlayers.filter(p => p.team === 'Dark').sort(byName).forEach(player => {
+                const opt = document.createElement('option');
+                opt.value = String(player.id);
+                opt.textContent = formatRebalancePlayerOption(player);
+                darkSelect.appendChild(opt);
+            });
+        }
+
+        async function postRosterRebalance(payload) {
+            const res = await fetch(`${API_URL}/api/admin/rebalance-roster`, {
+                method: 'POST',
+                headers: getAdminHeaders(),
+                body: JSON.stringify({ sessionToken, ...payload })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) throw new Error(data.error || 'Could not rebalance roster.');
+            await loadData();
+            await loadReleasedRosterPreview();
+            await loadRosterContactExport();
+            return data;
+        }
+
+        async function swapSelectedRosterPlayers() {
+            const whitePlayerId = document.getElementById('rebalanceWhiteSelect')?.value || '';
+            const darkPlayerId = document.getElementById('rebalanceDarkSelect')?.value || '';
+            if (!whitePlayerId || !darkPlayerId) {
+                alert('Select one White player and one Dark player to swap.');
+                return;
+            }
+            try {
+                const data = await postRosterRebalance({ mode: 'swap', whitePlayerId, darkPlayerId });
+                alert(`✅ Teams updated.\nWhite Avg: ${data.whiteRating} | Dark Avg: ${data.darkRating}`);
+            } catch (err) {
+                alert('Rebalance blocked: ' + err.message);
+            }
+        }
+
+        async function autoRebalanceRoster() {
+            if (!confirm('Auto rebalance the released roster now? This may move multiple players.')) return;
+            try {
+                const data = await postRosterRebalance({ mode: 'auto' });
+                alert(`✅ Auto rebalance complete.\nWhite Avg: ${data.whiteRating} | Dark Avg: ${data.darkRating}`);
+            } catch (err) {
+                alert('Auto rebalance failed: ' + err.message);
+            }
+        }
+
         async function releaseRoster() {
             console.log("Release roster clicked");
             
@@ -8639,6 +8773,8 @@ ${rosterLink}
                 adminPlayersById = Object.fromEntries((data.players || []).map(p => [String(p.id), p]));
                 adminWaitlist = Array.isArray(data.waitlist) ? data.waitlist : [];
                 updateLatePlayerTeamUI();
+                latestAdminPlayers = Array.isArray(data.players) ? data.players : [];
+                renderTeamRebalanceControls();
                 renderWaitlistRosterPicker();
 
                 const serverRegularMap = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
