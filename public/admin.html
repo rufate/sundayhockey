@@ -1,10 +1,11 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - Phan's Hockey</title>
-    <style>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Admin - Phan's Hockey</title>
+<style>
         :root {
             --bg-color: #1a1a1a;
             --card-bg: #2d2d2d;
@@ -1838,7 +1839,6 @@
         }
 
 </style>
-
 <style>
 table {
     border-collapse: collapse !important;
@@ -1908,8 +1908,6 @@ input[type="number"] {
         }
 
 </style>
-
-
 <style>
 /* lock name + rating closer */
 td:nth-child(1) { padding-right: 2px !important; }
@@ -1974,8 +1972,6 @@ th, td { padding: 3px 5px !important; }
         }
 
 </style>
-
-
 <style>
 /* FINAL POLISH */
 
@@ -2061,8 +2057,6 @@ button {
         }
 
 </style>
-
-
 <style>
 /* tighten badges */
 .protected-badge,
@@ -2129,8 +2123,6 @@ button {
         }
 
 </style>
-
-
 <style>
 /* center name + badges */
 .player-name-cell {
@@ -2198,8 +2190,6 @@ button {
         }
 
 </style>
-
-
 <style>
 .compact-pay{
     display:inline-flex;
@@ -2429,8 +2419,6 @@ button {
         }
 
 </style>
-
-
 <style id="safe-ui-hide-unused-admin-panels">
 .regular-summary-section,
 .regular-skaters-section,
@@ -2491,7 +2479,6 @@ button {
         }
 
 </style>
-
 <style>
 #goalieQuickSelectWrap { display:none; }
 #goalieQuickSelectWrap.visible { display:block; }
@@ -2618,8 +2605,6 @@ button {
         }
 
 </style>
-
-
 <style>
 .snapshot-pro-section {
     background: linear-gradient(135deg, #15253d, #213651);
@@ -2850,7 +2835,6 @@ button {
         }
 
 </style>
-
 <style id="admin-waitlist-bypass-mobile-v22">
 .waitlist-section {
     margin-left: auto !important;
@@ -2998,8 +2982,6 @@ button {
         }
 
 </style>
-
-
 <style id="admin-safe-mobile-patch-v10">
 #playerList .protected-badge,
 #playerList .goalie-badge{display:none !important;}
@@ -3147,8 +3129,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
 <style id="admin-border-align-fix-v16">
 /* align row separator lines perfectly across columns */
 #playerList table{
@@ -3213,8 +3193,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
 <style id="admin-panel-unify-v17">
 /* Make remaining admin tables/panels visually match the Registered Players table */
 .waitlist-section table,
@@ -3397,8 +3375,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
 <style id="admin-maintenance-under-title-v18">
 #adminPanel > .maintenance-control{
     margin-top:-8px !important;
@@ -3528,9 +3504,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
-
 <style id="maintenance-pill-left-fix-vfinal">
 #adminPanel > .maintenance-control{
     width: 100% !important;
@@ -3621,9 +3594,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
-
 <style id="android-compact-mode-v1">
 /* Android Compact Mode */
 @media (max-width: 700px) {
@@ -3916,9 +3886,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
-
 <style id="android-compact-mode-v2-ultra">
 /* Android Compact Mode - Step 2 */
 @media (max-width: 700px) {
@@ -4240,10 +4207,7 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
-<style id="android-mobile-collapsible-sections-v3">
-@media (max-width: 700px) {
+<style id="admin-all-device-collapsible-sections-v4">
     .mobile-collapsible {
         overflow: hidden;
     }
@@ -4252,31 +4216,43 @@ th, td{padding:2px 3px !important;}
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
+        gap: 12px;
         cursor: pointer;
         user-select: none;
         margin: 0 !important;
         padding: 2px 0 !important;
     }
 
+    .mobile-collapse-header h1,
+    .mobile-collapse-header h2,
     .mobile-collapse-header h3,
     .mobile-collapse-header .section-header,
     .mobile-collapse-header .mobile-collapse-title {
         margin: 0 !important;
     }
 
+    .mobile-collapse-title {
+        min-width: 0;
+    }
+
     .mobile-collapse-chevron {
         flex: 0 0 auto;
-        width: 22px;
-        height: 22px;
+        width: 42px;
+        height: 42px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         border-radius: 999px;
-        background: rgba(255,255,255,0.08);
-        font-size: 0.82rem;
+        background: rgba(255,255,255,0.10);
+        color: #ffffff;
+        font-size: 1.2rem;
+        font-weight: 900;
         line-height: 1;
-        transition: transform 0.18s ease;
+        transition: transform 0.18s ease, background 0.18s ease;
+    }
+
+    .mobile-collapse-header:hover .mobile-collapse-chevron {
+        background: rgba(255,255,255,0.16);
     }
 
     .mobile-collapsible.is-collapsed .mobile-collapse-chevron {
@@ -4284,7 +4260,7 @@ th, td{padding:2px 3px !important;}
     }
 
     .mobile-collapse-body {
-        margin-top: 8px;
+        margin-top: 10px;
     }
 
     .mobile-collapsible.is-collapsed .mobile-collapse-body {
@@ -4293,16 +4269,27 @@ th, td{padding:2px 3px !important;}
 
     .mobile-collapse-summary {
         display: none;
-        margin-top: 6px;
+        margin-top: 8px;
         color: #bfc8d4;
-        font-size: 0.66rem;
-        line-height: 1.25;
+        font-size: 0.86rem;
+        line-height: 1.3;
     }
 
     .mobile-collapsible.is-collapsed .mobile-collapse-summary {
         display: block;
     }
-}
+
+    @media (max-width: 700px) {
+        .mobile-collapse-chevron {
+            width: 44px;
+            height: 44px;
+            font-size: 1.25rem;
+        }
+
+        .mobile-collapse-summary {
+            font-size: 0.88rem;
+        }
+    }
 
         .compact-weekly-code-editor {
             display: grid;
@@ -4355,8 +4342,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
 <style id="admin-final-fixes-v30">
 #playerList .compact-pay {
     width: 42px !important;
@@ -4584,8 +4569,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
 <style id="admin-force-match-rating-exactly-v1">
 /* Force the actual rating number to match the $15 paid text exactly */
 #playerList .rating-wrap input.rating-pill-input,
@@ -4661,8 +4644,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
 <style id="admin-paid-pill-width-minus15-v1">
 /* Reduce Paid red pill width by ~15% ONLY */
 #playerList .compact-pay{
@@ -4752,8 +4733,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
 <style id="admin-match-all-pills-to-paid-v1">
 /* Match Regular + Action pills to Paid pill EXACT size */
 
@@ -4839,8 +4818,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
 <style id="admin-waitlist-height-reduction-v1">
 /* Reduce waitlist box heights vertically by ~25% while keeping font sizes unchanged */
 .waitlist-section #waitlistList tr td {
@@ -4933,8 +4910,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
 <style id="registered-waitlist-visibility-mobile-fix-v1">
 /* Hard reset so rows always render */
 #playerList,
@@ -5130,8 +5105,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
 <style id="admin-registered-action-stack-v2">
 #playerList .registered-action-stack {
     display:flex !important;
@@ -5224,8 +5197,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
 <style id="admin-registered-name-room-v1">
 #playerList .player-name-cell {
     gap:1px !important;
@@ -5312,8 +5283,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
 <style id="admin-header-box-wrap-v1">
 .admin-header-box{
     border:3px solid #ff6b00;
@@ -5435,9 +5404,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
-
 <style id="announcement-toggle-red-green-fix-v1">
 /* Announcement ON/OFF button: red when OFF, green when ON */
 .compact-announcement-control .announcement-toggle-row .maintenance-label{
@@ -5518,8 +5484,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
 <style id="late-player-upgrade-v1">
 .late-roster-admin-panel{
     display:none;
@@ -5624,8 +5588,6 @@ th, td{padding:2px 3px !important;}
         }
 
 </style>
-
-
 <style id="roster-text-export-styles">
 .roster-text-export-box {
     background: linear-gradient(135deg, #142c3f, #1e435c);
@@ -5668,8 +5630,6 @@ th, td{padding:2px 3px !important;}
     .roster-text-export-actions button { width: 100%; }
 }
 </style>
-
-
 <style id="admin-mobile-action-pill-minus-extra-8-v1">
 /* Mobile only: reduce Registered Players action pillboxes by another ~8%.
    Keeps order/layout intact. Applies to Regular, Text In, and Remove. */
@@ -5693,738 +5653,705 @@ th, td{padding:2px 3px !important;}
     }
 }
 </style>
-
 </head>
 <body class="admin-layout-option-1">
-
-    <!-- MAINTENANCE BULLETIN - Shows when activated -->
-    <div class="maintenance-bulletin" id="maintenanceBulletin">
+<!-- MAINTENANCE BULLETIN - Shows when activated -->
+<div class="maintenance-bulletin" id="maintenanceBulletin">
         Portal is down for maintenance, check back later
     </div>
+<div class="container" id="loginBox">
+<h1>Admin Portal</h1>
+<p style="text-align:center; color:#888;">Phan's Hockey</p>
+<input id="adminPass" placeholder="Enter Render ADMIN_PASSWORD" type="password"/>
+<div style="display:flex; align-items:center; gap:3px; margin-top:4px; margin-bottom:4px; color:#bbb; font-size:0.95rem; flex-wrap:wrap;">
+<input id="showAdminPass" style="width:auto; margin:0;" type="checkbox"/>
+<label for="showAdminPass" style="cursor:pointer;">Show password</label>
+<span style="opacity:.45;">•</span>
+<input checked="" id="rememberDevice" style="width:auto; margin:0;" type="checkbox"/>
+<label for="rememberDevice" style="cursor:pointer;">Remember this device for 30 days</label>
+</div>
+<button onclick="login()" style="width:100%;border-spacing:0;">Access Dashboard</button>
+<p id="errorMsg" style="color:#ff4444; text-align:center; display:none;">Wrong Password</p>
+</div>
+<div class="container admin-panel" id="adminPanel">
 
-    <div class="container" id="loginBox">
-        <h1>Admin Portal</h1>
-        <p style="text-align:center; color:#888;">Phan's Hockey</p>
-        <input type="password" id="adminPass" placeholder="Enter Render ADMIN_PASSWORD">
-        <div style="display:flex; align-items:center; gap:3px; margin-top:4px; margin-bottom:4px; color:#bbb; font-size:0.95rem; flex-wrap:wrap;">
-            <input type="checkbox" id="showAdminPass" style="width:auto; margin:0;">
-            <label for="showAdminPass" style="cursor:pointer;">Show password</label>
-            <span style="opacity:.45;">•</span>
-            <input type="checkbox" id="rememberDevice" style="width:auto; margin:0;" checked>
-            <label for="rememberDevice" style="cursor:pointer;">Remember this device for 30 days</label>
-        </div>
-        <button onclick="login()" style="width:100%;border-spacing:0;">Access Dashboard</button>
-        <p id="errorMsg" style="color:#ff4444; text-align:center; display:none;">Wrong Password</p>
-    </div>
 
-    <div class="container admin-panel" id="adminPanel">
-                <div class="admin-header-box">
-            <div class="admin-header-top">
+
+
+<!-- ANNOUNCEMENT -->
+
+
+<!-- GAME SETUP -->
+
+<!-- GAME DETAILS -->
+
+
+<!-- Pre-defined Goalies Section - AUTO ADD -->
+
+<!-- Backup Goalies Section - FOR SUBSTITUTIONS -->
+
+<!-- Add Goalie On The Fly -->
+
+<!-- History Management -->
+
+
+
+<!-- Add Player Form -->
+
+
+<!-- Payment Summary -->
+
+<!-- Released Roster Preview -->
+
+
+
+
+
+<div class="admin-header-box">
+<div class="admin-header-top">
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:10px; flex-wrap:wrap;">
-            <h1 style="margin:0;">Admin Dashboard</h1>
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                <button class="control-btn" onclick="downloadBackup()" style="background:#2e7d32;">⬇ Backup Portal</button>
-                <button class="control-btn" onclick="previewLatestServerBackup()" style="background:#5c6bc0;">👁 Preview Latest</button>
-                <button class="control-btn" onclick="restoreLatestServerBackup()" style="background:#3949ab;">♻ Restore Latest</button>
-                <button class="control-btn" onclick="document.getElementById('restoreBackupFile').click()" style="background:#8e24aa;">⤴ Restore Portal</button>
-                <input type="file" id="restoreBackupFile" accept=".json,application/json" style="display:none;" onchange="restoreBackupFromFile(event)">
-                <button class="control-btn" onclick="logoutAllDevices()" style="background:#6d4c41;">Logout All Devices</button>
-                <button class="logout-btn" onclick="logout()">Logout</button>
-            </div>
-        </div>
-            </div>
-            <div class="admin-header-bottom">
+<h1 style="margin:0;">Admin Dashboard</h1>
+<div style="display:flex; gap:10px; flex-wrap:wrap;">
+<button class="control-btn" onclick="downloadBackup()" style="background:#2e7d32;">⬇ Backup Portal</button>
+<button class="control-btn" onclick="previewLatestServerBackup()" style="background:#5c6bc0;">👁 Preview Latest</button>
+<button class="control-btn" onclick="restoreLatestServerBackup()" style="background:#3949ab;">♻ Restore Latest</button>
+<button class="control-btn" onclick="document.getElementById('restoreBackupFile').click()" style="background:#8e24aa;">⤴ Restore Portal</button>
+<input accept=".json,application/json" id="restoreBackupFile" onchange="restoreBackupFromFile(event)" style="display:none;" type="file"/>
+<button class="control-btn" onclick="logoutAllDevices()" style="background:#6d4c41;">Logout All Devices</button>
+<button class="logout-btn" onclick="logout()">Logout</button>
+</div>
+</div>
+</div>
+<div class="admin-header-bottom">
 <div class="maintenance-control">
-            <div class="maintenance-toggle">
-                <input type="checkbox" id="maintenanceCheckbox" class="maintenance-checkbox" onchange="toggleMaintenance()">
-                <label for="maintenanceCheckbox" class="maintenance-label" id="maintenanceLabel">Maintenance Mode Off</label>
-                <div class="maintenance-status inactive" id="maintenanceStatus">PORTAL ACTIVE</div>
-            </div>
+<div class="maintenance-toggle">
+<input class="maintenance-checkbox" id="maintenanceCheckbox" onchange="toggleMaintenance()" type="checkbox"/>
+<label class="maintenance-label" for="maintenanceCheckbox" id="maintenanceLabel">Maintenance Mode Off</label>
+<div class="maintenance-status inactive" id="maintenanceStatus">PORTAL ACTIVE</div>
+</div>
+</div>
+</div>
 </div>
 
-            </div>
-        </div>
-
-
-
-        <div class="snapshot-pro-section">
-            <h3>🧠 Quick Restore</h3>
-
-            <div class="snapshot-stats">
-                <div class="snapshot-stat-card"><div class="snapshot-stat-label">Snapshots Loaded</div><div class="snapshot-stat-value" id="snapshotStatCount">--</div></div>
-                <div class="snapshot-stat-card"><div class="snapshot-stat-label">Database Snapshots</div><div class="snapshot-stat-value" id="snapshotStatDb">--</div></div>
-                <div class="snapshot-stat-card"><div class="snapshot-stat-label">Local Snapshots</div><div class="snapshot-stat-value" id="snapshotStatLocal">--</div></div>
-                <div class="snapshot-stat-card"><div class="snapshot-stat-label">Selected Snapshot</div><div class="snapshot-stat-value" id="snapshotStatSelected">None</div></div>
-            </div>
-            <div class="snapshot-toolbar">
-                <input class="grow" type="text" id="snapshotSearch" placeholder="Search reason, source, file, date, game info..." oninput="renderSnapshotList()">
-                <select id="snapshotSourceFilter" onchange="renderSnapshotList()">
-                    <option value="all">All sources</option>
-                    <option value="database">Database only</option>
-                    <option value="local">Local only</option>
-                </select>
-            </div>
-            <div class="snapshot-toolbar snapshot-picker-toolbar">
-                <select id="snapshotPicker" class="grow" onchange="handleSnapshotPickerChange()">
-                    <option value="">Loading snapshots...</option>
-                </select>
-                <button class="control-btn" onclick="loadSnapshotCatalog()" style="background:#1e88e5;">↻ Refresh</button>
-                <button class="control-btn" onclick="createManualSnapshot()" style="background:#8e24aa;">＋ Create Snapshot</button>
-                <button class="control-btn" onclick="previewSelectedSnapshot()" style="background:#546e7a;">👁 Preview</button>
-                <button class="control-btn" onclick="restoreSelectedSnapshot()" style="background:#2e7d32;">♻ Restore</button>
-            </div>
-            <div id="snapshotCompactCard" class="snapshot-compact-card" style="display:none;"></div>
-            <div id="snapshotList" class="snapshot-list" style="display:none;"><div class="snapshot-empty">Loading snapshots...</div></div>
-            <div id="snapshotPreviewPanel" class="snapshot-preview-panel" style="display:none;">
-                <div class="snapshot-preview-title" id="snapshotPreviewTitle">Snapshot Preview</div>
-                <div class="snapshot-preview-grid">
-                    <div class="snapshot-preview-box"><div class="k">Snapshot players</div><div class="v" id="previewPlayers">--</div></div>
-                    <div class="snapshot-preview-box"><div class="k">Snapshot waitlist</div><div class="v" id="previewWaitlist">--</div></div>
-                    <div class="snapshot-preview-box"><div class="k">Roster released</div><div class="v" id="previewReleased">--</div></div>
-                    <div class="snapshot-preview-box"><div class="k">Live players now</div><div class="v" id="previewLivePlayers">--</div></div>
-                    <div class="snapshot-preview-box"><div class="k">Live waitlist now</div><div class="v" id="previewLiveWaitlist">--</div></div>
-                    <div class="snapshot-preview-box"><div class="k">Fingerprint</div><div class="v snapshot-mini" id="previewFingerprint">--</div></div>
-                </div>
-                <div class="snapshot-preview-notes" id="snapshotPreviewNotes"></div>
-                <div class="snapshot-actions">
-                    <button class="control-btn" onclick="previewSelectedSnapshot()" style="background:#546e7a;">Refresh Preview</button>
-                    <button class="control-btn" onclick="restoreSelectedSnapshot()" style="background:#2e7d32;">Restore Selected Snapshot</button>
-                </div>
-            </div>
-        </div>
-
-
-        <div class="success-message" id="releaseSuccess">
+<div class="success-message" id="releaseSuccess">
             ✅ Roster Released Successfully! Players can now see the teams.
         </div>
 
-        <div class="error-message" id="releaseError">
+<div class="error-message" id="releaseError">
             ❌ Error releasing roster. Check console for details.
         </div>
 
-        <!-- ANNOUNCEMENT -->
-        <div class="announcement-control compact-announcement-control">
-            <div class="announcement-topbar">
-                <h3>📢 Announcement</h3>
-                <div class="announcement-status inactive" id="announcementStatus">OFF</div>
-            </div>
-
-            <div class="announcement-toggle-row">
-                <input type="checkbox" id="announcementCheckbox" class="maintenance-checkbox">
-                <label for="announcementCheckbox" class="maintenance-label">Enable</label>
-            </div>
-
-            <div class="announcement-compact-grid">
-                <div class="message-box message-box-main">
-                    <label for="announcementText">General Announcement</label>
-                    <textarea id="announcementText" rows="5" placeholder="Optional general announcement before roster release..."></textarea>
-                </div>
-
-                <div class="message-box message-box-main">
-                    <label for="rosterReleaseAnnouncementText">Roster Release Auto-Message</label>
-                    <textarea id="rosterReleaseAnnouncementText" rows="5" placeholder="Etransfer: okosoff@outlook.com
-{spots}
-{joinMessage}"></textarea>
-                </div>
-
-                <div class="announcement-side-stack">
-                    <div class="message-box">
-                        <label for="announcementImageUpload">Upload Image</label>
-                        <input type="file" id="announcementImageUpload" accept="image/*">
-                    </div>
-
-                    <div class="message-box">
-                        <label>Preview</label>
-                        <div class="preview-row compact-preview-row">
-                            <img id="announcementImagePreview" class="preview-thumb visible" alt="Announcement preview" style="width:140px;height:auto;max-height:140px;object-fit:contain;">
-                            <button type="button" class="secondary-btn control-btn" onclick="clearAnnouncementImage()">Remove</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="message-actions compact-message-actions">
-                <button type="button" id="saveAnnouncementBtn" class="control-btn" onclick="saveAnnouncementSettings()">Save</button>
-                <button type="button" class="control-btn secondary-btn" onclick="clearAnnouncementSettings()">Clear</button>
-            </div>
-        </div>
-
-        <div id="legacyRegularSkatersSection" style="display:none;"></div>
-
-        <!-- GAME SETUP -->
-        <div class="game-setup-section">
-            <h3>🏒 Game Setup</h3>
-            <div class="game-setup-title-row">
-                <div class="title-preview" id="titlePreview">Phan's Friday Hockey</div>
-                <div class="title-control-group">
-                    <label for="customTitleInput">Title shown on public pages</label>
-                    <textarea id="customTitleInput" class="custom-title-input" rows="1" placeholder="Enter custom title..." oninput="handleCustomTitleInput()">Phan's Friday Hockey</textarea>
-                    <div class="custom-title-note">This title auto-expands as you type and saves to the public pages.</div>
-                </div>
-            </div>
-            <div class="game-setup-grid">
-                <div class="title-control-group">
-                    <label for="titleDayTime">Day and time</label>
-                    <input type="datetime-local" id="titleDayTime" class="control-input" onchange="updateTitlePreview()">
-
-                </div>
-                <div class="title-control-group">
-                    <label for="arenaSelect">Arena</label>
-                    <div class="arena-select-group">
-                        <select id="arenaSelect" onchange="updateGameSetupPreview()">
-                            <option value="WFCU Bowl">WFCU Bowl</option>
-                            <option value="WFCU Greenshield">WFCU Greenshield</option>
-                            <option value="WFCU Grenon">WFCU Grenon</option>
-                            <option value="WFCU AM800">WFCU AM800</option>
-                            <option value="Capri Recreation Complex">Capri Recreation Complex</option>
-                            <option value="Vollmer Lasalle Arena">Vollmer Lasalle Arena</option>
-                            <option value="Atlas Tube Lakeshore">Atlas Tube Lakeshore</option>
-                        </select>
-                    </div>
-
-                </div>
-            </div>
-            <div class="game-setup-preview-line">
-                <strong>Preview:</strong>
-                <span id="dynamicTitlePreview">Phan's Friday Hockey</span>
-                <span class="preview-sep">•</span>
-                <span id="currentArenaDisplay">--</span>
-            </div>
-            <div class="game-setup-savebar">
-                <button id="updateGameSetupBtn" class="update-title-btn" onclick="updateGameSetup()">Save Game Setup</button>
-            </div>
-        </div>
-
-        <!-- GAME DETAILS -->
-        <div class="details-box">
-            <h3>📍 Game Details</h3>
-            <div class="control-row">
-                <input type="text" id="locationInput" placeholder="Location" style="flex:1;" readonly>
-                <input type="text" id="timeInput" placeholder="Time" style="flex:1;" readonly>
-            </div>
-            <div class="control-row" style="margin-top:10px;">
-                <input type="date" id="dateInput" style="flex:1;">
-                <button class="control-btn" onclick="updateDetails()">Update Date Only</button>
-            </div>
-            <div class="status-display" style="margin-top:10px; margin-left:0;">
-                <span id="currentDateDisplay">--</span> | <span id="currentLocation">--</span> | <span id="currentTime">--</span>
-            </div>
-        </div>
-<div class="control-box">
-            <h3>🔧 Player Spots</h3>
-            <div class="control-row">
-                <input type="number" id="playerSpotInput" class="control-input" min="0" max="30" value="20">
-                <button class="control-btn" onclick="updatePlayerSpots()">Update</button>
-                <div class="status-display">
-                    <div class="count-box">
-                        <div class="count-label">Player Spots</div>
-                        <div class="count-value" id="currentPlayerSpotsDisplay">20</div>
-                    </div>
-                    <div class="count-box">
-                        <div class="count-label">Players</div>
-                        <div class="count-value" id="currentPlayerCount">0</div>
-                    </div>
-                    <div class="count-box">
-                        <div class="count-label">Goalies</div>
-                        <div class="count-value" id="currentGoalieCount" style="color:#4CAF50;">0/2</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="control-box">
-            <h3>🔒 Signup Code Control</h3>
-
-            <div class="control-row" style="margin-bottom: 12px;">
-                <div class="code-display" id="currentCodeDisplay">----</div>
-                <button class="control-btn" onclick="toggleCode()" id="toggleCodeBtn">Toggle Lock</button>
-                <div class="status-display">
+<div class="game-setup-section">
+<h3>🏒 Game Setup</h3>
+<div class="game-setup-title-row">
+<div class="title-preview" id="titlePreview">Phan's Friday Hockey</div>
+<div class="title-control-group">
+<label for="customTitleInput">Title shown on public pages</label>
+<textarea class="custom-title-input" id="customTitleInput" oninput="handleCustomTitleInput()" placeholder="Enter custom title..." rows="1">Phan's Friday Hockey</textarea>
+<div class="custom-title-note">This title auto-expands as you type and saves to the public pages.</div>
+</div>
+</div>
+<div class="game-setup-grid">
+<div class="title-control-group">
+<label for="titleDayTime">Day and time</label>
+<input class="control-input" id="titleDayTime" onchange="updateTitlePreview()" type="datetime-local"/>
+</div>
+<div class="title-control-group">
+<label for="arenaSelect">Arena</label>
+<div class="arena-select-group">
+<select id="arenaSelect" onchange="updateGameSetupPreview()">
+<option value="WFCU Bowl">WFCU Bowl</option>
+<option value="WFCU Greenshield">WFCU Greenshield</option>
+<option value="WFCU Grenon">WFCU Grenon</option>
+<option value="WFCU AM800">WFCU AM800</option>
+<option value="Capri Recreation Complex">Capri Recreation Complex</option>
+<option value="Vollmer Lasalle Arena">Vollmer Lasalle Arena</option>
+<option value="Atlas Tube Lakeshore">Atlas Tube Lakeshore</option>
+</select>
+</div>
+</div>
+</div>
+<div class="game-setup-preview-line">
+<strong>Preview:</strong>
+<span id="dynamicTitlePreview">Phan's Friday Hockey</span>
+<span class="preview-sep">•</span>
+<span id="currentArenaDisplay">--</span>
+</div>
+<div class="game-setup-savebar">
+<button class="update-title-btn" id="updateGameSetupBtn" onclick="updateGameSetup()">Save Game Setup</button>
+</div>
+<div class="player-spots-inline-section">
+<h4>🔧 Player Spots</h4>
+<div class="control-row">
+<input class="control-input" id="playerSpotInput" max="30" min="0" type="number" value="20"/>
+<button class="control-btn" onclick="updatePlayerSpots()">Update</button>
+<div class="status-display">
+<div class="count-box">
+<div class="count-label">Player Spots</div>
+<div class="count-value" id="currentPlayerSpotsDisplay">20</div>
+</div>
+<div class="count-box">
+<div class="count-label">Players</div>
+<div class="count-value" id="currentPlayerCount">0</div>
+</div>
+<div class="count-box">
+<div class="count-label">Goalies</div>
+<div class="count-value" id="currentGoalieCount" style="color:#4CAF50;">0/2</div>
+</div>
+</div>
+</div>
+</div>
+<div class="game-setup-subsection signup-schedule-inline-section">
+<h4>🔒 Signup Code Control</h4>
+<div class="control-row" style="margin-bottom: 12px;">
+<div class="code-display" id="currentCodeDisplay">----</div>
+<button class="control-btn" id="toggleCodeBtn" onclick="toggleCode()">Toggle Lock</button>
+<div class="status-display">
                     Status: <span id="codeStatusDisplay">...</span>
-                </div>
-            </div>
-
-            
-            
-            <div class="compact-weekly-code-editor">
-                <div class="compact-row">
-                    <label for="weeklyDaySelect">Day</label>
-                    <select id="weeklyDaySelect" onchange="loadSelectedDayCode()">
-                        <option value="sunday">Sunday</option>
-                        <option value="monday">Monday</option>
-                        <option value="tuesday">Tuesday</option>
-                        <option value="wednesday">Wednesday</option>
-                        <option value="thursday">Thursday</option>
-                        <option value="friday">Friday</option>
-                        <option value="saturday">Saturday</option>
-                    </select>
-                </div>
-
-                <div class="compact-row">
-                    <label for="selectedDayCodeInput">Default Code</label>
-                    <input type="text" id="selectedDayCodeInput" maxlength="4" placeholder="9855">
-                </div>
-
-                <button class="control-btn compact-save-btn" onclick="saveSelectedDayCode()">Save Selected Day Code</button>
-                <button class="control-btn compact-save-btn" onclick="generateSelectedDayCode()" style="background:#4a90e2;">Auto Generate</button>
-            </div>
-
-            <div class="schedule-info compact-code-note" id="weeklyCodeSummary">
+</div>
+</div>
+<div class="compact-weekly-code-editor">
+<div class="compact-row">
+<label for="weeklyDaySelect">Day</label>
+<select id="weeklyDaySelect" onchange="loadSelectedDayCode()">
+<option value="sunday">Sunday</option>
+<option value="monday">Monday</option>
+<option value="tuesday">Tuesday</option>
+<option value="wednesday">Wednesday</option>
+<option value="thursday">Thursday</option>
+<option value="friday">Friday</option>
+<option value="saturday">Saturday</option>
+</select>
+</div>
+<div class="compact-row">
+<label for="selectedDayCodeInput">Default Code</label>
+<input id="selectedDayCodeInput" maxlength="4" placeholder="9855" type="text"/>
+</div>
+<button class="control-btn compact-save-btn" onclick="saveSelectedDayCode()">Save Selected Day Code</button>
+<button class="control-btn compact-save-btn" onclick="generateSelectedDayCode()" style="background:#4a90e2;">Auto Generate</button>
+</div>
+<div class="schedule-info compact-code-note" id="weeklyCodeSummary">
                 Select a day, set its 4-digit default code, then save.
             </div>
-
-
-            <div class="schedule-editor">
-                <h4 style="margin:10px 0 8px 0;">🗓️ Schedules (ET)</h4>
-
-                <div class="schedule-grid">
-                    <div class="schedule-card">
-                        <div class="schedule-title">🔒 Signup Lock Window</div>
-                        <label class="schedule-label">
-                            <input type="checkbox" id="signupLockEnabled">
+<div class="schedule-editor">
+<h4 style="margin:10px 0 8px 0;">🗓️ Schedules (ET)</h4>
+<div class="schedule-grid">
+<div class="schedule-card">
+<div class="schedule-title">🔒 Signup Lock Window</div>
+<label class="schedule-label">
+<input id="signupLockEnabled" type="checkbox"/>
                             Enable scheduled lock window
                         </label>
-
-                        <div class="schedule-row">
-                            <div class="schedule-field">
-                                <div class="schedule-label2">Lock starts</div>
-                                <input type="datetime-local" id="signupLockStart" class="control-input">
-                            </div>
-                            <div class="schedule-field">
-                                <div class="schedule-label2">Lock ends</div>
-                                <input type="datetime-local" id="signupLockEnd" class="control-input">
-                            </div>
-                        </div>
-
-                        <div class="schedule-hint">Repeats weekly in ET using the weekday and time you selected.</div>
-                    </div>
-
-                    <div class="schedule-card">
-                        <div class="schedule-title">📋 Auto Roster Release</div>
-                        <label class="schedule-label">
-                            <input type="checkbox" id="rosterReleaseEnabled">
+<div class="schedule-row">
+<div class="schedule-field">
+<div class="schedule-label2">Lock starts</div>
+<input class="control-input" id="signupLockStart" type="datetime-local"/>
+</div>
+<div class="schedule-field">
+<div class="schedule-label2">Lock ends</div>
+<input class="control-input" id="signupLockEnd" type="datetime-local"/>
+</div>
+</div>
+<div class="schedule-hint">Repeats weekly in ET using the weekday and time you selected.</div>
+</div>
+<div class="schedule-card">
+<div class="schedule-title">📋 Auto Roster Release</div>
+<label class="schedule-label">
+<input id="rosterReleaseEnabled" type="checkbox"/>
                             Enable auto roster release
                         </label>
-
-                        <div class="schedule-row">
-                            <div class="schedule-field">
-                                <div class="schedule-label2">Release at</div>
-                                <input type="datetime-local" id="rosterReleaseAt" class="control-input">
-                            </div>
-                        </div>
-
-                        <div class="schedule-hint">Repeats weekly in ET using the weekday and time you selected.</div>
-                    </div>
-
-                    <div class="schedule-card">
-                        <div class="schedule-title">♻️ Weekly Reset</div>
-                        <label class="schedule-label">
-                            <input type="checkbox" id="resetWeekEnabled">
+<div class="schedule-row">
+<div class="schedule-field">
+<div class="schedule-label2">Release at</div>
+<input class="control-input" id="rosterReleaseAt" type="datetime-local"/>
+</div>
+</div>
+<div class="schedule-hint">Repeats weekly in ET using the weekday and time you selected.</div>
+</div>
+<div class="schedule-card">
+<div class="schedule-title">♻️ Weekly Reset</div>
+<label class="schedule-label">
+<input id="resetWeekEnabled" type="checkbox"/>
                             Enable scheduled weekly reset
                         </label>
+<div class="schedule-row">
+<div class="schedule-field">
+<div class="schedule-label2">Reset at</div>
+<input class="control-input" id="resetWeekAt" type="datetime-local"/>
+</div>
+</div>
+<div class="schedule-hint">This clears players and waitlist only after the configured game time, then auto-adds the default players at the exact ET date and time selected above.</div>
+</div>
+</div>
+<div class="control-row" style="margin-top:10px; gap:10px; flex-wrap:wrap;">
+<button class="control-btn" id="saveSchedulesBtn" onclick="saveSchedules()" style="background:#4a90e2;">💾 Save Schedules</button>
+<button class="control-btn" onclick="refreshSettings()" style="background:#555;">↻ Reload</button>
+<div class="status-display" style="margin-left:0;">Now: <span id="etNowLine">--</span></div>
+</div>
+<div class="schedule-info" id="scheduleInfo">Loading schedule...</div>
+</div>
+<div class="manual-override-warning" id="overrideWarning" style="display:none;">
+<strong>⚠️ Manual Override Active</strong>
+<div id="overrideDetails"></div>
+</div>
+</div>
+</div>
 
-                        <div class="schedule-row">
-                            <div class="schedule-field">
-                                <div class="schedule-label2">Reset at</div>
-                                <input type="datetime-local" id="resetWeekAt" class="control-input">
-                            </div>
-                        </div>
+<div class="details-box">
+<h3>📍 Game Details</h3>
+<div class="control-row">
+<input id="locationInput" placeholder="Location" readonly="" style="flex:1;" type="text"/>
+<input id="timeInput" placeholder="Time" readonly="" style="flex:1;" type="text"/>
+</div>
+<div class="control-row" style="margin-top:10px;">
+<input id="dateInput" style="flex:1;" type="date"/>
+<button class="control-btn" onclick="updateDetails()">Update Date Only</button>
+</div>
+<div class="status-display" style="margin-top:10px; margin-left:0;">
+<span id="currentDateDisplay">--</span> | <span id="currentLocation">--</span> | <span id="currentTime">--</span>
+</div>
+</div>
 
-                        <div class="schedule-hint">This clears players and waitlist only after the configured game time, then auto-adds the default players at the exact ET date and time selected above.</div>
-                    </div>
-                </div>
+<div class="announcement-control compact-announcement-control">
+<div class="announcement-topbar">
+<h3>📢 Announcement</h3>
+<div class="announcement-status inactive" id="announcementStatus">OFF</div>
+</div>
+<div class="announcement-toggle-row">
+<input class="maintenance-checkbox" id="announcementCheckbox" type="checkbox"/>
+<label class="maintenance-label" for="announcementCheckbox">Enable</label>
+</div>
+<div class="announcement-compact-grid">
+<div class="message-box message-box-main">
+<label for="announcementText">General Announcement</label>
+<textarea id="announcementText" placeholder="Optional general announcement before roster release..." rows="5"></textarea>
+</div>
+<div class="message-box message-box-main">
+<label for="rosterReleaseAnnouncementText">Roster Release Auto-Message</label>
+<textarea id="rosterReleaseAnnouncementText" placeholder="Etransfer: okosoff@outlook.com
+{spots}
+{joinMessage}" rows="5"></textarea>
+</div>
+<div class="announcement-side-stack">
+<div class="message-box">
+<label for="announcementImageUpload">Upload Image</label>
+<input accept="image/*" id="announcementImageUpload" type="file"/>
+</div>
+<div class="message-box">
+<label>Preview</label>
+<div class="preview-row compact-preview-row">
+<img alt="Announcement preview" class="preview-thumb visible" id="announcementImagePreview" style="width:140px;height:auto;max-height:140px;object-fit:contain;"/>
+<button class="secondary-btn control-btn" onclick="clearAnnouncementImage()" type="button">Remove</button>
+</div>
+</div>
+</div>
+</div>
+<div class="message-actions compact-message-actions">
+<button class="control-btn" id="saveAnnouncementBtn" onclick="saveAnnouncementSettings()" type="button">Save</button>
+<button class="control-btn secondary-btn" onclick="clearAnnouncementSettings()" type="button">Clear</button>
+</div>
+</div>
 
-                <div class="control-row" style="margin-top:10px; gap:10px; flex-wrap:wrap;">
-                    <button id="saveSchedulesBtn" class="control-btn" onclick="saveSchedules()" style="background:#4a90e2;">💾 Save Schedules</button>
-                    <button class="control-btn" onclick="refreshSettings()" style="background:#555;">↻ Reload</button>
-                    <div class="status-display" style="margin-left:0;">Now: <span id="etNowLine">--</span></div>
-                </div>
-
-                <div class="schedule-info" id="scheduleInfo">Loading schedule...</div>
-            </div>
-
-            <div class="manual-override-warning" id="overrideWarning" style="display:none;">
-                <strong>⚠️ Manual Override Active</strong>
-                <div id="overrideDetails"></div>
-            </div>
-        </div>
-
-        <div class="roster-status">
-            <h3>📋 Team Roster Status</h3>
-            <div class="control-row">
-                <div class="status-display" style="margin-left:0;">
-                    Status: <span id="rosterStatusDisplay" class="roster-pending">Pending</span>
-                </div>
-                <button class="control-btn" onclick="releaseRoster()" id="releaseRosterBtn" style="background: var(--success);">Release Roster Now</button>
-                <button class="control-btn" onclick="manualReset()" style="background: var(--danger);">Reset Week</button>
-            </div>
-            <div style="margin-top:10px; font-size: 0.85rem; color: #aaa;">
-                Click "Release Roster Now" to generate teams and make them visible to all players instantly.
-            </div>
-            <div class="team-rebalance-box" id="teamRebalanceBox" style="display:none;">
-                <h4>⚖️ Manual Team Rebalance</h4>
-                <div class="team-rebalance-grid">
-                    <div>
-                        <label for="rebalanceWhiteSelect">White player</label>
-                        <select id="rebalanceWhiteSelect"><option value="">Select White player</option></select>
-                    </div>
-                    <div>
-                        <label for="rebalanceDarkSelect">Dark player</label>
-                        <select id="rebalanceDarkSelect"><option value="">Select Dark player</option></select>
-                    </div>
-                    <button class="control-btn" onclick="swapSelectedRosterPlayers()" style="background:#4a90e2;">Swap Players</button>
-                    <button class="control-btn" onclick="autoRebalanceRoster()" style="background:#6f42c1;">Auto Rebalance</button>
-                </div>
-                <div class="team-rebalance-note">Auto Rebalance builds the fairest teams possible. Manual swap lets you rebalance as needed.</div>
-            </div>
-            <div class="roster-text-export-box" id="rosterTextExportBox">
-                <h4>📱 Mass Text Signup Players</h4>
-                <p>Use this anytime to text the current signup list from Android. Phan Ly and all goalies are automatically excluded.</p>
-                <div class="roster-text-export-actions">
-                    <button class="control-btn" onclick="copySignupPhonesOnly()" style="background:#2e7d32;">Copy Phone Numbers</button>
-                    <button class="control-btn" onclick="copySignupNamesAndPhones()" style="background:#4a90e2;">Copy Names + Phones</button>
-                    <button class="control-btn" onclick="openSignupSmsDraft()" style="background:#8e44ad;">Open Android Text</button>
-                    <button class="control-btn" onclick="downloadSignupContactsCsv()" style="background:#546e7a;">Download CSV</button>
-                </div>
-                <textarea id="rosterTextExportPreview" class="roster-text-export-preview" readonly placeholder="Signup contact export appears here after players sign up."></textarea>
-            </div>
-        </div>
-
-        <!-- Pre-defined Goalies Section - AUTO ADD -->
-        <div class="goalies-section">
-            <h3>🥅 Auto-Add Regular Goalies (Weekly Reset)</h3>
-            <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">
-                These goalies can be added manually now. Weekly reset is dynamic: Friday auto-adds Craig + Hao, Sunday auto-adds Craig + Mat.
-            </p>
-            <div class="goalie-list" id="predefinedGoalies">
-                <div class="goalie-item">
-                    <div class="goalie-checkbox-wrapper">
-                        <input type="checkbox" id="goalieCraig" value="Craig Scolack">
-                        <label for="goalieCraig">Craig Scolack</label>
-                    </div>
-                    <div class="goalie-rating">
-                        <label>Rating:</label>
-                        <input type="number" id="ratingCraig" min="1" max="10" value="9">
-                    </div>
-                </div>
-                <div class="goalie-item">
-                    <div class="goalie-checkbox-wrapper">
-                        <input type="checkbox" id="goalieHao" value="Hao Chau">
-                        <label for="goalieHao">Hao Chau</label>
-                    </div>
-                    <div class="goalie-rating">
-                        <label>Rating:</label>
-                        <input type="number" id="ratingHao" min="1" max="10" value="8">
-                    </div>
-                </div>
-                <div class="goalie-item">
-                    <div class="goalie-checkbox-wrapper">
-                        <input type="checkbox" id="goalieMat" value="Mat Carriere">
-                        <label for="goalieMat">Mat Carriere</label>
-                    </div>
-                    <div class="goalie-rating">
-                        <label>Rating:</label>
-                        <input type="number" id="ratingMat" min="1" max="10" value="7">
-                    </div>
-                </div>
-            </div>
-            <button class="add-goalies-btn" onclick="addSelectedGoalies()">➕ Add Selected Goalies Now</button>
-        </div>
-
-        <!-- Backup Goalies Section - FOR SUBSTITUTIONS -->
-        <div class="backup-goalies-section">
-            <h3>🔄 Backup Goalies (Substitutions)</h3>
-            <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">
-                Select a backup goalie to substitute when needed. Sunday regular setup now uses Craig + Mat.
-            </p>
-            <div class="backup-goalie-select">
-                <select id="backupGoalieSelect">
-                    <option value="">Backup goalies are managed in Spare / Quick Goalies</option>
-                </select>
-                <button class="add-backup-btn" onclick="addBackupGoalie()">Add as Substitute</button>
-            </div>
-            <p style="color: #888; font-size: 0.8rem; margin-top: 10px;">
-                * Backup goalies will be added with "N/A" payment method and auto-marked as paid.
-            </p>
-        </div>
-
-        <!-- Add Goalie On The Fly -->
-        <div class="add-goalie-fly-section">
-            <h3>✨ Add/Edit Goalie On The Fly</h3>
-            <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">
-                Quickly add a new goalie not in the system. Edit by removing and re-adding.
-            </p>
-            <div class="fly-goalie-form">
-                <input type="text" id="flyGoalieFirstName" placeholder="First Name">
-                <input type="text" id="flyGoalieLastName" placeholder="Last Name">
-                <input type="tel" id="flyGoaliePhone" placeholder="Phone Number">
-            </div>
-            <div class="fly-goalie-form" style="grid-template-columns: 1fr 2fr; margin-top:10px;">
-                <input type="number" id="flyGoalieRating" min="1" max="10" value="7" placeholder="Rating (1-10)">
-                <input type="text" id="flyGoalieNote" placeholder="Notes (optional)">
-            </div>
-            <button class="add-fly-btn" onclick="addGoalieOnTheFly()">➕ Add New Goalie</button>
-        </div>
-
-
-
-        <div class="control-box">
-            <h3>📚 History</h3>
-            <div class="control-row">
-                <button class="control-btn" onclick="window.open('/history', '_blank')" style="background: #4a90e2;">
-                    View Roster History
-                </button>
-                <div class="status-display">
-                    Past weeks are automatically archived
-                </div>
-            </div>
-        </div>
-
-        <!-- History Management -->
-        <div class="history-delete-box">
-            <h3>🗑️ Delete Old History</h3>
-            <div class="control-row" style="margin-bottom: 10px; gap:10px; align-items:flex-start; flex-wrap:wrap;">
-                <select id="historySelect" class="history-select" multiple size="8" style="min-height:220px;">
-                </select>
-                <div style="display:flex; flex-direction:column; gap:10px; min-width:170px;">
-                    <button class="control-btn" onclick="loadHistoryList()" style="background: #4a90e2;">🔄 Refresh</button>
-                    <button class="control-btn" onclick="selectAllHistory()" style="background: #2e7d32;">✅ Select All</button>
-                    <button class="control-btn" onclick="clearHistorySelection()" style="background: #666;">🧹 Clear</button>
-                </div>
-            </div>
-            <button class="delete-btn" onclick="deleteSelectedHistory()">
-                ❌ Delete Selected History
-            </button>
-            <div id="deleteResult" class="delete-result"></div>
-        </div>
-
-
-        <div id="lateRosterAdminPanel" class="late-roster-admin-panel">
-            <h3>🚀 Add Late Player to Released Roster</h3>
-            <p>Roster is already released. Use the Add Player form below, choose Team White or Team Dark, then click Add Player. This adds the player directly to the posted roster without rebalancing teams.</p>
-            <div id="lateRosterTeamHint" class="late-team-hint">Suggested team: —</div>
-        </div>
-
-        <div id="waitlistToRosterPanel" class="waitlist-to-roster-panel">
-            <h3>📋 Move Waitlist Player to Released Roster</h3>
-            <p>Pick any player from the waitlist, choose Team White or Team Dark, then add them directly to the posted roster. They are removed from the waitlist automatically.</p>
-            <div class="waitlist-to-roster-grid">
-                <div>
-                    <label style="display:block; color:#d9ecff; font-weight:700; margin-bottom:6px;">Waitlist player</label>
-                    <select id="waitlistRosterSelect">
-                        <option value="">No waitlist players available</option>
-                    </select>
-                </div>
-                <div>
-                    <label style="display:block; color:#d9ecff; font-weight:700; margin-bottom:6px;">Team</label>
-                    <select id="waitlistRosterTeam">
-                        <option value="">Auto-suggest</option>
-                        <option value="White">Team White</option>
-                        <option value="Dark">Team Dark</option>
-                    </select>
-                </div>
-            </div>
-            <div id="waitlistRosterHint" class="waitlist-to-roster-hint">Suggested team: —</div>
-            <div class="waitlist-to-roster-actions">
-                <button class="control-btn" onclick="applyWaitlistRosterSuggestedTeam()" style="background:#546e7a;">Use Suggested Team</button>
-                <button class="control-btn" onclick="promoteSelectedWaitlistToRoster()" style="background:#2e7d32;">Add Selected Waitlist Player to Roster</button>
-            </div>
-        </div>
-
-        <!-- Add Player Form -->
-        <div class="add-player-form">
-            <h3 id="manualAddPlayerHeading">➕ Add Player Manually</h3>
-            <div class="form-row">
-                <input type="text" id="newFirstName" placeholder="First Name">
-                <input type="text" id="newLastName" placeholder="Last Name">
-            </div>
-            <input type="tel" id="newPhone" placeholder="Phone Number">
-            <div class="form-row">
-                <input type="number" id="newRating" placeholder="Rating (1-10)" min="1" max="10">
-                <select id="newPayment" onchange="toggleManualPaymentControls()">
-                    <option value="Cash">Cash</option>
-                    <option value="E-Transfer">E-Transfer</option>
-                    <option value="PIA">PIA (Pay In Advance)</option>
-                </select>
-                <input type="date" id="newPiaDate" title="PIA Date" style="display:none; min-width:145px;" aria-label="PIA Date">
-            </div>
-
-            <div class="inline-check-row">
-                <label style="display:flex; align-items:center; gap:10px; margin:0; color:#ddd;">
-                    <input type="checkbox" id="newIsGoalie" onchange="toggleManualGoalieMode()">
+<div class="registered-players-box">
+<h3 class="section-header">🏒 Registered Players (<span id="playerCount">0</span> Players, <span id="goalieCountDisplay">0</span> Goalies)</h3>
+<div class="add-player-form">
+<h3 id="manualAddPlayerHeading">➕ Add Player Manually</h3>
+<div class="form-row">
+<input id="newFirstName" placeholder="First Name" type="text"/>
+<input id="newLastName" placeholder="Last Name" type="text"/>
+</div>
+<input id="newPhone" placeholder="Phone Number" type="tel"/>
+<div class="form-row">
+<input id="newRating" max="10" min="1" placeholder="Rating (1-10)" type="number"/>
+<select id="newPayment" onchange="toggleManualPaymentControls()">
+<option value="Cash">Cash</option>
+<option value="E-Transfer">E-Transfer</option>
+<option value="PIA">PIA (Pay In Advance)</option>
+</select>
+<input aria-label="PIA Date" id="newPiaDate" style="display:none; min-width:145px;" title="PIA Date" type="date"/>
+</div>
+<div class="inline-check-row">
+<label style="display:flex; align-items:center; gap:10px; margin:0; color:#ddd;">
+<input id="newIsGoalie" onchange="toggleManualGoalieMode()" type="checkbox"/>
                     Goalie (always free)
                 </label>
-                <span class="goalie-helper">When checked, payment is auto-set to FREE.</span>
-            </div>
-
-            <div id="goalieQuickSelectWrap">
-                <select id="goalieQuickSelect" onchange="fillManualGoalieFromPreset()">
-                    <option value="">-- Quick Select Goalie --</option>
-                </select>
-
-                <div id="goalieQuickManager" style="display:none !important;"></div>
-
-                <details id="spareGoalieManagerDetails" class="spare-goalie-manager-details">
-                    <summary>Manage Spare / Quick Goalies</summary>
-                    <div class="spare-goalie-ratings-section nested-spare-goalie-ratings">
-                        <h3>🥅 Manage Spare / Quick Goalies</h3>
-            <p class="spare-goalie-rating-note">One goalie list for Admin quick-select and the private goalie page. Built-in goalies stay visible; saved spares/ratings sync through the server.</p>
-            <div class="spare-goalie-add-grid">
-                <input type="text" id="adminSpareGoalieFirst" placeholder="First name">
-                <input type="text" id="adminSpareGoalieLast" placeholder="Last name">
-                <input type="tel" id="adminSpareGoaliePhone" placeholder="Phone">
-                <input type="number" id="adminSpareGoalieRating" min="1" max="10" step="0.1" value="7" placeholder="Rating">
-            </div>
-            <input type="text" id="adminSpareGoalieNote" placeholder="Note, optional" style="margin-top:0 !important;">
-            <div class="spare-goalie-add-actions">
-                <button class="control-btn" style="background:#4CAF50;" onclick="saveSpareGoalieFromAdmin()">Save Spare Goalie</button>
-                <button class="control-btn secondary-btn" onclick="loadAppSettings()">Refresh Spare List</button>
-            </div>
-            <div id="spareGoalieRatingList" class="spare-goalie-rating-list">
-                <div class="spare-goalie-empty">Loading spare goalies...</div>
-            </div>
-        </div>
-
-                </details>
-            </div>
-
-            <label style="display:flex; align-items:center; gap:10px; margin:10px 0; color:#aaa;">
-                <input type="checkbox" id="addToWaitlist" style="width:auto;" onchange="updateLatePlayerTeamUI()">
+<span class="goalie-helper">When checked, payment is auto-set to FREE.</span>
+</div>
+<div id="goalieQuickSelectWrap">
+<select id="goalieQuickSelect" onchange="fillManualGoalieFromPreset()">
+<option value="">-- Quick Select Goalie --</option>
+</select>
+<div id="goalieQuickManager" style="display:none !important;"></div>
+<details class="spare-goalie-manager-details" id="spareGoalieManagerDetails">
+<summary>Manage Spare / Quick Goalies</summary>
+<div class="spare-goalie-ratings-section nested-spare-goalie-ratings">
+<h3>🥅 Manage Spare / Quick Goalies</h3>
+<p class="spare-goalie-rating-note">One goalie list for Admin quick-select and the private goalie page. Built-in goalies stay visible; saved spares/ratings sync through the server.</p>
+<div class="spare-goalie-add-grid">
+<input id="adminSpareGoalieFirst" placeholder="First name" type="text"/>
+<input id="adminSpareGoalieLast" placeholder="Last name" type="text"/>
+<input id="adminSpareGoaliePhone" placeholder="Phone" type="tel"/>
+<input id="adminSpareGoalieRating" max="10" min="1" placeholder="Rating" step="0.1" type="number" value="7"/>
+</div>
+<input id="adminSpareGoalieNote" placeholder="Note, optional" style="margin-top:0 !important;" type="text"/>
+<div class="spare-goalie-add-actions">
+<button class="control-btn" onclick="saveSpareGoalieFromAdmin()" style="background:#4CAF50;">Save Spare Goalie</button>
+<button class="control-btn secondary-btn" onclick="loadAppSettings()">Refresh Spare List</button>
+</div>
+<div class="spare-goalie-rating-list" id="spareGoalieRatingList">
+<div class="spare-goalie-empty">Loading spare goalies...</div>
+</div>
+</div>
+</details>
+</div>
+<label style="display:flex; align-items:center; gap:10px; margin:10px 0; color:#aaa;">
+<input id="addToWaitlist" onchange="updateLatePlayerTeamUI()" style="width:auto;" type="checkbox"/>
                 Add to Waitlist
             </label>
+<div id="latePlayerTeamWrap" style="display:none; margin:10px 0; padding:12px; border:1px solid #4CAF50; border-radius:10px; background:rgba(76,175,80,0.12);">
+<label style="display:block; color:#8fd18f; font-weight:700; margin-bottom:6px;">Roster released — place late player on team:</label>
+<select id="latePlayerTeam">
+<option value="">Auto-suggest / choose team</option>
+<option value="White">Team White</option>
+<option value="Dark">Team Dark</option>
+</select>
+<div style="color:#b8d8b8; font-size:0.82rem; margin-top:6px;">This adds the player directly to the released roster without regenerating teams.</div>
+</div>
+<button class="add-btn" id="manualAddPlayerBtn" onclick="addPlayer()">Add Player</button>
+</div>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th class="phone-col-hidden">Phone</th>
+<th>Rating</th>
+<th>Paid ($) <span class="total-paid-display" id="totalPaidDisplay" style="display:none;">($15.00)</span></th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody id="playerList"></tbody>
+</table>
+</div>
 
-            <div id="latePlayerTeamWrap" style="display:none; margin:10px 0; padding:12px; border:1px solid #4CAF50; border-radius:10px; background:rgba(76,175,80,0.12);">
-                <label style="display:block; color:#8fd18f; font-weight:700; margin-bottom:6px;">Roster released — place late player on team:</label>
-                <select id="latePlayerTeam">
-                    <option value="">Auto-suggest / choose team</option>
-                    <option value="White">Team White</option>
-                    <option value="Dark">Team Dark</option>
-                </select>
-                <div style="color:#b8d8b8; font-size:0.82rem; margin-top:6px;">This adds the player directly to the released roster without regenerating teams.</div>
+<div class="regular-summary-section">
+<h3>⭐ Regular Players</h3>
+<p class="regular-summary-note">Use the one-click Regular button in the player list above. Active regulars are highlighted green.</p>
+<div class="regular-summary-list" id="regularSkatersList"></div>
+</div>
+
+<div class="waitlist-section">
+<h3>⏳ Waitlist (<span id="waitlistCount">0</span>)</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Name</th>
+<th>Rating</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody id="waitlistList"></tbody>
+</table>
+</div>
+
+<div class="cancellations-section">
+<div class="control-row" style="justify-content:center; align-items:center; margin-bottom:12px; flex-direction:column; gap:12px;">
+<h3 style="margin:0; text-align:center;">📋 Recent Cancellations (<span id="cancellationCount">0</span>)</h3>
+<button class="control-btn" onclick="clearCancellations()" style="background:#b86b00; width:auto; margin:0 auto;">🧹 Clear Cancellations</button>
+</div>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Cancelled</th>
+</tr>
+</thead>
+<tbody id="cancellationList"></tbody>
+</table>
+</div>
+
+<div class="goalies-section">
+<h3>🥅 Auto-Add Regular Goalies (Weekly Reset)</h3>
+<p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">
+                These goalies can be added manually now. Weekly reset is dynamic: Friday auto-adds Craig + Hao, Sunday auto-adds Craig + Mat.
+            </p>
+<div class="goalie-list" id="predefinedGoalies">
+<div class="goalie-item">
+<div class="goalie-checkbox-wrapper">
+<input id="goalieCraig" type="checkbox" value="Craig Scolack"/>
+<label for="goalieCraig">Craig Scolack</label>
+</div>
+<div class="goalie-rating">
+<label>Rating:</label>
+<input id="ratingCraig" max="10" min="1" type="number" value="9"/>
+</div>
+</div>
+<div class="goalie-item">
+<div class="goalie-checkbox-wrapper">
+<input id="goalieHao" type="checkbox" value="Hao Chau"/>
+<label for="goalieHao">Hao Chau</label>
+</div>
+<div class="goalie-rating">
+<label>Rating:</label>
+<input id="ratingHao" max="10" min="1" type="number" value="8"/>
+</div>
+</div>
+<div class="goalie-item">
+<div class="goalie-checkbox-wrapper">
+<input id="goalieMat" type="checkbox" value="Mat Carriere"/>
+<label for="goalieMat">Mat Carriere</label>
+</div>
+<div class="goalie-rating">
+<label>Rating:</label>
+<input id="ratingMat" max="10" min="1" type="number" value="7"/>
+</div>
+</div>
+</div>
+<button class="add-goalies-btn" onclick="addSelectedGoalies()">➕ Add Selected Goalies Now</button>
+</div>
+
+<div class="backup-goalies-section">
+<h3>🔄 Backup Goalies (Substitutions)</h3>
+<p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">
+                Select a backup goalie to substitute when needed. Sunday regular setup now uses Craig + Mat.
+            </p>
+<div class="backup-goalie-select">
+<select id="backupGoalieSelect">
+<option value="">Backup goalies are managed in Spare / Quick Goalies</option>
+</select>
+<button class="add-backup-btn" onclick="addBackupGoalie()">Add as Substitute</button>
+</div>
+<p style="color: #888; font-size: 0.8rem; margin-top: 10px;">
+                * Backup goalies will be added with "N/A" payment method and auto-marked as paid.
+            </p>
+</div>
+
+<div class="add-goalie-fly-section">
+<h3>✨ Add/Edit Goalie On The Fly</h3>
+<p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">
+                Quickly add a new goalie not in the system. Edit by removing and re-adding.
+            </p>
+<div class="fly-goalie-form">
+<input id="flyGoalieFirstName" placeholder="First Name" type="text"/>
+<input id="flyGoalieLastName" placeholder="Last Name" type="text"/>
+<input id="flyGoaliePhone" placeholder="Phone Number" type="tel"/>
+</div>
+<div class="fly-goalie-form" style="grid-template-columns: 1fr 2fr; margin-top:10px;">
+<input id="flyGoalieRating" max="10" min="1" placeholder="Rating (1-10)" type="number" value="7"/>
+<input id="flyGoalieNote" placeholder="Notes (optional)" type="text"/>
+</div>
+<button class="add-fly-btn" onclick="addGoalieOnTheFly()">➕ Add New Goalie</button>
+</div>
+
+<div class="roster-status">
+<h3>📋 Team Roster Status</h3>
+<div class="control-row">
+<div class="status-display" style="margin-left:0;">
+                    Status: <span class="roster-pending" id="rosterStatusDisplay">Pending</span>
+</div>
+<button class="control-btn" id="releaseRosterBtn" onclick="releaseRoster()" style="background: var(--success);">Release Roster Now</button>
+<button class="control-btn" onclick="manualReset()" style="background: var(--danger);">Reset Week</button>
+</div>
+<div style="margin-top:10px; font-size: 0.85rem; color: #aaa;">
+                Click "Release Roster Now" to generate teams and make them visible to all players instantly.
             </div>
-            <button class="add-btn" id="manualAddPlayerBtn" onclick="addPlayer()">Add Player</button>
-        </div>
+<div class="team-rebalance-box" id="teamRebalanceBox" style="display:none;">
+<h4>⚖️ Manual Team Rebalance</h4>
+<div class="team-rebalance-grid">
+<div>
+<label for="rebalanceWhiteSelect">White player</label>
+<select id="rebalanceWhiteSelect"><option value="">Select White player</option></select>
+</div>
+<div>
+<label for="rebalanceDarkSelect">Dark player</label>
+<select id="rebalanceDarkSelect"><option value="">Select Dark player</option></select>
+</div>
+<button class="control-btn" onclick="swapSelectedRosterPlayers()" style="background:#4a90e2;">Swap Players</button>
+<button class="control-btn" onclick="autoRebalanceRoster()" style="background:#6f42c1;">Auto Rebalance</button>
+</div>
+<div class="team-rebalance-note">Auto Rebalance builds the fairest teams possible. Manual swap lets you rebalance as needed.</div>
+</div>
+<div class="roster-text-export-box" id="rosterTextExportBox">
+<h4>📱 Mass Text Signup Players</h4>
+<p>Use this anytime to text the current signup list from Android. Phan Ly and all goalies are automatically excluded.</p>
+<div class="roster-text-export-actions">
+<button class="control-btn" onclick="copySignupPhonesOnly()" style="background:#2e7d32;">Copy Phone Numbers</button>
+<button class="control-btn" onclick="copySignupNamesAndPhones()" style="background:#4a90e2;">Copy Names + Phones</button>
+<button class="control-btn" onclick="openSignupSmsDraft()" style="background:#8e44ad;">Open Android Text</button>
+<button class="control-btn" onclick="downloadSignupContactsCsv()" style="background:#546e7a;">Download CSV</button>
+</div>
+<textarea class="roster-text-export-preview" id="rosterTextExportPreview" placeholder="Signup contact export appears here after players sign up." readonly=""></textarea>
+</div>
+</div>
 
-        <div class="registered-players-box">
-            <h3 class="section-header">🏒 Registered Players (<span id="playerCount">0</span> Players, <span id="goalieCountDisplay">0</span> Goalies)</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th class="phone-col-hidden">Phone</th>
-                        <th>Rating</th>
-                        <th>Paid ($) <span id="totalPaidDisplay" class="total-paid-display" style="display:none;">($15.00)</span></th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody id="playerList"></tbody>
-            </table>
-        </div>
+<div class="late-roster-admin-panel" id="lateRosterAdminPanel">
+<h3>🚀 Add Late Player to Released Roster</h3>
+<p>Roster is already released. Use the Add Player form below, choose Team White or Team Dark, then click Add Player. This adds the player directly to the posted roster without rebalancing teams.</p>
+<div class="late-team-hint" id="lateRosterTeamHint">Suggested team: —</div>
+</div>
 
-        <!-- Payment Summary -->
-        <div class="payment-summary-box">
-            <h3>💰 Payment Summary (Admin Only)</h3>
-            <div class="payment-stats">
-                <div class="payment-stat">
-                    <div class="payment-stat-value" id="totalCollected">$15.00</div>
-                    <div class="payment-stat-label">Total Collected</div>
-                </div>
-                <div class="payment-stat">
-                    <div class="payment-stat-value" id="paidCountDisplay">0</div>
-                    <div class="payment-stat-label">Paid Players</div>
-                </div>
-                <div class="payment-stat">
-                    <div class="payment-stat-value unpaid" id="unpaidCountDisplay">0</div>
-                    <div class="payment-stat-label">Unpaid Players</div>
-                </div>
-            </div>
-            <button class="export-btn" onclick="exportToExcel()">
+<div class="waitlist-to-roster-panel" id="waitlistToRosterPanel">
+<h3>📋 Move Waitlist Player to Released Roster</h3>
+<p>Pick any player from the waitlist, choose Team White or Team Dark, then add them directly to the posted roster. They are removed from the waitlist automatically.</p>
+<div class="waitlist-to-roster-grid">
+<div>
+<label style="display:block; color:#d9ecff; font-weight:700; margin-bottom:6px;">Waitlist player</label>
+<select id="waitlistRosterSelect">
+<option value="">No waitlist players available</option>
+</select>
+</div>
+<div>
+<label style="display:block; color:#d9ecff; font-weight:700; margin-bottom:6px;">Team</label>
+<select id="waitlistRosterTeam">
+<option value="">Auto-suggest</option>
+<option value="White">Team White</option>
+<option value="Dark">Team Dark</option>
+</select>
+</div>
+</div>
+<div class="waitlist-to-roster-hint" id="waitlistRosterHint">Suggested team: —</div>
+<div class="waitlist-to-roster-actions">
+<button class="control-btn" onclick="applyWaitlistRosterSuggestedTeam()" style="background:#546e7a;">Use Suggested Team</button>
+<button class="control-btn" onclick="promoteSelectedWaitlistToRoster()" style="background:#2e7d32;">Add Selected Waitlist Player to Roster</button>
+</div>
+</div>
+
+<div class="released-roster-preview" id="releasedRosterPreview">
+<div class="preview-header">
+<h3>🏒 Released Roster</h3>
+<p id="previewGameInfo">--</p>
+</div>
+<div class="preview-teams">
+<div class="preview-team white">
+<h4>Team White <span id="whiteAvgPreview"></span></h4>
+<ul class="preview-list" id="whiteTeamPreview"></ul>
+</div>
+<div class="preview-team dark">
+<h4>Team Dark <span id="darkAvgPreview"></span></h4>
+<ul class="preview-list" id="darkTeamPreview"></ul>
+</div>
+</div>
+</div>
+
+<div class="payment-summary-box">
+<h3>💰 Payment Summary (Admin Only)</h3>
+<div class="payment-stats">
+<div class="payment-stat">
+<div class="payment-stat-value" id="totalCollected">$15.00</div>
+<div class="payment-stat-label">Total Collected</div>
+</div>
+<div class="payment-stat">
+<div class="payment-stat-value" id="paidCountDisplay">0</div>
+<div class="payment-stat-label">Paid Players</div>
+</div>
+<div class="payment-stat">
+<div class="payment-stat-value unpaid" id="unpaidCountDisplay">0</div>
+<div class="payment-stat-label">Unpaid Players</div>
+</div>
+</div>
+<button class="export-btn" onclick="exportToExcel()">
                 📥 Download Full Payment Report (CSV)
             </button>
-            <div class="message-actions" style="margin-top:12px;">
-                <button type="button" class="control-btn" onclick="downloadLatestSavedPaymentReport()" style="background:#6f42c1;">🗂️ Download Last Auto-Saved Report</button>
-                <button type="button" class="secondary-btn control-btn" onclick="loadPaymentReportSnapshots()">↻ Refresh Saved Reports</button>
-            </div>
-            <div class="message-box" style="margin-top:12px;">
-                <label for="paymentReportSnapshotSelect">Saved Payment Report Snapshots</label>
-                <div class="control-row" style="margin-bottom:10px; gap:10px; align-items:flex-start; flex-wrap:wrap;">
-                    <select id="paymentReportSnapshotSelect" class="history-select" multiple size="8" style="flex:1; min-height:220px;">
-                        <option value="">No saved reports loaded</option>
-                    </select>
-                    <div style="display:flex; flex-direction:column; gap:10px; min-width:170px;">
-                        <button type="button" class="control-btn" onclick="loadPaymentReportSnapshots()" style="background:#4a90e2;">🔄 Refresh</button>
-                        <button type="button" class="control-btn" onclick="selectAllPaymentReports()" style="background:#2e7d32;">✅ Select All</button>
-                        <button type="button" class="control-btn" onclick="clearPaymentReportSelection()" style="background:#666;">🧹 Clear</button>
-                        <button type="button" class="control-btn" onclick="downloadSelectedPaymentReport()" style="background:#6f42c1;">📥 Download Selected</button>
-                    </div>
-                </div>
-                <button type="button" class="delete-btn" onclick="deleteSelectedPaymentReports()">❌ Delete Selected Reports</button>
-                <small id="paymentReportSnapshotStatus">Reports are auto-saved to the database before scheduled and manual weekly reset.</small>
-            </div>
-            <p class="security-notice">
+<div class="message-actions" style="margin-top:12px;">
+<button class="control-btn" onclick="downloadLatestSavedPaymentReport()" style="background:#6f42c1;" type="button">🗂️ Download Last Auto-Saved Report</button>
+<button class="secondary-btn control-btn" onclick="loadPaymentReportSnapshots()" type="button">↻ Refresh Saved Reports</button>
+</div>
+<div class="message-box" style="margin-top:12px;">
+<label for="paymentReportSnapshotSelect">Saved Payment Report Snapshots</label>
+<div class="control-row" style="margin-bottom:10px; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+<select class="history-select" id="paymentReportSnapshotSelect" multiple="" size="8" style="flex:1; min-height:220px;">
+<option value="">No saved reports loaded</option>
+</select>
+<div style="display:flex; flex-direction:column; gap:10px; min-width:170px;">
+<button class="control-btn" onclick="loadPaymentReportSnapshots()" style="background:#4a90e2;" type="button">🔄 Refresh</button>
+<button class="control-btn" onclick="selectAllPaymentReports()" style="background:#2e7d32;" type="button">✅ Select All</button>
+<button class="control-btn" onclick="clearPaymentReportSelection()" style="background:#666;" type="button">🧹 Clear</button>
+<button class="control-btn" onclick="downloadSelectedPaymentReport()" style="background:#6f42c1;" type="button">📥 Download Selected</button>
+</div>
+</div>
+<button class="delete-btn" onclick="deleteSelectedPaymentReports()" type="button">❌ Delete Selected Reports</button>
+<small id="paymentReportSnapshotStatus">Reports are auto-saved to the database before scheduled and manual weekly reset.</small>
+</div>
+<p class="security-notice">
                 ⚠️ Payment and rating data is hidden from public view. Only admins can see this information.
             </p>
-        </div>
+</div>
 
+<div class="snapshot-pro-section">
+<h3>🧠 Quick Restore</h3>
+<div class="snapshot-stats">
+<div class="snapshot-stat-card"><div class="snapshot-stat-label">Snapshots Loaded</div><div class="snapshot-stat-value" id="snapshotStatCount">--</div></div>
+<div class="snapshot-stat-card"><div class="snapshot-stat-label">Database Snapshots</div><div class="snapshot-stat-value" id="snapshotStatDb">--</div></div>
+<div class="snapshot-stat-card"><div class="snapshot-stat-label">Local Snapshots</div><div class="snapshot-stat-value" id="snapshotStatLocal">--</div></div>
+<div class="snapshot-stat-card"><div class="snapshot-stat-label">Selected Snapshot</div><div class="snapshot-stat-value" id="snapshotStatSelected">None</div></div>
+</div>
+<div class="snapshot-toolbar">
+<input class="grow" id="snapshotSearch" oninput="renderSnapshotList()" placeholder="Search reason, source, file, date, game info..." type="text"/>
+<select id="snapshotSourceFilter" onchange="renderSnapshotList()">
+<option value="all">All sources</option>
+<option value="database">Database only</option>
+<option value="local">Local only</option>
+</select>
+</div>
+<div class="snapshot-toolbar snapshot-picker-toolbar">
+<select class="grow" id="snapshotPicker" onchange="handleSnapshotPickerChange()">
+<option value="">Loading snapshots...</option>
+</select>
+<button class="control-btn" onclick="loadSnapshotCatalog()" style="background:#1e88e5;">↻ Refresh</button>
+<button class="control-btn" onclick="createManualSnapshot()" style="background:#8e24aa;">＋ Create Snapshot</button>
+<button class="control-btn" onclick="previewSelectedSnapshot()" style="background:#546e7a;">👁 Preview</button>
+<button class="control-btn" onclick="restoreSelectedSnapshot()" style="background:#2e7d32;">♻ Restore</button>
+</div>
+<div class="snapshot-compact-card" id="snapshotCompactCard" style="display:none;"></div>
+<div class="snapshot-list" id="snapshotList" style="display:none;"><div class="snapshot-empty">Loading snapshots...</div></div>
+<div class="snapshot-preview-panel" id="snapshotPreviewPanel" style="display:none;">
+<div class="snapshot-preview-title" id="snapshotPreviewTitle">Snapshot Preview</div>
+<div class="snapshot-preview-grid">
+<div class="snapshot-preview-box"><div class="k">Snapshot players</div><div class="v" id="previewPlayers">--</div></div>
+<div class="snapshot-preview-box"><div class="k">Snapshot waitlist</div><div class="v" id="previewWaitlist">--</div></div>
+<div class="snapshot-preview-box"><div class="k">Roster released</div><div class="v" id="previewReleased">--</div></div>
+<div class="snapshot-preview-box"><div class="k">Live players now</div><div class="v" id="previewLivePlayers">--</div></div>
+<div class="snapshot-preview-box"><div class="k">Live waitlist now</div><div class="v" id="previewLiveWaitlist">--</div></div>
+<div class="snapshot-preview-box"><div class="k">Fingerprint</div><div class="v snapshot-mini" id="previewFingerprint">--</div></div>
+</div>
+<div class="snapshot-preview-notes" id="snapshotPreviewNotes"></div>
+<div class="snapshot-actions">
+<button class="control-btn" onclick="previewSelectedSnapshot()" style="background:#546e7a;">Refresh Preview</button>
+<button class="control-btn" onclick="restoreSelectedSnapshot()" style="background:#2e7d32;">Restore Selected Snapshot</button>
+</div>
+</div>
+</div>
 
-        <!-- Released Roster Preview -->
-        <div class="released-roster-preview" id="releasedRosterPreview">
-            <div class="preview-header">
-                <h3>🏒 Released Roster</h3>
-                <p id="previewGameInfo">--</p>
-            </div>
-            <div class="preview-teams">
-                <div class="preview-team white">
-                    <h4>Team White <span id="whiteAvgPreview"></span></h4>
-                    <ul class="preview-list" id="whiteTeamPreview"></ul>
+<div id="legacyRegularSkatersSection" style="display:none;"></div>
+
+<div class="history-delete-box">
+<h3>📚 History / Delete Old History</h3>
+<div class="control-row" style="margin-bottom: 14px; gap:10px; align-items:center; flex-wrap:wrap;">
+<button class="control-btn" onclick="window.open('/history', '_blank')" style="background: #4a90e2;">
+                    View Roster History
+                </button>
+<div class="status-display">
+                    Past weeks are automatically archived
                 </div>
-                <div class="preview-team dark">
-                    <h4>Team Dark <span id="darkAvgPreview"></span></h4>
-                    <ul class="preview-list" id="darkTeamPreview"></ul>
-                </div>
-            </div>
-        </div>
+</div>
+<div class="control-row" style="margin-bottom: 10px; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+<select class="history-select" id="historySelect" multiple="" size="8" style="min-height:220px;">
+</select>
+<div style="display:flex; flex-direction:column; gap:10px; min-width:170px;">
+<button class="control-btn" onclick="loadHistoryList()" style="background: #4a90e2;">🔄 Refresh</button>
+<button class="control-btn" onclick="selectAllHistory()" style="background: #2e7d32;">✅ Select All</button>
+<button class="control-btn" onclick="clearHistorySelection()" style="background: #666;">🧹 Clear</button>
+</div>
+</div>
+<button class="delete-btn" onclick="deleteSelectedHistory()">
+                ❌ Delete Selected History
+            </button>
+<div class="delete-result" id="deleteResult"></div>
+</div>
 
-
-        <div class="waitlist-section">
-            <h3>⏳ Waitlist (<span id="waitlistCount">0</span>)</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Name</th>
-                        <th>Rating</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody id="waitlistList"></tbody>
-            </table>
-        </div>
-
-        <div class="cancellations-section">
-            <div class="control-row" style="justify-content:center; align-items:center; margin-bottom:12px; flex-direction:column; gap:12px;">
-                <h3 style="margin:0; text-align:center;">📋 Recent Cancellations (<span id="cancellationCount">0</span>)</h3>
-                <button class="control-btn" onclick="clearCancellations()" style="background:#b86b00; width:auto; margin:0 auto;">🧹 Clear Cancellations</button>
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Type</th>
-                        <th>Cancelled</th>
-                    </tr>
-                </thead>
-                <tbody id="cancellationList"></tbody>
-            </table>
-        </div>
-
-        <div class="regular-summary-section">
-            <h3>⭐ Regular Players</h3>
-            <p class="regular-summary-note">Use the one-click Regular button in the player list above. Active regulars are highlighted green.</p>
-            <div class="regular-summary-list" id="regularSkatersList"></div>
-        </div>
-    </div>
-
-    <script>
+</div>
+<script>
         const API_URL = window.location.origin;
         const SESSION_KEY = 'hockey_admin_session';
         const REMEMBER_KEY = 'hockey_admin_remember_device';
@@ -11045,32 +10972,29 @@ This backup has fewer records than live data.
         });
 
 </script>
-
-    <div class="clock-modal" id="clockModal">
-        <div class="clock-modal-card">
-            <div class="clock-modal-title">Select Time</div>
-            <div class="clock-readout" id="clockReadout">12:00 AM</div>
-            <div class="clock-mode-row">
-                <button type="button" class="clock-pill active" id="clockHourBtn" onclick="setClockMode('hour')">Hour</button>
-                <button type="button" class="clock-pill" id="clockMinuteBtn" onclick="setClockMode('minute')">Minute</button>
-            </div>
-            <div class="clock-ampm-row">
-                <button type="button" class="clock-pill active" id="clockAmBtn" onclick="setClockPeriod('AM')">AM</button>
-                <button type="button" class="clock-pill" id="clockPmBtn" onclick="setClockPeriod('PM')">PM</button>
-            </div>
-            <div class="clock-help" id="clockHelp">Tap or drag on the clock to set the hour.</div>
-            <div class="analog-clock" id="analogClock">
-                <div class="clock-hand" id="clockHand"></div>
-                <div class="clock-center-dot"></div>
-            </div>
-            <div class="clock-action-row">
-                <button type="button" class="clock-pill" onclick="closeClockModal()">Cancel</button>
-                <button type="button" class="clock-pill" onclick="confirmClockSelection()">Use Time</button>
-            </div>
-        </div>
-    </div>
-
-
+<div class="clock-modal" id="clockModal">
+<div class="clock-modal-card">
+<div class="clock-modal-title">Select Time</div>
+<div class="clock-readout" id="clockReadout">12:00 AM</div>
+<div class="clock-mode-row">
+<button class="clock-pill active" id="clockHourBtn" onclick="setClockMode('hour')" type="button">Hour</button>
+<button class="clock-pill" id="clockMinuteBtn" onclick="setClockMode('minute')" type="button">Minute</button>
+</div>
+<div class="clock-ampm-row">
+<button class="clock-pill active" id="clockAmBtn" onclick="setClockPeriod('AM')" type="button">AM</button>
+<button class="clock-pill" id="clockPmBtn" onclick="setClockPeriod('PM')" type="button">PM</button>
+</div>
+<div class="clock-help" id="clockHelp">Tap or drag on the clock to set the hour.</div>
+<div class="analog-clock" id="analogClock">
+<div class="clock-hand" id="clockHand"></div>
+<div class="clock-center-dot"></div>
+</div>
+<div class="clock-action-row">
+<button class="clock-pill" onclick="closeClockModal()" type="button">Cancel</button>
+<button class="clock-pill" onclick="confirmClockSelection()" type="button">Use Time</button>
+</div>
+</div>
+</div>
 <script>
 let activePaymentSliderPlayerId = null;
 let activePaymentMethod = 'E-Transfer';
@@ -11239,37 +11163,33 @@ document.addEventListener('keydown', function(e){
         closePaymentSlider();
     }
 });</script>
-
-
-
-    <div class="payment-slider-modal" id="paymentSliderModal" onclick="if(event.target === this) closePaymentSlider()">
-        <div class="payment-slider-card">
-            <div class="payment-slider-title">Set Payment Amount</div>
-            <div class="payment-slider-amount" id="paymentSliderAmount">$15</div>
-            <input type="number" id="paymentSliderNumber" min="0" step="1" value="15" placeholder="Enter any amount" oninput="handlePaymentSliderInput(this.value)">
-            <div class="payment-method-options">
-                <button type="button" class="payment-method-option active" data-method="E-Transfer" onclick="setPaymentMethod('E-Transfer')">E-Transfer</button>
-                <button type="button" class="payment-method-option cash" data-method="Cash" onclick="setPaymentMethod('Cash')">Cash</button>
-            </div>
-            <div class="payment-slider-presets">
-                <button type="button" class="payment-slider-preset" onclick="paymentSliderPreset(10)">$10</button>
-                <button type="button" class="payment-slider-preset" onclick="paymentSliderPreset(15)">$15</button>
-                <button type="button" class="payment-slider-preset" onclick="paymentSliderPreset(20)">$20</button>
-                <button type="button" class="payment-slider-preset" onclick="paymentSliderPreset(0)">$0</button>
-            </div>
-            <div class="payment-slider-pia-date-wrap">
-                <label for="paymentSliderPiaDate">PIA Date</label>
-                <input type="date" id="paymentSliderPiaDate">
-            </div>
-            <div class="payment-slider-actions">
-                <button type="button" class="payment-slider-cancel" onclick="closePaymentSlider()">Cancel</button>
-                <button type="button" class="payment-slider-clear" onclick="markPaymentOwes()">OWES</button>
-                <button type="button" class="payment-slider-pia" onclick="markPaymentPia()">PIA</button>
-                <button type="button" class="payment-slider-save" onclick="savePaymentSlider()">Save</button>
-            </div>
-        </div>
-    </div>
-
+<div class="payment-slider-modal" id="paymentSliderModal" onclick="if(event.target === this) closePaymentSlider()">
+<div class="payment-slider-card">
+<div class="payment-slider-title">Set Payment Amount</div>
+<div class="payment-slider-amount" id="paymentSliderAmount">$15</div>
+<input id="paymentSliderNumber" min="0" oninput="handlePaymentSliderInput(this.value)" placeholder="Enter any amount" step="1" type="number" value="15"/>
+<div class="payment-method-options">
+<button class="payment-method-option active" data-method="E-Transfer" onclick="setPaymentMethod('E-Transfer')" type="button">E-Transfer</button>
+<button class="payment-method-option cash" data-method="Cash" onclick="setPaymentMethod('Cash')" type="button">Cash</button>
+</div>
+<div class="payment-slider-presets">
+<button class="payment-slider-preset" onclick="paymentSliderPreset(10)" type="button">$10</button>
+<button class="payment-slider-preset" onclick="paymentSliderPreset(15)" type="button">$15</button>
+<button class="payment-slider-preset" onclick="paymentSliderPreset(20)" type="button">$20</button>
+<button class="payment-slider-preset" onclick="paymentSliderPreset(0)" type="button">$0</button>
+</div>
+<div class="payment-slider-pia-date-wrap">
+<label for="paymentSliderPiaDate">PIA Date</label>
+<input id="paymentSliderPiaDate" type="date"/>
+</div>
+<div class="payment-slider-actions">
+<button class="payment-slider-cancel" onclick="closePaymentSlider()" type="button">Cancel</button>
+<button class="payment-slider-clear" onclick="markPaymentOwes()" type="button">OWES</button>
+<button class="payment-slider-pia" onclick="markPaymentPia()" type="button">PIA</button>
+<button class="payment-slider-save" onclick="savePaymentSlider()" type="button">Save</button>
+</div>
+</div>
+</div>
 <script id="android-mobile-collapsible-sections-script-v3">
 (function() {
     const MOBILE_BREAKPOINT = 700;
@@ -11281,18 +11201,25 @@ document.addEventListener('keydown', function(e){
     function makeCollapsible(section, opts = {}) {
         if (!section || section.dataset.mobileCollapseReady === '1') return;
 
-        const titleEl = section.querySelector('h3');
+        const titleEl = section.querySelector('h1, h2, h3, .section-header');
         if (!titleEl) return;
 
         const originalTitleHtml = titleEl.innerHTML;
         const summaryText = opts.summary || '';
-        const collapsedByDefault = !!opts.collapsedByDefault;
+        const collapsedByDefault = opts.collapsedByDefault !== false;
+        const storageKey = opts.storageKey || (`adminCollapse:${(originalTitleHtml || '').replace(/<[^>]*>/g, '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}`);
+        let initialCollapsed = collapsedByDefault;
+        try {
+            const stored = localStorage.getItem(storageKey);
+            if (stored === 'open') initialCollapsed = false;
+            if (stored === 'closed') initialCollapsed = true;
+        } catch (e) {}
 
         const header = document.createElement('div');
         header.className = 'mobile-collapse-header';
         header.setAttribute('role', 'button');
         header.setAttribute('tabindex', '0');
-        header.setAttribute('aria-expanded', collapsedByDefault ? 'false' : 'true');
+        header.setAttribute('aria-expanded', initialCollapsed ? 'false' : 'true');
 
         const titleWrap = document.createElement('div');
         titleWrap.className = 'mobile-collapse-title';
@@ -11328,19 +11255,13 @@ document.addEventListener('keydown', function(e){
         section.dataset.mobileCollapseReady = '1';
 
         function applyState(collapsed) {
-            if (isMobileViewport() && collapsed) {
-                section.classList.add('is-collapsed');
-                header.setAttribute('aria-expanded', 'false');
-            } else {
-                section.classList.remove('is-collapsed');
-                header.setAttribute('aria-expanded', 'true');
-            }
+            section.classList.toggle('is-collapsed', !!collapsed);
+            header.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            try { localStorage.setItem(storageKey, collapsed ? 'closed' : 'open'); } catch (e) {}
         }
 
         function toggle() {
-            if (!isMobileViewport()) return;
-            const collapsed = !section.classList.contains('is-collapsed');
-            applyState(collapsed);
+            applyState(!section.classList.contains('is-collapsed'));
         }
 
         header.addEventListener('click', toggle);
@@ -11351,11 +11272,16 @@ document.addEventListener('keydown', function(e){
             }
         });
 
-        applyState(collapsedByDefault);
-        window.addEventListener('resize', () => applyState(section.classList.contains('is-collapsed')));
+        applyState(initialCollapsed);
     }
 
     function initMobileCollapsibles() {
+        makeCollapsible(document.querySelector('.admin-header-box'), {
+            collapsedByDefault: true,
+            summary: 'Admin dashboard hidden. Tap to expand.',
+            storageKey: 'adminCollapse:admin-dashboard'
+        });
+
         makeCollapsible(document.querySelector('.payment-summary-box'), {
             collapsedByDefault: true,
             summary: 'Payment totals hidden. Tap to expand.'
@@ -11377,19 +11303,15 @@ document.addEventListener('keydown', function(e){
         });
 
         makeCollapsible(document.querySelector('.waitlist-section'), {
-            collapsedByDefault: false,
+            collapsedByDefault: true,
             summary: 'Waitlist hidden. Tap to expand.'
         });
 
         makeCollapsible(document.querySelector('.roster-status'), {
-            collapsedByDefault: false,
+            collapsedByDefault: true,
             summary: 'Roster tools hidden. Tap to expand.'
         });
 
-        makeCollapsible(document.querySelector('.add-player-form'), {
-            collapsedByDefault: true,
-            summary: 'Add player form hidden. Tap to expand.'
-        });
 
         makeCollapsible(document.querySelector('.game-setup-section'), {
             collapsedByDefault: true,
@@ -11397,7 +11319,7 @@ document.addEventListener('keydown', function(e){
         });
 
         makeCollapsible(document.querySelector('.maintenance-control'), {
-            collapsedByDefault: false,
+            collapsedByDefault: true,
             summary: 'Maintenance controls hidden. Tap to expand.'
         });
 
@@ -11414,7 +11336,6 @@ document.addEventListener('keydown', function(e){
     }
 })();
 </script>
-
 <style id="admin-registered-pills-match-waitlist-mobile-v1">
 @media (max-width:600px){
     /* Match registered-player pills/badges to waitlist pill sizing on Android/mobile */
@@ -11525,7 +11446,6 @@ document.addEventListener('keydown', function(e){
         }
 
 </style>
-
 <style id="admin-mobile-stabilizer-final-v1">
 /* Final mobile/admin stabilization: keeps spacing predictable and removes previous patch conflicts. */
 @media (max-width: 700px) {
@@ -11692,8 +11612,317 @@ document.addEventListener('keydown', function(e){
 }
 
 </style>
+<div class="copyright-footer">© 2026 Phan Anthony Ly. All Rights Reserved.</div>
+<style id="adminCollapsibleTablesStyle">
+/* Collapsible admin tables - mobile friendly */
+.admin-collapsible-section > .admin-collapsible-title,
+.admin-collapsible-section > h3.admin-collapsible-title,
+.admin-collapsible-section .section-header.admin-collapsible-title {
+    cursor: pointer;
+    user-select: none;
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+.admin-collapse-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.10);
+    color: #fff;
+    font-size: 1.2rem;
+    font-weight: 900;
+    line-height: 1;
+    transition: transform 0.18s ease, background 0.18s ease;
+    margin-left: auto;
+}
+.admin-collapsible-section:not(.admin-collapsed) .admin-collapse-arrow {
+    transform: rotate(180deg);
+    background: rgba(74,144,226,0.35);
+}
+.admin-collapsible-section.admin-collapsed > table,
+.admin-collapsible-section.admin-collapsed table.admin-collapsible-table {
+    display: none !important;
+}
+.admin-collapsible-hint {
+    color: #9fb7c9;
+    font-size: 0.78rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+@media (max-width: 700px) {
+    .admin-collapsible-hint { display: none; }
+    .admin-collapse-arrow { min-width: 44px; width:44px; height: 44px; }
+}
 
+</style>
+<script id="adminCollapsibleTablesScript">
+(function () {
+    function closestTableSection(table) {
+        return table.closest('.registered-players-box, .waitlist-section, .cancellations-section, .history-delete-box, .payment-summary-box, .control-box, .message-box, .spare-goalie-ratings-section, .backup-goalies-section, .add-goalie-fly-section, .add-player-form, section, .admin-section, div');
+    }
 
-    <div class="copyright-footer">© 2026 Phan Anthony Ly. All Rights Reserved.</div>
+    function makeHeader(section, table, index) {
+        let header = section.querySelector(':scope > h3, :scope > .section-header, :scope > .preview-header h3');
+        if (!header) {
+            const previous = table.previousElementSibling;
+            if (previous && /^H[1-6]$/i.test(previous.tagName)) header = previous;
+        }
+        if (!header) return null;
+        return header;
+    }
+
+    function toggleSection(section, forceOpen) {
+        const willOpen = typeof forceOpen === 'boolean' ? forceOpen : section.classList.contains('admin-collapsed');
+        section.classList.toggle('admin-collapsed', !willOpen);
+        const header = section.querySelector('.admin-collapsible-title');
+        if (header) header.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    }
+
+    function initCollapsibleAdminTables() {
+        const tables = Array.from(document.querySelectorAll('body.admin-page table, .container table, table'));
+        const sections = [];
+        tables.forEach((table, index) => {
+            if (table.dataset.adminCollapsibleReady === '1') return;
+            const section = closestTableSection(table);
+            if (!section || section.dataset.adminCollapsibleSectionReady === '1') return;
+            const header = makeHeader(section, table, index);
+            if (!header) return;
+            table.dataset.adminCollapsibleReady = '1';
+            table.classList.add('admin-collapsible-table');
+            section.dataset.adminCollapsibleSectionReady = '1';
+            section.classList.add('admin-collapsible-section', 'admin-collapsed');
+
+            header.classList.add('admin-collapsible-title');
+            header.setAttribute('role', 'button');
+            header.setAttribute('tabindex', '0');
+            header.setAttribute('aria-expanded', 'false');
+
+            if (!header.querySelector('.admin-collapse-arrow')) {
+                const hint = document.createElement('span');
+                hint.className = 'admin-collapsible-hint';
+                hint.textContent = 'Tap to expand';
+                const arrow = document.createElement('span');
+                arrow.className = 'admin-collapse-arrow';
+                arrow.innerHTML = '&#9662;';
+                header.appendChild(hint);
+                header.appendChild(arrow);
+            }
+
+            const handler = (event) => {
+                const tag = event.target && event.target.tagName ? event.target.tagName.toLowerCase() : '';
+                if (['button','input','select','textarea','a','label'].includes(tag)) return;
+                toggleSection(section);
+            };
+            header.addEventListener('click', handler);
+            header.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    toggleSection(section);
+                }
+            });
+            sections.push(section);
+        });
+        window.adminCollapsibleTableSections = sections;
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initCollapsibleAdminTables);
+    } else {
+        initCollapsibleAdminTables();
+    }
+    window.initCollapsibleAdminTables = initCollapsibleAdminTables;
+})();
+</script>
+<style id="adminCollapsibleNonTableSectionsStyle">
+/* Collapsible admin sections without tables, e.g. Player Spots and Signup Code Control */
+.admin-ui-collapsible-section > .admin-ui-collapsible-title {
+    cursor: pointer;
+    user-select: none;
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+.admin-ui-collapsible-section.admin-ui-collapsed > .admin-ui-collapse-body {
+    display: none !important;
+}
+.admin-ui-collapse-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.10);
+    color: #fff;
+    font-size: 1.2rem;
+    font-weight: 900;
+    line-height: 1;
+    transition: transform 0.18s ease, background 0.18s ease;
+    margin-left: auto;
+}
+.admin-ui-collapsible-section:not(.admin-ui-collapsed) .admin-ui-collapse-arrow {
+    transform: rotate(180deg);
+    background: rgba(74,144,226,0.35);
+}
+.admin-ui-collapse-hint {
+    color: #9fb7c9;
+    font-size: 0.78rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+@media (max-width: 700px) {
+    .admin-ui-collapse-hint { display: none; }
+    .admin-ui-collapse-arrow { min-width: 44px; width:44px; height: 44px; }
+}
+</style>
+<script id="adminCollapsibleNonTableSectionsScript">
+(function () {
+    function hasDirectTable(section) {
+        return !!section.querySelector(':scope > table, :scope table.admin-collapsible-table');
+    }
+
+    function makeSectionCollapsible(section) {
+        if (!section || section.dataset.adminUiCollapsibleReady === '1') return;
+        if (section.dataset.adminCollapsibleSectionReady === '1') return;
+        if (section.classList.contains('mobile-collapsible')) return;
+        if (hasDirectTable(section)) return;
+
+        const header = section.querySelector(':scope > h3, :scope > h4, :scope > .section-header');
+        if (!header) return;
+
+        const body = document.createElement('div');
+        body.className = 'admin-ui-collapse-body';
+        Array.from(section.children).forEach((child) => {
+            if (child !== header) body.appendChild(child);
+        });
+        section.appendChild(body);
+
+        section.dataset.adminUiCollapsibleReady = '1';
+        section.classList.add('admin-ui-collapsible-section', 'admin-ui-collapsed');
+        header.classList.add('admin-ui-collapsible-title');
+        header.setAttribute('role', 'button');
+        header.setAttribute('tabindex', '0');
+        header.setAttribute('aria-expanded', 'false');
+
+        if (!header.querySelector('.admin-ui-collapse-arrow')) {
+            const hint = document.createElement('span');
+            hint.className = 'admin-ui-collapse-hint';
+            hint.textContent = 'Tap to expand';
+            const arrow = document.createElement('span');
+            arrow.className = 'admin-ui-collapse-arrow';
+            arrow.innerHTML = '&#9662;';
+            header.appendChild(hint);
+            header.appendChild(arrow);
+        }
+
+        function toggle() {
+            const willOpen = section.classList.contains('admin-ui-collapsed');
+            section.classList.toggle('admin-ui-collapsed', !willOpen);
+            header.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+        }
+
+        header.addEventListener('click', function (event) {
+            const tag = event.target && event.target.tagName ? event.target.tagName.toLowerCase() : '';
+            if (['button','input','select','textarea','a','label'].includes(tag)) return;
+            toggle();
+        });
+        header.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggle();
+            }
+        });
+    }
+
+    function initAdminUiCollapsibles() {
+        document.querySelectorAll('.control-box, .details-box, .portal-backup-section, .schedule-editor').forEach(makeSectionCollapsible);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initAdminUiCollapsibles);
+    } else {
+        initAdminUiCollapsibles();
+    }
+    window.initAdminUiCollapsibles = initAdminUiCollapsibles;
+})();
+</script>
+<style id="admin-consistent-collapse-arrow-override-v1">
+.admin-collapse-arrow,
+.admin-ui-collapse-arrow,
+.mobile-collapse-chevron {
+    min-width: 42px !important;
+    width: 42px !important;
+    height: 42px !important;
+    font-size: 1.2rem !important;
+    font-weight: 900 !important;
+}
+.admin-collapsible-section:not(.admin-collapsed) .admin-collapse-arrow,
+.admin-ui-collapsible-section:not(.admin-ui-collapsed) .admin-ui-collapse-arrow {
+    transform: rotate(0deg) !important;
+    background: rgba(74,144,226,0.35) !important;
+}
+.admin-collapsible-section.admin-collapsed .admin-collapse-arrow,
+.admin-ui-collapsible-section.admin-ui-collapsed .admin-ui-collapse-arrow,
+.mobile-collapsible.is-collapsed .mobile-collapse-chevron {
+    transform: rotate(-90deg) !important;
+}
+@media (max-width: 700px) {
+    .admin-collapse-arrow,
+    .admin-ui-collapse-arrow,
+    .mobile-collapse-chevron {
+        min-width: 44px !important;
+        width: 44px !important;
+        height: 44px !important;
+        font-size: 1.25rem !important;
+    }
+}
+</style>
+<style id="gameSetupPlayerSpotsGroupStyle">
+.player-spots-inline-section {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.14);
+}
+.player-spots-inline-section h4 {
+    margin: 0 0 12px;
+    color: #ff7a00;
+    font-size: 1.05rem;
+    font-weight: 800;
+}
+.player-spots-inline-section .control-row {
+    align-items: center;
+}
+@media (max-width: 700px) {
+    .player-spots-inline-section .control-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .player-spots-inline-section .status-display {
+        margin-left: 0 !important;
+        justify-content: center;
+    }
+}
+</style>
+
+<style id="admin-registered-add-player-grouped-v1">
+/* Add Player Manually is now part of Registered Players. When Registered Players is collapsed, hide the form too. */
+.registered-players-box.admin-collapsed > .add-player-form {
+    display: none !important;
+}
+.registered-players-box > .add-player-form {
+    margin: 12px 0 16px 0;
+}
+.registered-players-box > .add-player-form h3 {
+    margin-top: 0;
+}
+</style>
 </body>
 </html>
