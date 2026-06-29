@@ -14,6 +14,7 @@ h1{color:var(--accent);text-align:center;text-transform:uppercase;letter-spacing
 input,select{width:100%;padding:12px;margin:8px 0;background:#3d3d3d;border:1px solid #555;color:#fff;border-radius:8px;font-size:1rem}button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer}button:hover{background:#ff8533}.logout{background:#666;float:right}.refresh{background:var(--blue)}.danger{background:var(--danger)}.success{background:var(--success)}.secondary{background:#666}.error{display:none;background:var(--danger);padding:10px;border-radius:8px;text-align:center;margin-top:10px}.top-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}.card{background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:14px}.card.current{border-color:var(--success)}.card.regular{border-color:var(--blue)}.card.backup{border-color:var(--accent)}.name{font-size:1.08rem;font-weight:900;margin-bottom:6px}.meta{color:#ddd;font-size:.92rem;line-height:1.5}.phone-link{display:inline-block;color:#8fd1ff;font-weight:900;text-decoration:none;margin-top:4px}.phone-link:hover{text-decoration:underline}.pill{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:3px 8px;font-size:.72rem;font-weight:900;margin-left:6px}.pill.current{background:var(--success)}.pill.regular{background:var(--blue)}.pill.backup{background:var(--accent)}.pill.waitlist{background:var(--purple)}.note{color:#bbb;font-size:.84rem;margin-top:6px}.empty{color:#888;text-align:center;padding:18px;border:1px dashed #555;border-radius:10px}.card-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.card-actions button{flex:1;margin:0;font-size:.82rem;padding:8px 10px}.form-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}.form-grid input{margin:0}.result-box{display:none;background:#173524;border:1px solid var(--success);border-radius:10px;padding:14px;margin:12px 0;color:#d9ffe0}.result-box.active{display:block}.sms-box{background:rgba(0,0,0,.25);border-radius:8px;padding:10px;margin-top:10px;word-break:break-word}.sms-link{display:block;text-align:center;background:var(--blue);color:white;text-decoration:none;border-radius:8px;padding:12px;margin-top:10px;font-weight:900}.footer{text-align:center;font-size:12px;color:#888;padding:15px 10px;margin-top:20px;border-top:1px solid rgba(255,255,255,.1)}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.78);display:none;align-items:center;justify-content:center;z-index:10000;padding:18px}.modal.active{display:flex}.modal-card{width:min(440px,100%);background:linear-gradient(135deg,#222,#2f2f2f);border:2px solid var(--accent);border-radius:16px;padding:18px;box-shadow:0 18px 40px rgba(0,0,0,.45)}.modal-title{color:var(--accent);font-weight:900;text-align:center;margin-bottom:10px}.modal-actions{display:flex;gap:10px;margin-top:10px}.modal-actions button{flex:1}.small{font-size:.82rem;color:#bbb;line-height:1.35}
+.tools-row{display:flex;gap:10px;flex-wrap:wrap}.tools-row button{flex:1;min-width:160px}.tools-note{color:#bbb;font-size:.84rem;line-height:1.35;margin-top:8px}
 @media(max-width:650px){body{padding:10px}.container{padding:16px}h1{font-size:1.55rem}.grid,.form-grid{grid-template-columns:1fr}.top-actions{justify-content:stretch}.top-actions button{width:100%}.modal-actions{flex-direction:column}}
 
 .flashing-notify{
@@ -55,6 +56,18 @@ input,select{width:100%;padding:12px;margin:8px 0;background:#3d3d3d;border:1px 
   <div id="gameInfo" class="sub"></div>
 
   <div class="result-box" id="resultBox"></div>
+
+
+  <div class="section">
+    <h3>🗂️ Goalie Import / Export</h3>
+    <div class="tools-row">
+      <button class="refresh" onclick="exportGoalies()">Export Goalies</button>
+      <button class="success" onclick="chooseGoalieImport('merge')">Import / Merge</button>
+      <button class="danger" onclick="chooseGoalieImport('replace')">Import / Replace</button>
+    </div>
+    <input class="hidden" type="file" id="goalieImportFile" accept="application/json,.json" onchange="handleGoalieImportFile(event)">
+    <div class="tools-note">Export downloads your saved backup/substitute goalies. Import / Merge adds missing goalies. Import / Replace overwrites the saved backup/substitute goalie list.</div>
+  </div>
 
   <div class="section">
     <h3>🥅 Current Registered Goalies</h3>
@@ -102,6 +115,7 @@ let sessionToken = localStorage.getItem(TOKEN_KEY) || '';
 let currentData = {currentGoalies:[], regularGoalies:[], backupGoalies:[]};
 let selectedCancelGoalie = null;
 let selectedSubGoalie = null;
+let pendingGoalieImportMode = 'merge';
 function headers(){return {'Content-Type':'application/json','Authorization':'Bearer '+sessionToken,'X-Goalie-Auth':sessionToken};}
 function escapeHtml(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function phoneDigits(phone){let d=String(phone||'').replace(/\D/g,''); if(d.length===11&&d.startsWith('1')) d=d.slice(1); return d.slice(0,10);}
@@ -128,6 +142,54 @@ function buildAvailabilitySms(goalie){
 
   return `Hi ${name}, are you available to sub in net for Phan's Hockey this ${getGameDateTimeForSms()}?`;
 }
+
+function goalieExportFilename(){
+  const now = new Date();
+  const stamp = now.toISOString().slice(0,10);
+  return `phans-goalies-${stamp}.json`;
+}
+async function exportGoalies(){
+  try{
+    const res = await fetch(`${API_URL}/api/goalies/export`,{method:'GET',headers:headers()});
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || !data.success){alert(data.error || 'Could not export goalies.');return;}
+    const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = goalieExportFilename();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }catch(e){alert('Could not export goalies.');}
+}
+function chooseGoalieImport(mode){
+  pendingGoalieImportMode = mode === 'replace' ? 'replace' : 'merge';
+  const fileInput = document.getElementById('goalieImportFile');
+  if(fileInput){fileInput.value='';fileInput.click();}
+}
+async function handleGoalieImportFile(event){
+  const file = event?.target?.files?.[0];
+  if(!file)return;
+  try{
+    const raw = await file.text();
+    const parsed = JSON.parse(raw);
+    const goalies = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.backupGoalies) ? parsed.backupGoalies : parsed.goalies);
+    if(!Array.isArray(goalies) || !goalies.length){alert('No backup goalie contacts found in this file.');return;}
+    if(pendingGoalieImportMode === 'replace' && !confirm('Replace all saved backup/substitute goalies with this file?')) return;
+    const res = await fetch(`${API_URL}/api/goalies/import`,{
+      method:'POST',
+      headers:headers(),
+      body:JSON.stringify({mode:pendingGoalieImportMode,goalies})
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || !data.success){alert(data.error || 'Could not import goalies.');return;}
+    alert(`Goalie import complete. Imported: ${data.importedCount || 0}. Skipped: ${data.skippedCount || 0}.`);
+    loadData();
+  }catch(e){alert('Invalid goalie import file. Use a JSON file exported from this page.');}
+}
+
 function textAvailability(goalie){
   const body = buildAvailabilitySms(goalie || {});
   const href = smsHref(goalie?.phone || '', body);

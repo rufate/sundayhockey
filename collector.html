@@ -40,7 +40,7 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
   <div class="registered-players-box hidden" id="playersBox">
     <h3 id="playersTitle">🏒 Registered Players</h3>
     <table>
-      <thead><tr><th>Name</th><th>Rating</th><th>Paid ($)</th><th>Action</th></tr></thead>
+      <thead><tr><th>Name</th><th>Paid ($)</th><th>Action</th></tr></thead>
       <tbody id="playerList"></tbody>
     </table>
   </div>
@@ -94,9 +94,19 @@ async function loadData(){
   renderPlayers(data.players || []);
 }
 
+
+function formatPiaDateShort(value){
+  const raw = String(value || '').trim();
+  if(!raw) return '';
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m) return `${m[2]}/${m[3]}`;
+  const d = new Date(raw);
+  if(Number.isNaN(d.getTime())) return '';
+  return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+}
 function paymentState(p){
   const st = String(p.paymentStatus || '').toLowerCase();
-  if(st === 'pia') return {label:'PIA', cls:'pia', method:'E-Transfer'};
+  if(st === 'pia') { const pd = formatPiaDateShort(p.piaDate); return {label:'PIA' + (pd ? ' ' + pd : ''), cls:'pia', method:'E-Transfer'}; }
   const amt = Number(p.paidAmount);
   if(Number.isFinite(amt) && amt > 0){
     const isCash = String(p.paymentMethod || '').toLowerCase().includes('cash');
@@ -125,7 +135,7 @@ function renderPlayers(players){
     const actions = (p.isGoalie || isPhan) ? '<span class="goalie-note">No collection</span>' : `<div class="action-stack"><button class="paid-btn" onclick="setPaid(${p.id},15,'Cash')">$15</button><button class="amount-btn" onclick="customAmount(${p.id})">Other</button><button class="owes-btn" onclick="setPaid(${p.id},null)">Owes</button></div>`;
     const tr = document.createElement('tr');
     const pillAction = (p.isGoalie || isPhan) ? '' : `onclick="payPillTap(${p.id}, '${state.cls}', '${state.method || 'E-Transfer'}')" style="cursor:pointer" title="Tap OWES for E$15. Tap paid to switch cash/e-transfer."`;
-    tr.innerHTML = `<td><span class="name-main">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}${p.isGoalie?' <span class="goalie-note">GOALIE</span>':''}</span><span class="phone">${escapeHtml(p.phone||'')}</span>${p.registeredAt?`<span class="time">🔒 ${fmtTime(p.registeredAt)}</span>`:''}</td><td><span class="rating-pill">${Number(p.finalRating ?? p.rating ?? 5).toFixed(1)}</span></td><td><span class="pay-pill ${state.cls}" ${pillAction}>${state.label}</span></td><td>${actions}</td>`;
+    tr.innerHTML = `<td><span class="name-main">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}${p.isGoalie?' <span class="goalie-note">GOALIE</span>':''}</span><span class="phone">${escapeHtml(p.phone||'')}</span>${p.registeredAt?`<span class="time">🔒 ${fmtTime(p.registeredAt)}</span>`:''}</td><td><span class="pay-pill ${state.cls}" ${pillAction}>${state.label}</span></td><td>${actions}</td>`;
     tbody.appendChild(tr);
   }
 }

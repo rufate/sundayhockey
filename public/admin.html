@@ -2369,6 +2369,11 @@ button {
 .payment-slider-save{
     background:#2e7d32 !important;
 }
+
+.payment-slider-pia-date-wrap{margin:10px 0 8px;text-align:left}
+.payment-slider-pia-date-wrap label{display:block;color:#ddd;font-size:.78rem;font-weight:800;margin-bottom:4px}
+.payment-slider-pia-date-wrap input{width:100%;box-sizing:border-box;background:#111;color:#fff;border:1px solid #555;border-radius:8px;padding:8px;font-weight:800}
+
 .payment-slider-pia{
     background:#1565c0 !important;
 }
@@ -3014,6 +3019,24 @@ button {
     color:#b9b9b9;
     font-size:0.72rem !important;
     line-height:1 !important;
+}
+
+#playerList .player-name-nickname-row{
+    display:flex;
+    align-items:center;
+    gap:4px;
+    min-width:0;
+    max-width:100%;
+}
+#playerList .nickname-tap-target{
+    cursor:pointer;
+    user-select:none;
+    border-bottom:1px dotted rgba(255,255,255,0.22);
+}
+#playerList .nickname-tap-target.has-nickname::after{
+    content:' ✎';
+    color:rgba(255,255,255,0.55);
+    font-size:0.72rem;
 }
 #playerList .player-time-sub{
     display:block;
@@ -5697,10 +5720,10 @@ th, td{padding:2px 3px !important;}
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:10px; flex-wrap:wrap;">
             <h1 style="margin:0;">Admin Dashboard</h1>
             <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                <button class="control-btn" onclick="downloadBackup()" style="background:#2e7d32;">⬇ Download Backup</button>
+                <button class="control-btn" onclick="downloadBackup()" style="background:#2e7d32;">⬇ Backup Portal</button>
                 <button class="control-btn" onclick="previewLatestServerBackup()" style="background:#5c6bc0;">👁 Preview Latest</button>
                 <button class="control-btn" onclick="restoreLatestServerBackup()" style="background:#3949ab;">♻ Restore Latest</button>
-                <button class="control-btn" onclick="document.getElementById('restoreBackupFile').click()" style="background:#8e24aa;">⤴ Restore Backup</button>
+                <button class="control-btn" onclick="document.getElementById('restoreBackupFile').click()" style="background:#8e24aa;">⤴ Restore Portal</button>
                 <input type="file" id="restoreBackupFile" accept=".json,application/json" style="display:none;" onchange="restoreBackupFromFile(event)">
                 <button class="control-btn" onclick="logoutAllDevices()" style="background:#6d4c41;">Logout All Devices</button>
                 <button class="logout-btn" onclick="logout()">Logout</button>
@@ -6048,7 +6071,7 @@ th, td{padding:2px 3px !important;}
                     <button class="control-btn" onclick="swapSelectedRosterPlayers()" style="background:#4a90e2;">Swap Players</button>
                     <button class="control-btn" onclick="autoRebalanceRoster()" style="background:#6f42c1;">Auto Rebalance</button>
                 </div>
-                <div class="team-rebalance-note">The server blocks any rebalance that puts the 2 strongest skaters together or the 2 weakest skaters together.</div>
+                <div class="team-rebalance-note">Auto Rebalance builds the fairest teams possible. Manual swap lets you rebalance as needed.</div>
             </div>
             <div class="roster-text-export-box" id="rosterTextExportBox">
                 <h4>📱 Mass Text Signup Players</h4>
@@ -6214,11 +6237,12 @@ th, td{padding:2px 3px !important;}
             <input type="tel" id="newPhone" placeholder="Phone Number">
             <div class="form-row">
                 <input type="number" id="newRating" placeholder="Rating (1-10)" min="1" max="10">
-                <select id="newPayment">
+                <select id="newPayment" onchange="toggleManualPaymentControls()">
                     <option value="Cash">Cash</option>
                     <option value="E-Transfer">E-Transfer</option>
                     <option value="PIA">PIA (Pay In Advance)</option>
                 </select>
+                <input type="date" id="newPiaDate" title="PIA Date" style="display:none; min-width:145px;" aria-label="PIA Date">
             </div>
 
             <div class="inline-check-row">
@@ -8853,11 +8877,12 @@ ${rosterLink}
                                 ? 0
                                 : (isPaid ? parseFloat(p.paidAmount) : 15);
                             const amountText = Number.isInteger(compactAmount) ? String(compactAmount) : compactAmount.toFixed(2).replace(/\.00$/, '').replace(/0$/, '');
-                            const compactLabel = isPia ? 'PIA' : (isPaid ? `${isCashPaid ? '' : 'E'}$${amountText}` : 'OWES');
+                            const piaDateText = isPia ? formatPiaDateShort(p.piaDate) : '';
+                            const compactLabel = isPia ? `PIA${piaDateText ? ' ' + piaDateText : ''}` : (isPaid ? `${isCashPaid ? '' : 'E'}$${amountText}` : 'OWES');
                             const compactClass = isPia ? 'is-pia' : (isPaid ? (isCashPaid ? 'is-paid-cash' : 'is-paid-etransfer') : 'is-unpaid');
                             const compactMethod = isCashPaid ? 'Cash' : 'E-Transfer';
                             paidInput = `
-                                <div class="compact-pay ${compactClass}" data-player-id="${p.id}" data-payment-status="${paymentStatus}" data-payment-method="${compactMethod}">
+                                <div class="compact-pay ${compactClass}" data-player-id="${p.id}" data-payment-status="${paymentStatus}" data-payment-method="${compactMethod}" data-pia-date="${escapeHtml(p.piaDate || '')}">
                                     <button class="compact-pay-btn compact-pay-main" title="Tap OWES to mark E-Transfer. Tap paid to edit method/amount. Double tap OWES for options." onclick="compactPayToggle(${p.id}, event)" ondblclick="compactPayDoubleTap(${p.id}, event)" data-amount="${compactAmount}">
                                         ${compactLabel}
                                     </button>
@@ -8885,8 +8910,12 @@ ${rosterLink}
 
                         tr.innerHTML = `
                             <td class="player-name-cell">
-                                <span class="player-name-main">${p.firstName} ${p.lastName}</span>
-                                <span class="player-phone-sub">${p.phone}</span>
+                                <div class="player-name-nickname-row">
+                                    <span class="player-name-main nickname-tap-target ${(p.nickname || '').trim() ? 'has-nickname' : ''}"
+                                        title="Double-tap to edit nickname"
+                                        onclick="handleNicknameNameTap(${p.id}, event)">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}</span>
+                                </div>
+                                <span class="player-phone-sub">${escapeHtml(p.phone || '')}</span>
                                 ${p.registeredAt ? `<span class="player-time-sub"><span class="locked-time-chip" title="Locked signup timestamp — saved when the player registered and does not change">${formatLockedSignupTime(p.registeredAt)}</span></span>` : ``}
                             </td>
                             <td class="phone-col-hidden">${p.phone}</td>
@@ -9085,7 +9114,22 @@ ${rosterLink}
         }
 
 
-        async function updatePaymentStatus(playerId, status) {
+
+function formatPiaDateShort(value){
+    const raw = String(value || '').trim();
+    if(!raw) return '';
+    const parts = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if(parts) return `${parts[2]}/${parts[3]}`;
+    const d = new Date(raw);
+    if(Number.isNaN(d.getTime())) return '';
+    return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+}
+function todayDateInputValue(){
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+        async function updatePaymentStatus(playerId, status, options = {}) {
             try {
                 const res = await fetch(`${API_URL}/api/admin/update-payment-status`, {
                     method: 'POST',
@@ -9093,7 +9137,8 @@ ${rosterLink}
                     body: JSON.stringify({
                         sessionToken: sessionToken,
                         playerId: playerId,
-                        status: status
+                        status: status,
+                        piaDate: options.piaDate || ''
                     })
                 });
 
@@ -9431,6 +9476,58 @@ ${rosterLink}
             }
         }
 
+
+        const nicknameTapTracker = {};
+
+        function handleNicknameNameTap(id, event) {
+            const now = Date.now();
+            const key = String(id);
+            if (nicknameTapTracker[key] && (now - nicknameTapTracker[key]) < 450) {
+                nicknameTapTracker[key] = 0;
+                openNicknamePrompt(id);
+            } else {
+                nicknameTapTracker[key] = now;
+            }
+        }
+
+        function openNicknamePrompt(id) {
+            const player = adminPlayersById[String(id)];
+            if (!player) return;
+            const fullName = `${player.firstName || ''} ${player.lastName || ''}`.trim();
+            const currentNickname = String(player.nickname || '').trim();
+            const nextNickname = prompt(`Nickname for ${fullName} (leave blank to remove):`, currentNickname);
+            if (nextNickname === null) return;
+            updatePlayerNickname(id, nextNickname);
+        }
+
+        async function updatePlayerNickname(id, nickname) {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/update-nickname`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken: sessionToken, playerId: id, nickname: String(nickname || '').trim() })
+                });
+
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.success !== false) {
+                    showNotification('✅ Nickname saved', 'success');
+                    if (data.player && adminPlayersById[String(id)]) {
+                        adminPlayersById[String(id)].nickname = data.player.nickname || '';
+                    }
+                    loadData();
+                } else if (res.status === 401) {
+                    logout();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to update nickname'));
+                    loadData();
+                }
+            } catch (err) {
+                console.error('Update nickname error:', err);
+                alert('Error updating nickname');
+                loadData();
+            }
+        }
+
         async function updateRating(id, newRating) {
             const ratingNum = parseFloat(newRating);
             if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 10) {
@@ -9610,6 +9707,23 @@ ${rosterLink}
             renderQuickGoalies();
         }
 
+        function todayDateInputValue() {
+            return new Date().toISOString().slice(0, 10);
+        }
+
+        function toggleManualPaymentControls() {
+            const isGoalie = !!document.getElementById('newIsGoalie')?.checked;
+            const paymentSelect = document.getElementById('newPayment');
+            const piaDateInput = document.getElementById('newPiaDate');
+            const isPia = !isGoalie && paymentSelect && paymentSelect.value === 'PIA';
+            if (piaDateInput) {
+                piaDateInput.style.display = isPia ? 'block' : 'none';
+                piaDateInput.disabled = !isPia;
+                if (isPia && !piaDateInput.value) piaDateInput.value = todayDateInputValue();
+                if (!isPia) piaDateInput.value = '';
+            }
+        }
+
         function toggleManualGoalieMode() {
             const isGoalie = !!document.getElementById('newIsGoalie')?.checked;
             const quickWrap = document.getElementById('goalieQuickSelectWrap');
@@ -9625,6 +9739,7 @@ ${rosterLink}
                 if (isGoalie) paymentSelect.value = 'Cash';
             }
             if (!isGoalie && quickSelect) quickSelect.value = '';
+            toggleManualPaymentControls();
         }
 
         function fillManualGoalieFromPreset() {
@@ -9744,6 +9859,7 @@ ${rosterLink}
             const rating = document.getElementById('newRating').value;
             const isGoalie = !!document.getElementById('newIsGoalie').checked;
             const paymentMethod = isGoalie ? 'FREE' : document.getElementById('newPayment').value;
+            const piaDate = (!isGoalie && paymentMethod === 'PIA') ? (document.getElementById('newPiaDate')?.value || todayDateInputValue()) : '';
             const toWaitlist = document.getElementById('addToWaitlist').checked;
             const assignTeam = document.getElementById('latePlayerTeam') ? document.getElementById('latePlayerTeam').value : '';
 
@@ -9768,6 +9884,7 @@ ${rosterLink}
                         phone, 
                         rating,
                         paymentMethod,
+                        piaDate,
                         isGoalie,
                         toWaitlist,
                         assignTeam
@@ -9777,6 +9894,9 @@ ${rosterLink}
                 if (res.ok) {
                     document.getElementById('newFirstName').value = '';
                     document.getElementById('newLastName').value = '';
+                    const newPiaDateField = document.getElementById('newPiaDate');
+                    if (newPiaDateField) newPiaDateField.value = '';
+                    toggleManualPaymentControls();
                     document.getElementById('newPhone').value = '';
                     document.getElementById('newRating').value = '';
                     document.getElementById('newIsGoalie').checked = false;
@@ -10607,7 +10727,9 @@ Continue?`;
                     `Source: ${data.snapshotSource || 'unknown'}\n` +
                     `Fingerprint: ${data.fingerprint || 'n/a'}\n` +
                     `Players now: ${data.restoredPlayers}\n` +
-                    `Waitlist now: ${data.restoredWaitlist}`
+                    `Waitlist now: ${data.restoredWaitlist}
+` +
+                    `History weeks restored: ${data.restoredHistoryRows || 0}`
                 );
                 await loadSnapshotCatalog(false);
                 loadData();
@@ -10731,7 +10853,9 @@ Continue?`;
                     `Saved: ${data.snapshotSavedAt || 'unknown'}\n` +
                     `Mode: ${(data.mode || 'replace').toUpperCase()}\n` +
                     `Players now: ${data.restoredPlayers}\n` +
-                    `Waitlist now: ${data.restoredWaitlist}`
+                    `Waitlist now: ${data.restoredWaitlist}
+` +
+                    `History weeks restored: ${data.restoredHistoryRows || 0}`
                 );
 
                 loadData();
@@ -10763,6 +10887,7 @@ Continue?`;
 
                 const backupPlayerCount = Array.isArray(backupData.players) ? backupData.players.length : 0;
                 const backupWaitlistCount = Array.isArray(backupData.waitlist) ? backupData.waitlist.length : 0;
+                const backupHistoryCount = Array.isArray(backupData.historyRows) ? backupData.historyRows.length : 0;
 
                 let currentPlayerCount = 15;
                 let currentWaitlistCount = 15;
@@ -10793,6 +10918,7 @@ Waitlist: ${currentWaitlistCount}
                     `Backup File
 Players: ${backupPlayerCount}
 Waitlist: ${backupWaitlistCount}
+History weeks: ${backupHistoryCount}
 
 ` +
                     `Press OK for FULL REPLACE.
@@ -10824,12 +10950,12 @@ This backup has fewer records than live data.
                 let restoreSettings = false;
                 if (useReplace) {
                     restoreSettings = confirm(
-                        `Also restore settings from the backup?
+                        `Also restore the full portal from this backup?
 
 ` +
-                        `OK = restore game/settings too
+                        `OK = restore players, waitlist, settings, goalies, schedule, current roster, and history
 ` +
-                        `Cancel = restore players/waitlist only (recommended)`
+                        `Cancel = restore players/waitlist only`
                     );
                 }
 
@@ -10872,7 +10998,9 @@ This backup has fewer records than live data.
 ` +
                     `Players now: ${data.restoredPlayers}
 ` +
-                    `Waitlist now: ${data.restoredWaitlist}`
+                    `Waitlist now: ${data.restoredWaitlist}
+` +
+                    `History weeks restored: ${data.restoredHistoryRows || 0}`
                 );
                 loadData();
                 loadSettings();
@@ -10967,6 +11095,9 @@ function openPaymentSlider(playerId, forceMethod){
     activePaymentSliderPlayerId = playerId;
     setPaymentSliderAmount(getCompactPayAmount(playerId));
     setPaymentMethod(forceMethod || getCompactPayMethod(playerId) || 'E-Transfer');
+    const piaDateInput = document.getElementById('paymentSliderPiaDate');
+    const wrap = compactPayFind(playerId);
+    if(piaDateInput) piaDateInput.value = (wrap && wrap.dataset.piaDate) ? wrap.dataset.piaDate : todayDateInputValue();
     const modal = document.getElementById('paymentSliderModal');
     if(modal) modal.classList.add('active');
 }
@@ -11056,7 +11187,8 @@ async function markPaymentPia(){
     if(wrap && wrap.dataset.busy === '1') return;
     if(wrap){ wrap.dataset.busy = '1'; wrap.style.opacity = '0.7'; }
     try {
-        await updatePaymentStatus(playerId, 'pia');
+        const piaDate = document.getElementById('paymentSliderPiaDate')?.value || todayDateInputValue();
+        await updatePaymentStatus(playerId, 'pia', { piaDate });
         closePaymentSlider();
         await loadData();
     } finally {
@@ -11100,6 +11232,10 @@ document.addEventListener('keydown', function(e){
                 <button type="button" class="payment-slider-preset" onclick="paymentSliderPreset(15)">$15</button>
                 <button type="button" class="payment-slider-preset" onclick="paymentSliderPreset(20)">$20</button>
                 <button type="button" class="payment-slider-preset" onclick="paymentSliderPreset(0)">$0</button>
+            </div>
+            <div class="payment-slider-pia-date-wrap">
+                <label for="paymentSliderPiaDate">PIA Date</label>
+                <input type="date" id="paymentSliderPiaDate">
             </div>
             <div class="payment-slider-actions">
                 <button type="button" class="payment-slider-cancel" onclick="closePaymentSlider()">Cancel</button>

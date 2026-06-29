@@ -1922,7 +1922,6 @@ async function initDatabase() {
                 paid BOOLEAN DEFAULT false,
                 paid_amount NUMERIC(10,2),
                 payment_status VARCHAR(20) DEFAULT 'owes',
-                pia_date VARCHAR(20),
                 rating NUMERIC(4,1) NOT NULL,
                 skating_rating NUMERIC(4,1),
                 puck_skills_rating NUMERIC(4,1),
@@ -1968,7 +1967,6 @@ async function initDatabase() {
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS admin_adjustment NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS final_rating NUMERIC(4,1)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'owes'`);
-        await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS pia_date VARCHAR(20)`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS promoted_from_waitlist BOOLEAN DEFAULT false`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS late_added_after_release BOOLEAN DEFAULT false`);
         await pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS subbed_in_for_player_id BIGINT`);
@@ -2176,7 +2174,6 @@ async function loadDataFromDB() {
             paid: !!p.paid,
             paidAmount: p.paid_amount == null ? null : Number(p.paid_amount),
             paymentStatus: normalizePaymentStatus(p.payment_status, { paid: !!p.paid, paidAmount: p.paid_amount == null ? null : Number(p.paid_amount) }),
-            piaDate: p.pia_date || '',
             rating: p.rating == null ? null : Number(p.rating),
             skatingRating: p.skating_rating == null ? null : Number(p.skating_rating),
             puckSkillsRating: p.puck_skills_rating == null ? null : Number(p.puck_skills_rating),
@@ -2795,9 +2792,6 @@ function applySnapshotToMemory(snapshot) {
     resetWeekSchedule = snapshot.resetWeekSchedule ?? resetWeekSchedule;
     cancelledRegistrations = Array.isArray(snapshot.cancelledRegistrations) ? snapshot.cancelledRegistrations : [];
     regularSkatersByDay = normalizeRegularSkatersByDayMap(snapshot.regularSkatersByDay || {});
-    if (Array.isArray(snapshot.extraGoalieContacts)) extraGoalieContacts = snapshot.extraGoalieContacts.map(normalizeGoalieContact).filter(g => g.firstName && g.lastName);
-    if (typeof snapshot.rosterReleaseAnnouncementText === 'string') rosterReleaseAnnouncementText = snapshot.rosterReleaseAnnouncementText;
-    if (typeof snapshot.collectorPageEnabled === 'boolean') collectorPageEnabled = snapshot.collectorPageEnabled;
     customSignupCode = String(snapshot.customSignupCode || '').trim();
     editableDefaultSignupCode = /^\d{4}$/.test(String(snapshot.editableDefaultSignupCode || '').trim()) ? String(snapshot.editableDefaultSignupCode).trim() : DEFAULT_SIGNUP_CODE;
     if (snapshot.weeklyDefaultSignupCodes !== undefined) weeklyDefaultSignupCodes = normalizeWeeklyDefaultSignupCodes(snapshot.weeklyDefaultSignupCodes);
@@ -3117,16 +3111,6 @@ function normalizeCollectionPaymentMethod(method, fallback = 'E-Transfer') {
     return String(fallback || 'E-Transfer').toLowerCase().includes('cash') ? 'Cash' : 'E-Transfer';
 }
 
-function normalizePiaDate(value) {
-    const raw = String(value || '').trim();
-    if (!raw) return '';
-    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (m) return raw;
-    const parsed = new Date(raw);
-    if (Number.isNaN(parsed.getTime())) return '';
-    return parsed.toISOString().slice(0, 10);
-}
-
 function applyPaymentStatusToPlayer(player, status, options = {}) {
     if (!player) return player;
     const normalized = normalizePaymentStatus(status, player);
@@ -3137,22 +3121,15 @@ function applyPaymentStatusToPlayer(player, status, options = {}) {
         // PIA means paid in advance and must always carry a $0 collected amount.
         // Do not preserve a prior $15/default payment when switching to PIA.
         player.paidAmount = 0;
-        if (Object.prototype.hasOwnProperty.call(options, 'piaDate')) {
-            player.piaDate = normalizePiaDate(options.piaDate);
-        } else if (!player.piaDate) {
-            player.piaDate = new Date().toISOString().slice(0, 10);
-        }
     } else if (normalized === 'paid') {
         player.paid = true;
         const amount = Number(player.paidAmount);
         if (options.ensureAmount && (!Number.isFinite(amount) || amount <= 0)) {
             player.paidAmount = Number(options.defaultAmount || 15);
         }
-        player.piaDate = '';
     } else {
         player.paid = false;
         if (options.clearAmount !== false) player.paidAmount = null;
-        player.piaDate = '';
     }
 
     return player;
@@ -3233,18 +3210,18 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
         for (const player of players) {
             await client.query(
                 `INSERT INTO players (
-                    id, first_name, last_name, nickname, phone, payment_method, paid, paid_amount, payment_status, pia_date, rating,
+                    id, first_name, last_name, nickname, phone, payment_method, paid, paid_amount, payment_status, rating,
                     skating_rating, puck_skills_rating, hockey_sense_rating, conditioning_rating, effort_rating,
                     passing_rating, shooting_rating, defensive_rating, speed_burst_rating, position_played,
                     level_played, peer_comparison, confidence_level, self_rating_raw, derived_rating,
                     admin_rating, admin_adjustment, final_rating, is_goalie, team, registered_at, rules_agreed,
                     promoted_from_waitlist, late_added_after_release, subbed_in_for_player_id, subbed_in_for_name, subbed_in_at
                 ) VALUES (
-                    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38
+                    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37
                 )`,
                 [
                     player.id, player.firstName, player.lastName, normalizeNickname(player.nickname) || null, player.phone, player.paymentMethod || null, !!player.paid,
-                    toNumericOrNull(player.paidAmount), normalizePaymentStatus(player.paymentStatus, player), normalizePiaDate(player.piaDate) || null, toNumericOrNull(player.rating),
+                    toNumericOrNull(player.paidAmount), normalizePaymentStatus(player.paymentStatus, player), toNumericOrNull(player.rating),
                     toNumericOrNull(player.skatingRating), toNumericOrNull(player.puckSkillsRating), toNumericOrNull(player.hockeySenseRating), toNumericOrNull(player.conditioningRating), toNumericOrNull(player.effortRating),
                     toNumericOrNull(player.passingRating), toNumericOrNull(player.shootingRating), toNumericOrNull(player.defensiveRating), toNumericOrNull(player.speedBurstRating), player.positionPlayed || null,
                     player.levelPlayed || null, player.peerComparison || null, player.confidenceLevel || null, toNumericOrNull(player.selfRatingRaw), toNumericOrNull(player.derivedRating),
@@ -3417,7 +3394,6 @@ function buildFullDataSnapshot() {
         waitlist,
         cancelledRegistrations,
         regularSkatersByDay,
-        extraGoalieContacts,
         persistentAdminRatings,
         customSignupCode,
         editableDefaultSignupCode,
@@ -3550,7 +3526,6 @@ function getSettingsSnapshot() {
         currentWeekData,
         cancelledRegistrations,
         regularSkatersByDay,
-        extraGoalieContacts,
         persistentAdminRatings,
         customSignupCode,
         editableDefaultSignupCode,
@@ -6201,83 +6176,6 @@ app.post('/api/admin/clear-cancellations', async (req, res) => {
     res.json({ success: true, cancellations: cancelledRegistrations });
 });
 
-
-async function getPortalHistoryRowsForBackup() {
-    if (!pool) return [];
-    try {
-        const result = await pool.query(`
-            SELECT week_number, year, release_date, game_location, game_time, game_date, white_team, dark_team, white_avg, dark_avg
-            FROM history
-            ORDER BY year ASC, week_number ASC, release_date ASC, id ASC
-        `);
-        return result.rows.map(row => ({
-            weekNumber: row.week_number,
-            year: row.year,
-            releaseDate: row.release_date,
-            gameLocation: row.game_location,
-            gameTime: row.game_time,
-            gameDate: row.game_date,
-            whiteTeam: row.white_team,
-            darkTeam: row.dark_team,
-            whiteAvg: row.white_avg,
-            darkAvg: row.dark_avg
-        }));
-    } catch (err) {
-        console.error('Error reading history for portal backup:', err.message);
-        return [];
-    }
-}
-
-async function replacePortalHistoryFromBackup(historyRows = []) {
-    if (!pool || !Array.isArray(historyRows)) return { restoredHistoryRows: 0, skippedHistoryRows: Array.isArray(historyRows) ? historyRows.length : 0 };
-    const client = await pool.connect();
-    let restored = 0;
-    let skipped = 0;
-    try {
-        await client.query('BEGIN');
-        await client.query('DELETE FROM history');
-        for (const row of historyRows) {
-            const weekNumber = Number(row.weekNumber ?? row.week_number);
-            const year = Number(row.year);
-            if (!Number.isFinite(weekNumber) || !Number.isFinite(year)) { skipped++; continue; }
-            await client.query(
-                `INSERT INTO history (week_number, year, release_date, game_location, game_time, game_date, white_team, dark_team, white_avg, dark_avg)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-                 ON CONFLICT (year, week_number)
-                 DO UPDATE SET release_date = EXCLUDED.release_date,
-                               game_location = EXCLUDED.game_location,
-                               game_time = EXCLUDED.game_time,
-                               game_date = EXCLUDED.game_date,
-                               white_team = EXCLUDED.white_team,
-                               dark_team = EXCLUDED.dark_team,
-                               white_avg = EXCLUDED.white_avg,
-                               dark_avg = EXCLUDED.dark_avg`,
-                [
-                    weekNumber,
-                    year,
-                    row.releaseDate || row.release_date || new Date().toISOString(),
-                    row.gameLocation ?? row.game_location ?? null,
-                    row.gameTime ?? row.game_time ?? null,
-                    row.gameDate ?? row.game_date ?? null,
-                    JSON.stringify(row.whiteTeam ?? row.white_team ?? []),
-                    JSON.stringify(row.darkTeam ?? row.dark_team ?? []),
-                    row.whiteAvg ?? row.white_avg ?? row.whiteTeamAvg ?? null,
-                    row.darkAvg ?? row.dark_avg ?? row.darkTeamAvg ?? null
-                ]
-            );
-            restored++;
-        }
-        await client.query('COMMIT');
-        return { restoredHistoryRows: restored, skippedHistoryRows: skipped };
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('Error restoring portal history from backup:', err.message);
-        throw err;
-    } finally {
-        client.release();
-    }
-}
-
 app.post('/api/admin/download-backup', async (req, res) => {
     const { sessionToken } = req.body || {};
 
@@ -6294,27 +6192,33 @@ app.post('/api/admin/download-backup', async (req, res) => {
         const mi = String(etNow.getMinutes()).padStart(2, '0');
         const ss = String(etNow.getSeconds()).padStart(2, '0');
 
-        const fullSnapshot = buildFullDataSnapshot();
-        const historyRows = await getPortalHistoryRowsForBackup();
         const backup = {
-            portalBackupVersion: 1,
             exportedAt: new Date().toISOString(),
             exportedAtET: `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss} ET`,
-            fullSnapshot,
-            historyRows,
-            // Backward-compatible top-level fields for older restore code/tools
             players,
             waitlist,
             currentWeekData,
-            regularSkatersByDay,
-            extraGoalieContacts,
             summary: {
-                ...fullSnapshot.summary,
+                playerSpots,
+                gameLocation,
+                gameTime,
+                gameDate,
+                rosterReleased,
+                requirePlayerCode,
+                playerSignupCode,
                 totalPlayers: players.length,
-                totalWaitlist: waitlist.length,
-                totalHistoryRows: historyRows.length
+                totalWaitlist: waitlist.length
             },
-            appSettings: fullSnapshot.appSettings
+            appSettings: {
+                maintenanceMode,
+                customTitle,
+                announcementEnabled,
+                announcementText,
+                announcementImages,
+                playerSpots,
+                requirePlayerCode,
+                playerSignupCode
+            }
         };
 
         const filename = getGameDayBackupDownloadName('json');
@@ -6523,9 +6427,8 @@ app.post('/api/admin/restore-backup', async (req, res) => {
             return res.status(400).json({ error: "Invalid backup file" });
         }
 
-        const portalSnapshot = (backupData.fullSnapshot && typeof backupData.fullSnapshot === 'object') ? backupData.fullSnapshot : null;
-        const restoredPlayers = normalizeRestoreList(portalSnapshot?.players || backupData.players);
-        const restoredWaitlist = normalizeRestoreList(portalSnapshot?.waitlist || backupData.waitlist);
+        const restoredPlayers = normalizeRestoreList(backupData.players);
+        const restoredWaitlist = normalizeRestoreList(backupData.waitlist);
 
         if (!restoredPlayers || !restoredWaitlist) {
             return res.status(400).json({ error: "Backup file is missing players or waitlist" });
@@ -6568,10 +6471,8 @@ app.post('/api/admin/restore-backup', async (req, res) => {
             waitlist = mergeUnique(originalWaitlist, restoredWaitlist);
         }
 
-        // Restore full portal settings only when explicitly requested on a full replace.
-        if (mode === 'replace' && restoreSettings === true && portalSnapshot) {
-            applySnapshotToMemory(portalSnapshot);
-        } else if (mode === 'replace' && restoreSettings === true) {
+        // Restore supported settings only when explicitly requested on a full replace
+        if (mode === 'replace' && restoreSettings === true) {
             if (backupData.currentWeekData && typeof backupData.currentWeekData === 'object') {
                 currentWeekData = backupData.currentWeekData;
             }
@@ -6601,15 +6502,10 @@ app.post('/api/admin/restore-backup', async (req, res) => {
         // Always recalculate spots from the resulting live roster instead of trusting backup counts.
         playerSpots = Math.max(0, MAX_SKATERS - players.filter(p => !(p && p.isGoalie)).length);
 
-        let historyRestoreResult = { restoredHistoryRows: 0, skippedHistoryRows: 0 };
-        if (mode === 'replace' && restoreSettings === true && Array.isArray(backupData.historyRows)) {
-            historyRestoreResult = await replacePortalHistoryFromBackup(backupData.historyRows);
-        }
-
         // Persist using existing save helper if available
         try {
             if (typeof saveData === 'function') {
-                await saveData('restore-portal-backup');
+                await saveData();
             }
         } catch (saveErr) {
             console.error('Restore completed in memory but saveData failed:', saveErr);
@@ -6641,9 +6537,6 @@ app.post('/api/admin/restore-backup', async (req, res) => {
             backupPlayers: restoredPlayers.length,
             backupWaitlist: restoredWaitlist.length,
             restoreSettingsApplied: mode === 'replace' && restoreSettings === true,
-            restoredHistoryRows: historyRestoreResult.restoredHistoryRows || 0,
-            skippedHistoryRows: historyRestoreResult.skippedHistoryRows || 0,
-            portalBackupVersion: backupData.portalBackupVersion || null,
             message: mode === 'merge'
                 ? "Backup merged safely with live data"
                 : "Backup replaced live data successfully"
@@ -7093,26 +6986,22 @@ app.post('/api/admin/remove-waitlist', async (req, res) => {
 });
 
 app.post('/api/admin/add-player', async (req, res) => {
-    const { password, sessionToken, firstName, lastName, nickname, phone, paymentMethod, piaDate, rating, isGoalie, toWaitlist, assignTeam } = req.body;
+    const { password, sessionToken, firstName, lastName, nickname, phone, paymentMethod, rating, isGoalie, toWaitlist, assignTeam } = req.body;
     if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
     if (!firstName || !lastName || !phone || !rating) return res.status(400).json({ error: "First name, last name, phone, and rating required" });
     const cleanFirstName = capitalizeFullName(firstName);
     const cleanLastName = capitalizeFullName(lastName);
-    const cleanNickname = normalizeNickname(nickname);
     if (!validatePhoneNumber(phone)) return res.status(400).json({ error: "Invalid phone number format" });
     const formattedPhone = formatPhoneNumber(phone);
     const ratingNum = roundRating(parseFloat(rating) || 5);
     const isGoalieBool = isGoalie || false;
-    const normalizedPaymentMethod = isGoalieBool ? 'FREE' : (paymentMethod || 'Cash');
-    const newPlayerPaymentStatus = isGoalieBool ? 'paid' : (String(normalizedPaymentMethod).toLowerCase() === 'pia' ? 'pia' : 'owes');
-    const cleanPiaDate = newPlayerPaymentStatus === 'pia' ? normalizePiaDate(piaDate) : '';
     const requestedTeam = assignTeam === 'White' || assignTeam === 'Dark' ? assignTeam : null;
     const teamForLateAdd = rosterReleased ? requestedTeam : null;
     if (rosterReleased && !toWaitlist && !teamForLateAdd) {
         return res.status(400).json({ error: "Roster is already released. Choose Team White or Team Dark for this late player." });
     }
     if (toWaitlist) {
-        const waitlistPlayer = hydratePlayerRatingProfile({ id: Date.now(), firstName: cleanFirstName, lastName: cleanLastName, nickname: cleanNickname, phone: formattedPhone, paymentMethod: normalizedPaymentMethod, paymentStatus: newPlayerPaymentStatus, piaDate: cleanPiaDate, rating: ratingNum, derivedRating: ratingNum, finalRating: ratingNum, selfRatingRaw: ratingNum, isGoalie: isGoalieBool, bypassAutoPromote: false, joinedAt: new Date() });
+        const waitlistPlayer = hydratePlayerRatingProfile({ id: Date.now(), firstName: cleanFirstName, lastName: cleanLastName, nickname: cleanNickname, phone: formattedPhone, paymentMethod: paymentMethod || 'Cash', rating: ratingNum, derivedRating: ratingNum, finalRating: ratingNum, selfRatingRaw: ratingNum, isGoalie: isGoalieBool, bypassAutoPromote: false, joinedAt: new Date() });
         applyPersistentAdminRating(waitlistPlayer);
         try { await runProtectedMutation('admin-add-waitlist-player', req, async () => { waitlist.push(waitlistPlayer); }, { playerId: waitlistPlayer.id }); }
         catch (err) { console.error('Error adding to waitlist:', err); return res.status(500).json({ error: "Failed to add waitlist player safely" }); }
@@ -7128,11 +7017,10 @@ app.post('/api/admin/add-player', async (req, res) => {
         lastName: cleanLastName,
         nickname: cleanNickname,
         phone: formattedPhone,
-        paymentMethod: normalizedPaymentMethod,
+        paymentMethod: paymentMethod || 'Cash',
         paid: isGoalieBool ? true : false,
         paidAmount: isGoalieBool ? 0 : null,
-        paymentStatus: newPlayerPaymentStatus,
-        piaDate: cleanPiaDate,
+        paymentStatus: isGoalieBool ? 'paid' : 'owes',
         rating: ratingNum,
         derivedRating: ratingNum,
         finalRating: ratingNum,
@@ -7234,8 +7122,8 @@ app.post('/api/admin/update-paid-amount', async (req, res) => {
 
         if (pool) {
             await pool.query(
-                'UPDATE players SET paid = $1, paid_amount = $2, payment_status = $3, payment_method = $4, pia_date = $5 WHERE id = $6',
-                [player.paid, player.paidAmount, normalizePaymentStatus(player.paymentStatus, player), player.paymentMethod || null, normalizePiaDate(player.piaDate) || null, normalizedPlayerId]
+                'UPDATE players SET paid = $1, paid_amount = $2, payment_status = $3, payment_method = $4 WHERE id = $5',
+                [player.paid, player.paidAmount, normalizePaymentStatus(player.paymentStatus, player), player.paymentMethod || null, normalizedPlayerId]
             );
         }
 
@@ -7255,7 +7143,7 @@ app.post('/api/admin/update-paid-amount', async (req, res) => {
 
 // Update payment status endpoint: paid / pia / owes without adding another admin-table column
 app.post('/api/admin/update-payment-status', async (req, res) => {
-    const { password, sessionToken, playerId, status, piaDate } = req.body;
+    const { password, sessionToken, playerId, status } = req.body;
     if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
 
     const normalizedPlayerId = parseInt(playerId, 10);
@@ -7269,15 +7157,15 @@ app.post('/api/admin/update-payment-status', async (req, res) => {
             player.paymentMethod = normalizeCollectionPaymentMethod(req.body?.paymentMethod, player.paymentMethod || 'E-Transfer');
             applyPaymentStatusToPlayer(player, 'paid', { ensureAmount: true, defaultAmount: 15 });
         } else if (paymentStatus === 'pia') {
-            applyPaymentStatusToPlayer(player, 'pia', { piaDate });
+            applyPaymentStatusToPlayer(player, 'pia');
         } else {
             applyPaymentStatusToPlayer(player, 'owes');
         }
 
         if (pool) {
             await pool.query(
-                'UPDATE players SET paid = $1, paid_amount = $2, payment_status = $3, payment_method = $4, pia_date = $5 WHERE id = $6',
-                [player.paid, player.paidAmount, normalizePaymentStatus(player.paymentStatus, player), player.paymentMethod || null, normalizePiaDate(player.piaDate) || null, normalizedPlayerId]
+                'UPDATE players SET paid = $1, paid_amount = $2, payment_status = $3, payment_method = $4 WHERE id = $5',
+                [player.paid, player.paidAmount, normalizePaymentStatus(player.paymentStatus, player), player.paymentMethod || null, normalizedPlayerId]
             );
         }
 
