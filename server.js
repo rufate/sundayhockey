@@ -1820,6 +1820,7 @@ function buildPersistedStateFingerprint(snapshot = null) {
         waitlist: payload.waitlist,
         cancelledRegistrations: payload.cancelledRegistrations,
         regularSkatersByDay: payload.regularSkatersByDay,
+        extraGoalieContacts: payload.extraGoalieContacts,
         persistentAdminRatings: payload.persistentAdminRatings,
         customSignupCode: payload.customSignupCode,
         scheduleMode: payload.scheduleMode,
@@ -2120,13 +2121,30 @@ async function initDatabase() {
     }
 }
 
+function parsePersistedSettingValue(value) {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    if (!trimmed) return value;
+    try {
+        return JSON.parse(trimmed);
+    } catch {
+        return value;
+    }
+}
+
+function normalizePersistedGoalieContacts(value, fallback = []) {
+    const parsed = parsePersistedSettingValue(value);
+    if (!Array.isArray(parsed)) return Array.isArray(fallback) ? fallback : [];
+    return parsed.map(normalizeGoalieContact).filter(g => g.firstName && g.lastName);
+}
+
 async function loadDataFromDB() {
     if (!pool) return;
     try {
         const settingsRes = await pool.query('SELECT * FROM settings');
         const settings = {};
         settingsRes.rows.forEach(row => {
-            settings[row.key] = row.value;
+            settings[row.key] = parsePersistedSettingValue(row.value);
         });
         
         if (settings.playerSpots) playerSpots = settings.playerSpots;
@@ -2144,7 +2162,9 @@ async function loadDataFromDB() {
         if (settings.currentWeekData) currentWeekData = settings.currentWeekData;
         if (settings.cancelledRegistrations) cancelledRegistrations = Array.isArray(settings.cancelledRegistrations) ? settings.cancelledRegistrations : [];
         if (settings.persistentAdminRatings) persistentAdminRatings = normalizePersistentAdminRatings(settings.persistentAdminRatings);
-        if (settings.extraGoalieContacts) extraGoalieContacts = Array.isArray(settings.extraGoalieContacts) ? settings.extraGoalieContacts.map(normalizeGoalieContact).filter(g => g.firstName && g.lastName) : EXTRA_GOALIE_CONTACTS.map(goalie => ({ ...goalie }));
+        if (settings.extraGoalieContacts !== undefined) {
+            extraGoalieContacts = normalizePersistedGoalieContacts(settings.extraGoalieContacts, extraGoalieContacts);
+        }
         if (settings.customSignupCode !== undefined) customSignupCode = String(settings.customSignupCode || '').trim();
         if (settings.editableDefaultSignupCode !== undefined) editableDefaultSignupCode = /^\d{4}$/.test(String(settings.editableDefaultSignupCode || '').trim()) ? String(settings.editableDefaultSignupCode).trim() : DEFAULT_SIGNUP_CODE;
         if (settings.weeklyDefaultSignupCodes !== undefined) weeklyDefaultSignupCodes = normalizeWeeklyDefaultSignupCodes(settings.weeklyDefaultSignupCodes);
@@ -2275,8 +2295,8 @@ async function loadDataFromDB() {
                 regularSkatersByDay = normalizeRegularSkatersByDayMap({});
             }
         }
-                if (!rosterReleased) collectorPageEnabled = false; // weekly reset/default guard
-if (appSettings.persistentAdminRatings !== undefined) {
+        if (!rosterReleased) collectorPageEnabled = false; // weekly reset/default guard
+        if (appSettings.persistentAdminRatings !== undefined) {
             try {
                 persistentAdminRatings = normalizePersistentAdminRatings(JSON.parse(appSettings.persistentAdminRatings || '{}'));
             } catch {
@@ -2284,11 +2304,11 @@ if (appSettings.persistentAdminRatings !== undefined) {
             }
         }
         if (appSettings.extraGoalieContacts !== undefined) {
-            try {
-                const parsedExtraGoalies = JSON.parse(appSettings.extraGoalieContacts || '[]');
-                extraGoalieContacts = Array.isArray(parsedExtraGoalies) ? parsedExtraGoalies.map(normalizeGoalieContact).filter(g => g.firstName && g.lastName) : extraGoalieContacts;
-            } catch {
-                extraGoalieContacts = Array.isArray(extraGoalieContacts) ? extraGoalieContacts : EXTRA_GOALIE_CONTACTS.map(goalie => ({ ...goalie }));
+            const appExtraGoalies = normalizePersistedGoalieContacts(appSettings.extraGoalieContacts, null);
+            // Prefer a non-empty app_settings list, but do not let a stale blank app_settings row wipe
+            // the older settings.extraGoalieContacts list during deploy/startup.
+            if (appExtraGoalies.length || !Array.isArray(extraGoalieContacts) || !extraGoalieContacts.length) {
+                extraGoalieContacts = appExtraGoalies;
             }
         }
 
