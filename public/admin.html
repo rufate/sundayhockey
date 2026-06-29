@@ -525,7 +525,7 @@
 
         .payment-stats {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
             gap: 15px;
             text-align: center;
             margin-bottom: 15px;
@@ -6236,10 +6236,18 @@ th, td{padding:2px 3px !important;}
 
 <div class="payment-summary-box">
 <h3>💰 Payment Summary (Admin Only)</h3>
-<div class="payment-stats">
+<div class="payment-stats payment-stats-expanded">
 <div class="payment-stat">
-<div class="payment-stat-value" id="totalCollected">$15.00</div>
+<div class="payment-stat-value" id="totalCollected">$0.00</div>
 <div class="payment-stat-label">Total Collected</div>
+</div>
+<div class="payment-stat">
+<div class="payment-stat-value" id="cashCollected">$0.00</div>
+<div class="payment-stat-label">Cash</div>
+</div>
+<div class="payment-stat">
+<div class="payment-stat-value" id="etransferCollected">$0.00</div>
+<div class="payment-stat-label">ET$</div>
 </div>
 <div class="payment-stat">
 <div class="payment-stat-value" id="paidCountDisplay">0</div>
@@ -8740,9 +8748,26 @@ ${rosterLink}
                 maxGoalies = data.maxGoalies || 2;
                 currentGoalies = data.goalieCount;
                 currentTotalPaid = parseFloat(data.totalPaid) || 0;
+                const paymentSummaryPlayers = Array.isArray(data.players) ? data.players : [];
+                const paymentCashTotal = paymentSummaryPlayers.reduce((sum, p) => {
+                    const amount = parseFloat(p.paidAmount);
+                    const method = String(p.paymentMethod || '').toLowerCase();
+                    if (!Number.isFinite(amount) || amount <= 0) return sum;
+                    return method.includes('cash') ? sum + amount : sum;
+                }, 0);
+                const paymentEtTotal = paymentSummaryPlayers.reduce((sum, p) => {
+                    const amount = parseFloat(p.paidAmount);
+                    const method = String(p.paymentMethod || '').toLowerCase();
+                    if (!Number.isFinite(amount) || amount <= 0) return sum;
+                    return method.includes('cash') ? sum : sum + amount;
+                }, 0);
                 
                 // Update payment summary
                 document.getElementById('totalCollected').innerText = '$' + currentTotalPaid.toFixed(2);
+                const cashCollectedEl = document.getElementById('cashCollected');
+                if (cashCollectedEl) cashCollectedEl.innerText = '$' + paymentCashTotal.toFixed(2);
+                const etransferCollectedEl = document.getElementById('etransferCollected');
+                if (etransferCollectedEl) etransferCollectedEl.innerText = '$' + paymentEtTotal.toFixed(2);
                 document.getElementById('paidCountDisplay').innerText = data.paidCount || 0;
                 document.getElementById('unpaidCountDisplay').innerText = data.unpaidCount || 0;
                 
@@ -11924,5 +11949,390 @@ document.addEventListener('keydown', function(e){
     margin-top: 0;
 }
 </style>
+
+
+<style id="adminSafeUpgradeStyleV1">
+/* Safe admin upgrades: status card, section summaries, accordion, search, balance score. */
+.admin-weekly-status-card {
+    background: linear-gradient(135deg, #13233a, #173822);
+    border: 2px solid #4a90e2;
+    border-radius: 14px;
+    padding: 16px;
+    margin: 0 0 18px 0;
+    box-shadow: 0 0 18px rgba(74,144,226,0.18);
+}
+.admin-weekly-status-card h3 {
+    margin: 0 0 12px 0;
+    color: #fff;
+    font-size: 1.15rem;
+}
+.admin-weekly-status-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(120px, 1fr));
+    gap: 10px;
+}
+.admin-weekly-status-item {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 10px;
+    min-height: 58px;
+}
+.admin-weekly-status-label {
+    color: #aebdcc;
+    font-size: 0.78rem;
+    margin-bottom: 4px;
+}
+.admin-weekly-status-value {
+    color: #fff;
+    font-weight: 800;
+    font-size: 1rem;
+    line-height: 1.2;
+}
+.admin-section-live-summary,
+.admin-collapsible-live-summary {
+    display: block;
+    flex: 1 1 auto;
+    color: #b9c7d6;
+    font-size: 0.86rem;
+    font-weight: 600;
+    line-height: 1.2;
+    margin-left: 8px;
+    text-align: right;
+}
+.mobile-collapse-title .admin-collapsible-live-summary {
+    display: block;
+    margin: 6px 0 0 0;
+    text-align: left;
+}
+.admin-player-search-wrap {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin: 10px 0 12px 0;
+}
+.admin-player-search-wrap input {
+    flex: 1;
+    margin: 0 !important;
+}
+.admin-player-search-clear {
+    width: auto !important;
+    min-width: 74px;
+    margin: 0 !important;
+    background: #555 !important;
+}
+.admin-balance-score-card {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin: 10px 0 12px 0;
+    color: #fff;
+    display: none;
+}
+.admin-balance-score-card.active { display: block; }
+.admin-balance-score-card strong { color: #4CAF50; }
+@media (max-width: 700px) {
+    .admin-weekly-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .admin-weekly-status-card { padding: 12px; }
+    .admin-section-live-summary,
+    .admin-collapsible-live-summary { text-align:left; margin-left:0; margin-top:5px; font-size:0.8rem; }
+    .admin-player-search-wrap { flex-direction: column; align-items: stretch; }
+    .admin-player-search-clear { width:100% !important; }
+}
+</style>
+<script id="adminSafeUpgradeScriptV1">
+(function () {
+    'use strict';
+
+    const STORAGE_KEY_PREFIX = 'adminSafeSectionOpen:';
+    let summaryUpdatePending = false;
+    let accordionLock = false;
+    let playerSearchTerm = '';
+
+    function safeText(el) { return el ? String(el.textContent || '').trim() : ''; }
+    function byId(id) { return document.getElementById(id); }
+    function getNumText(id) { return safeText(byId(id)) || '0'; }
+
+    function sectionKey(section) {
+        if (!section) return 'unknown';
+        if (section.id) return section.id;
+        const header = section.querySelector('.mobile-collapse-title, .admin-collapsible-title, .admin-ui-collapsible-title, h1, h2, h3, .section-header');
+        const text = safeText(header).replace(/Tap to expand|Tap to collapse|Snapshots hidden|hidden\. Tap to expand\./gi, '').trim();
+        return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'section';
+    }
+
+    function isCollapsibleSection(section) {
+        return !!section && (
+            section.classList.contains('mobile-collapsible') ||
+            section.classList.contains('admin-collapsible-section') ||
+            section.classList.contains('admin-ui-collapsible-section')
+        );
+    }
+
+    function isSectionOpen(section) {
+        if (!section) return false;
+        if (section.classList.contains('mobile-collapsible')) return !section.classList.contains('is-collapsed');
+        if (section.classList.contains('admin-collapsible-section')) return !section.classList.contains('admin-collapsed');
+        if (section.classList.contains('admin-ui-collapsible-section')) return !section.classList.contains('admin-ui-collapsed');
+        return true;
+    }
+
+    function setSectionOpen(section, open, persist = true) {
+        if (!isCollapsibleSection(section)) return;
+        section.classList.toggle('is-collapsed', !open);
+        section.classList.toggle('admin-collapsed', !open);
+        section.classList.toggle('admin-ui-collapsed', !open);
+        const header = section.querySelector('.mobile-collapse-header, .admin-collapsible-title, .admin-ui-collapsible-title');
+        if (header) header.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (persist) {
+            try { localStorage.setItem(STORAGE_KEY_PREFIX + sectionKey(section), open ? 'open' : 'closed'); } catch(e) {}
+        }
+    }
+
+    function allCollapsibleSections() {
+        return Array.from(document.querySelectorAll('.mobile-collapsible, .admin-collapsible-section, .admin-ui-collapsible-section'));
+    }
+
+    function restoreSectionState() {
+        allCollapsibleSections().forEach(section => {
+            try {
+                const value = localStorage.getItem(STORAGE_KEY_PREFIX + sectionKey(section));
+                if (value === 'open') setSectionOpen(section, true, false);
+                if (value === 'closed') setSectionOpen(section, false, false);
+            } catch(e) {}
+        });
+    }
+
+    function enableAccordion() {
+        document.addEventListener('click', function (event) {
+            if (accordionLock) return;
+            const header = event.target.closest('.mobile-collapse-header, .admin-collapsible-title, .admin-ui-collapsible-title');
+            if (!header) return;
+            const tag = event.target && event.target.tagName ? event.target.tagName.toLowerCase() : '';
+            if (['button','input','select','textarea','a','label'].includes(tag)) return;
+            const section = header.closest('.mobile-collapsible, .admin-collapsible-section, .admin-ui-collapsible-section');
+            if (!section) return;
+            window.setTimeout(function () {
+                if (!isSectionOpen(section)) {
+                    try { localStorage.setItem(STORAGE_KEY_PREFIX + sectionKey(section), 'closed'); } catch(e) {}
+                    return;
+                }
+                accordionLock = true;
+                allCollapsibleSections().forEach(other => {
+                    if (other !== section) setSectionOpen(other, false, true);
+                });
+                setSectionOpen(section, true, true);
+                accordionLock = false;
+            }, 0);
+        }, true);
+    }
+
+    function readDateSummary() {
+        const date = safeText(byId('currentDateDisplay')) || (byId('dateInput') && byId('dateInput').value) || '--';
+        const time = safeText(byId('currentTime')) || safeText(byId('timeInput')) || '--';
+        const loc = safeText(byId('currentLocation')) || safeText(byId('locationInput')) || '--';
+        return { date, time, loc };
+    }
+
+    function getRosterState() {
+        const status = safeText(byId('rosterStatusDisplay')) || (window.currentRosterReleased ? 'RELEASED' : 'NOT RELEASED');
+        return status.replace(/\s+/g, ' ');
+    }
+
+    function getPiaCount() {
+        const players = Array.isArray(window.latestAdminPlayers) ? window.latestAdminPlayers : [];
+        return players.filter(p => String(p.paymentStatus || '').toLowerCase() === 'pia').length;
+    }
+
+    function ensureWeeklyStatusCard() {
+        if (byId('adminWeeklyStatusCard')) return;
+        const panel = byId('adminPanel');
+        if (!panel) return;
+        const card = document.createElement('div');
+        card.id = 'adminWeeklyStatusCard';
+        card.className = 'admin-weekly-status-card';
+        card.innerHTML = `
+            <h3>📌 Weekly Game Status</h3>
+            <div class="admin-weekly-status-grid">
+                <div class="admin-weekly-status-item"><div class="admin-weekly-status-label">Game</div><div class="admin-weekly-status-value" id="weeklyStatusGame">--</div></div>
+                <div class="admin-weekly-status-item"><div class="admin-weekly-status-label">Players</div><div class="admin-weekly-status-value" id="weeklyStatusPlayers">--</div></div>
+                <div class="admin-weekly-status-item"><div class="admin-weekly-status-label">Goalies</div><div class="admin-weekly-status-value" id="weeklyStatusGoalies">--</div></div>
+                <div class="admin-weekly-status-item"><div class="admin-weekly-status-label">Roster</div><div class="admin-weekly-status-value" id="weeklyStatusRoster">--</div></div>
+                <div class="admin-weekly-status-item"><div class="admin-weekly-status-label">Payments</div><div class="admin-weekly-status-value" id="weeklyStatusPayments">--</div></div>
+                <div class="admin-weekly-status-item"><div class="admin-weekly-status-label">PIA</div><div class="admin-weekly-status-value" id="weeklyStatusPia">--</div></div>
+                <div class="admin-weekly-status-item"><div class="admin-weekly-status-label">Waitlist</div><div class="admin-weekly-status-value" id="weeklyStatusWaitlist">--</div></div>
+                <div class="admin-weekly-status-item"><div class="admin-weekly-status-label">Now</div><div class="admin-weekly-status-value" id="weeklyStatusNow">--</div></div>
+            </div>`;
+        const after = document.querySelector('.admin-header-box');
+        if (after && after.parentNode) after.parentNode.insertBefore(card, after.nextSibling);
+        else panel.insertBefore(card, panel.firstChild);
+    }
+
+    function ensurePlayerSearch() {
+        const box = document.querySelector('.registered-players-box');
+        if (!box || byId('adminPlayerSearch')) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'admin-player-search-wrap';
+        wrap.innerHTML = `<input id="adminPlayerSearch" type="search" placeholder="🔍 Search registered players..." autocomplete="off"/><button type="button" class="control-btn admin-player-search-clear" id="adminPlayerSearchClear">Clear</button>`;
+        const addForm = box.querySelector('.add-player-form');
+        if (addForm) box.insertBefore(wrap, addForm); else box.insertBefore(wrap, box.firstChild.nextSibling);
+        const input = byId('adminPlayerSearch');
+        const clear = byId('adminPlayerSearchClear');
+        input.addEventListener('input', function () {
+            playerSearchTerm = input.value.trim().toLowerCase();
+            filterRegisteredPlayers();
+        });
+        clear.addEventListener('click', function () {
+            input.value = '';
+            playerSearchTerm = '';
+            filterRegisteredPlayers();
+            input.focus();
+        });
+    }
+
+    function filterRegisteredPlayers() {
+        const rows = Array.from(document.querySelectorAll('#playerList tr'));
+        if (!rows.length) return;
+        rows.forEach(row => {
+            if (!playerSearchTerm) { row.style.display = ''; return; }
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(playerSearchTerm) ? '' : 'none';
+        });
+    }
+
+    function setSummaryForSection(selector, text) {
+        const section = document.querySelector(selector);
+        if (!section) return;
+        const header = section.querySelector('.mobile-collapse-title, .admin-collapsible-title, .admin-ui-collapsible-title, :scope > h3, :scope > .section-header');
+        if (!header) return;
+        let target = header.querySelector('.admin-collapsible-live-summary');
+        if (!target) {
+            target = document.createElement('span');
+            target.className = 'admin-collapsible-live-summary';
+            const arrow = header.querySelector('.admin-collapse-arrow, .admin-ui-collapse-arrow, .mobile-collapse-chevron');
+            if (arrow && arrow.parentNode === header) header.insertBefore(target, arrow);
+            else header.appendChild(target);
+        }
+        target.textContent = text;
+    }
+
+    function ensureBalanceScoreCard() {
+        if (byId('adminBalanceScoreCard')) return;
+        const preview = byId('releasedRosterPreview');
+        if (!preview) return;
+        const card = document.createElement('div');
+        card.id = 'adminBalanceScoreCard';
+        card.className = 'admin-balance-score-card';
+        card.innerHTML = `<strong>Balance:</strong> <span id="adminBalanceScoreText">--</span>`;
+        const teams = preview.querySelector('.preview-teams');
+        if (teams) preview.insertBefore(card, teams);
+        else preview.appendChild(card);
+    }
+
+    function updateBalanceScore() {
+        ensureBalanceScoreCard();
+        const card = byId('adminBalanceScoreCard');
+        const out = byId('adminBalanceScoreText');
+        const white = safeText(byId('whiteAvgPreview')).match(/[0-9]+(?:\.[0-9]+)?/);
+        const dark = safeText(byId('darkAvgPreview')).match(/[0-9]+(?:\.[0-9]+)?/);
+        if (!card || !out || !white || !dark) return;
+        const w = parseFloat(white[0]);
+        const d = parseFloat(dark[0]);
+        if (!Number.isFinite(w) || !Number.isFinite(d)) return;
+        const diff = Math.abs(w - d);
+        let label = 'Needs Review';
+        if (diff <= 0.15) label = 'Excellent';
+        else if (diff <= 0.35) label = 'Good';
+        else if (diff <= 0.60) label = 'Fair';
+        out.textContent = `${label} · Avg difference ${diff.toFixed(2)}`;
+        card.classList.add('active');
+    }
+
+    function updateWeeklyStatusAndSummaries() {
+        ensureWeeklyStatusCard();
+        ensurePlayerSearch();
+        ensureBalanceScoreCard();
+
+        const details = readDateSummary();
+        const playerCount = getNumText('currentPlayerCount') || getNumText('playerCount');
+        const playerSpots = getNumText('currentPlayerSpotsDisplay');
+        const goalieCount = getNumText('goalieCountDisplay');
+        const goalieMax = safeText(byId('currentGoalieCount')).includes('/') ? safeText(byId('currentGoalieCount')).split('/')[1] : '';
+        const waitlistCount = getNumText('waitlistCount');
+        const paidCount = getNumText('paidCountDisplay');
+        const owingCount = getNumText('unpaidCountDisplay');
+        const piaCount = String(getPiaCount());
+        const totalCollected = safeText(byId('totalCollected')) || '$0.00';
+        const cashCollected = safeText(byId('cashCollected')) || '$0.00';
+        const etransferCollected = safeText(byId('etransferCollected')) || '$0.00';
+        const roster = getRosterState();
+        const code = safeText(byId('currentCodeDisplay')) || '';
+        const etNow = safeText(byId('etNowLine')) || new Date().toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
+
+        const set = (id, value) => { const el = byId(id); if (el) el.textContent = value; };
+        set('weeklyStatusGame', `${details.date} · ${details.time}`);
+        set('weeklyStatusPlayers', `${playerCount}/${playerSpots}`);
+        set('weeklyStatusGoalies', goalieMax ? `${goalieCount}/${goalieMax}` : goalieCount);
+        set('weeklyStatusRoster', roster);
+        set('weeklyStatusPayments', `${paidCount} paid · ${owingCount} owing`);
+        set('weeklyStatusPia', piaCount);
+        set('weeklyStatusWaitlist', waitlistCount);
+        set('weeklyStatusNow', etNow);
+
+        setSummaryForSection('.game-setup-section', `${details.date} · ${details.time} · ${playerCount}/${playerSpots} players${code ? ' · Code ' + code : ''}`);
+        setSummaryForSection('.registered-players-box', `${playerCount}/${playerSpots} registered · ${waitlistCount} waitlist · ${piaCount} PIA`);
+        setSummaryForSection('.waitlist-section', `${waitlistCount} waitlist`);
+        setSummaryForSection('.payment-summary-box', `${paidCount} paid · ${owingCount} owing · ${piaCount} PIA · ${totalCollected} · Cash ${cashCollected} · ET$ ${etransferCollected}`);
+        setSummaryForSection('.roster-status', roster);
+        setSummaryForSection('.snapshot-pro-section', `${safeText(byId('snapshotStatCount')) || '--'} snapshots`);
+        setSummaryForSection('.history-delete-box', 'History / delete old history');
+        setSummaryForSection('.compact-announcement-control, .announcement-control', `${safeText(byId('announcementStatus')) || 'OFF'}`);
+        updateBalanceScore();
+        filterRegisteredPlayers();
+    }
+
+    function scheduleSummaryUpdate() {
+        if (summaryUpdatePending) return;
+        summaryUpdatePending = true;
+        window.requestAnimationFrame(function () {
+            summaryUpdatePending = false;
+            updateWeeklyStatusAndSummaries();
+        });
+    }
+
+    function wrapAsyncFunction(name) {
+        const original = window[name];
+        if (typeof original !== 'function' || original.__adminSafeWrapped) return;
+        const wrapped = function () {
+            const result = original.apply(this, arguments);
+            if (result && typeof result.then === 'function') {
+                return result.finally(scheduleSummaryUpdate);
+            }
+            scheduleSummaryUpdate();
+            return result;
+        };
+        wrapped.__adminSafeWrapped = true;
+        window[name] = wrapped;
+    }
+
+    function initSafeAdminUpgrade() {
+        ensureWeeklyStatusCard();
+        ensurePlayerSearch();
+        ensureBalanceScoreCard();
+        restoreSectionState();
+        enableAccordion();
+        ['loadData','loadSettings','refreshSettings','loadAppSettings','loadReleasedRosterPreview','saveSchedules','updateDetails','toggleCode','manualReset','releaseRoster','autoRebalanceRoster','swapSelectedRosterPlayers'].forEach(wrapAsyncFunction);
+        scheduleSummaryUpdate();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initSafeAdminUpgrade);
+    } else {
+        initSafeAdminUpgrade();
+    }
+})();
+</script>
+
 </body>
 </html>
