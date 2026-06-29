@@ -12109,7 +12109,12 @@ document.addEventListener('keydown', function(e){
                 }
                 accordionLock = true;
                 allCollapsibleSections().forEach(other => {
-                    if (other !== section) setSectionOpen(other, false, true);
+                    if (other === section) return;
+                    // Keep nested sections usable. When Schedules is opened inside
+                    // Game Setup, do not close its parent container; likewise do
+                    // not close child sections when opening a parent.
+                    if (other.contains(section) || section.contains(other)) return;
+                    setSectionOpen(other, false, true);
                 });
                 setSectionOpen(section, true, true);
                 accordionLock = false;
