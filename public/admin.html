@@ -3029,6 +3029,9 @@ button {
     max-width:100%;
 }
 #playerList .nickname-tap-target{
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
     cursor:pointer;
     user-select:none;
     border-bottom:1px dotted rgba(255,255,255,0.22);
@@ -8913,7 +8916,9 @@ ${rosterLink}
                                 <div class="player-name-nickname-row">
                                     <span class="player-name-main nickname-tap-target ${(p.nickname || '').trim() ? 'has-nickname' : ''}"
                                         title="Double-tap to edit nickname"
-                                        onclick="handleNicknameNameTap(${p.id}, event)">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}</span>
+                                        onclick="handleNicknameNameTap(${p.id}, event)"
+                                        ondblclick="handleNicknameNameDoubleTap(${p.id}, event)"
+                                        ontouchend="handleNicknameNameTouch(${p.id}, event)">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}</span>
                                 </div>
                                 <span class="player-phone-sub">${escapeHtml(p.phone || '')}</span>
                                 ${p.registeredAt ? `<span class="player-time-sub"><span class="locked-time-chip" title="Locked signup timestamp — saved when the player registered and does not change">${formatLockedSignupTime(p.registeredAt)}</span></span>` : ``}
@@ -9479,12 +9484,31 @@ function todayDateInputValue(){
 
         const nicknameTapTracker = {};
 
+        function handleNicknameNameDoubleTap(id, event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            nicknameTapTracker[String(id)] = 0;
+            openNicknamePrompt(id);
+        }
+
         function handleNicknameNameTap(id, event) {
+            if (event) event.stopPropagation();
             const now = Date.now();
             const key = String(id);
-            if (nicknameTapTracker[key] && (now - nicknameTapTracker[key]) < 450) {
-                nicknameTapTracker[key] = 0;
-                openNicknamePrompt(id);
+            if (nicknameTapTracker[key] && (now - nicknameTapTracker[key]) < 500) {
+                handleNicknameNameDoubleTap(id, event);
+            } else {
+                nicknameTapTracker[key] = now;
+            }
+        }
+
+        function handleNicknameNameTouch(id, event) {
+            const now = Date.now();
+            const key = String(id);
+            if (nicknameTapTracker[key] && (now - nicknameTapTracker[key]) < 650) {
+                handleNicknameNameDoubleTap(id, event);
             } else {
                 nicknameTapTracker[key] = now;
             }
