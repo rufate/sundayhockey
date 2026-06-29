@@ -11979,7 +11979,7 @@ document.addEventListener('keydown', function(e){
     min-height: 58px;
 }
 .admin-weekly-status-label {
-    color: #aebdcc;
+    color: #cbd6e2;
     font-size: 0.78rem;
     margin-bottom: 4px;
 }
@@ -12024,9 +12024,23 @@ document.addEventListener('keydown', function(e){
 }
 .admin-balance-score-card.active { display: block; }
 .admin-balance-score-card strong { color: #4CAF50; }
+.game-setup-section .mobile-collapse-header {
+    gap: 18px;
+}
+.game-setup-section .mobile-collapse-chevron {
+    width: 34px;
+    height: 34px;
+    font-size: 1rem;
+    margin-left: auto;
+}
 @media (max-width: 700px) {
     .admin-weekly-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .admin-weekly-status-card { padding: 12px; }
+    .game-setup-section .mobile-collapse-chevron {
+        width: 34px;
+        height: 34px;
+        font-size: 1rem;
+    }
     .admin-section-live-summary,
     .admin-collapsible-live-summary { text-align:left; margin-left:0; margin-top:5px; font-size:0.8rem; }
 }
@@ -12165,7 +12179,7 @@ document.addEventListener('keydown', function(e){
                 <div class="admin-weekly-status-item"><div class="admin-weekly-status-label">Payments</div><div class="admin-weekly-status-value" id="weeklyStatusPayments">--</div></div>
                 <div class="admin-weekly-status-item"><div class="admin-weekly-status-label">PIA</div><div class="admin-weekly-status-value" id="weeklyStatusPia">--</div></div>
                 <div class="admin-weekly-status-item"><div class="admin-weekly-status-label">Waitlist</div><div class="admin-weekly-status-value" id="weeklyStatusWaitlist">--</div></div>
-                <div class="admin-weekly-status-item"><div class="admin-weekly-status-label">Now</div><div class="admin-weekly-status-value" id="weeklyStatusNow">--</div></div>
+                <div class="admin-weekly-status-item"><div class="admin-weekly-status-label">Current Time</div><div class="admin-weekly-status-value" id="weeklyStatusNow">--</div></div>
             </div>`;
         const after = document.querySelector('.admin-header-box');
         if (after && after.parentNode) after.parentNode.insertBefore(card, after.nextSibling);
@@ -12245,16 +12259,16 @@ document.addEventListener('keydown', function(e){
         if (gameStatusEl) {
             gameStatusEl.innerHTML = `${escapeWeeklyStatusHtml(details.date)} · ${escapeWeeklyStatusHtml(details.time)}<span class="admin-weekly-status-arena">Arena: ${escapeWeeklyStatusHtml(details.loc)}</span>`;
         }
-        set('weeklyStatusPlayers', `${playerCount}/${playerSpots}`);
+        set('weeklyStatusPlayers', `${playerCount} of ${playerSpots}`);
         set('weeklyStatusGoalies', goalieMax ? `${goalieCount}/${goalieMax}` : goalieCount);
         set('weeklyStatusRoster', roster);
-        set('weeklyStatusPayments', `${paidCount} paid · ${owingCount} owing`);
+        const paymentsEl = byId('weeklyStatusPayments');
+        if (paymentsEl) paymentsEl.innerHTML = `Paid: ${escapeWeeklyStatusHtml(paidCount)}<br>Owing: ${escapeWeeklyStatusHtml(owingCount)}`;
         set('weeklyStatusPia', piaCount);
         set('weeklyStatusWaitlist', waitlistCount);
         set('weeklyStatusNow', etNow);
 
-        setSummaryForSection('.game-setup-section', `${details.date} · ${details.time} · ${details.loc} · ${playerCount}/${playerSpots} players${code ? ' · Code ' + code : ''}`);
-        setSummaryForSection('.registered-players-box', `${playerCount}/${playerSpots} registered · ${waitlistCount} waitlist · ${piaCount} PIA`);
+        setSummaryForSection('.game-setup-section', `${details.date} · ${details.time} · ${details.loc}${code ? ' · Code ' + code : ''}`);
         setSummaryForSection('.waitlist-section', `${waitlistCount} waitlist`);
         setSummaryForSection('.payment-summary-box', `${paidCount} paid · ${owingCount} owing · ${piaCount} PIA · ${totalCollected} · Cash ${cashCollected} · ET$ ${etransferCollected}`);
         setSummaryForSection('.roster-status', roster);
