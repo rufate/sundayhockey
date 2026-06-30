@@ -8746,6 +8746,8 @@ ${rosterLink}
 
                 playersCount = data.players.length;
                 maxGoalies = data.maxGoalies || 2;
+                window.currentMaxSkaters = Number(data.maxSkaters || data.maxRosterSpots || 20) || 20;
+                window.currentPlayerSpotsRemaining = Number(data.playerSpots || data.playerSpotsRemaining || 0) || 0;
                 currentGoalies = data.goalieCount;
                 currentTotalPaid = parseFloat(data.totalPaid) || 0;
                 const paymentSummaryPlayers = Array.isArray(data.players) ? data.players : [];
@@ -8772,8 +8774,8 @@ ${rosterLink}
                 document.getElementById('unpaidCountDisplay').innerText = data.unpaidCount || 0;
                 
                 // Update counts
-                document.getElementById('currentPlayerSpotsDisplay').innerText = data.playerSpots;
-                document.getElementById('playerSpotInput').value = data.playerSpots;
+                document.getElementById('currentPlayerSpotsDisplay').innerText = window.currentMaxSkaters;
+                document.getElementById('playerSpotInput').value = window.currentMaxSkaters;
                 document.getElementById('currentPlayerCount').innerText = data.playerCount;
                 
                 const goalieDisplay = document.getElementById('currentGoalieCount');
@@ -9133,8 +9135,7 @@ function todayDateInputValue(){
         });
 
         async function promotePlayer(id, forcedTeam = '') {
-            const spotsDisplay = document.getElementById('currentPlayerSpotsDisplay').innerText;
-            const spots = parseInt(spotsDisplay, 10);
+            const spots = Number(window.currentPlayerSpotsRemaining || 0) || 0;
             let assignTeam = forcedTeam;
 
             if (currentRosterReleased && assignTeam !== 'White' && assignTeam !== 'Dark') {
@@ -9547,8 +9548,12 @@ function todayDateInputValue(){
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    document.getElementById('currentPlayerSpotsDisplay').innerText = data.spots;
-                    alert("Player spots updated to: " + data.spots);
+                    window.currentMaxSkaters = Number(data.maxSkaters || data.spots || newSpots || 20) || 20;
+                    window.currentPlayerSpotsRemaining = Number(data.playerSpotsRemaining || 0) || 0;
+                    document.getElementById('currentPlayerSpotsDisplay').innerText = window.currentMaxSkaters;
+                    document.getElementById('playerSpotInput').value = window.currentMaxSkaters;
+                    updateWeeklyStatusAndSummaries();
+                    alert("Player spots updated to: " + window.currentMaxSkaters);
                 } else if (res.status === 401) {
                     logout();
                 }
@@ -12240,7 +12245,8 @@ document.addEventListener('keydown', function(e){
 
         const details = readDateSummary();
         const playerCount = getNumText('currentPlayerCount') || getNumText('playerCount');
-        const playerSpots = getNumText('currentPlayerSpotsDisplay');
+        const playerSpotsRemaining = Number(window.currentPlayerSpotsRemaining || 0) || 0;
+        const playerCapacity = Number(window.currentMaxSkaters) || (Number(playerCount) + Number(playerSpotsRemaining)) || 20;
         const goalieCount = getNumText('goalieCountDisplay');
         const goalieMax = safeText(byId('currentGoalieCount')).includes('/') ? safeText(byId('currentGoalieCount')).split('/')[1] : '';
         const waitlistCount = getNumText('waitlistCount');
@@ -12259,7 +12265,7 @@ document.addEventListener('keydown', function(e){
         if (gameStatusEl) {
             gameStatusEl.innerHTML = `${escapeWeeklyStatusHtml(details.date)} · ${escapeWeeklyStatusHtml(details.time)}<span class="admin-weekly-status-arena">Arena: ${escapeWeeklyStatusHtml(details.loc)}</span>`;
         }
-        set('weeklyStatusPlayers', `${playerCount} of ${playerSpots}`);
+        set('weeklyStatusPlayers', `${playerCount} of ${playerCapacity}`);
         set('weeklyStatusGoalies', goalieMax ? `${goalieCount}/${goalieMax}` : goalieCount);
         set('weeklyStatusRoster', roster);
         const paymentsEl = byId('weeklyStatusPayments');

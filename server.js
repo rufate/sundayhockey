@@ -242,8 +242,15 @@ app.use(schedulerCatchupMiddleware);
 
 // --- DATA STORE ---
 const MAX_SKATERS = 20;
+function normalizeSkaterCapacity(value, fallback = MAX_SKATERS) {
+    if (value === undefined || value === null || value === '') return fallback;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(0, Math.min(30, Math.floor(parsed)));
+}
+let configuredMaxSkaters = MAX_SKATERS;
 const MAX_ROSTER_SPOTS = 22;
-let playerSpots = MAX_SKATERS;
+let playerSpots = configuredMaxSkaters;
 let players = []; 
 let waitlist = [];
 let cancelledRegistrations = [];
@@ -1757,7 +1764,7 @@ async function checkWeeklyReset() {
         );
     }
 
-    playerSpots = MAX_SKATERS;
+    playerSpots = configuredMaxSkaters;
     players = [];
     waitlist = [];
     rosterReleased = false;
@@ -1816,6 +1823,7 @@ function buildPersistedStateFingerprint(snapshot = null) {
     const payload = snapshot || buildFullDataSnapshot();
     return JSON.stringify({
         playerSpots: payload.playerSpots,
+        configuredMaxSkaters: payload.configuredMaxSkaters,
         players: payload.players,
         waitlist: payload.waitlist,
         cancelledRegistrations: payload.cancelledRegistrations,
@@ -2147,7 +2155,8 @@ async function loadDataFromDB() {
             settings[row.key] = parsePersistedSettingValue(row.value);
         });
         
-        if (settings.playerSpots) playerSpots = settings.playerSpots;
+        if (settings.configuredMaxSkaters !== undefined) configuredMaxSkaters = normalizeSkaterCapacity(settings.configuredMaxSkaters, MAX_SKATERS);
+        if (settings.playerSpots !== undefined) playerSpots = normalizeSkaterCapacity(settings.playerSpots, 0);
         if (settings.gameLocation) gameLocation = settings.gameLocation;
         if (settings.gameTime) gameTime = settings.gameTime;
         if (settings.gameDate) gameDate = settings.gameDate;
@@ -2229,7 +2238,7 @@ async function loadDataFromDB() {
         
         // FIX: Recalculate playerSpots based on actual player count
         const nonGoalieCount = players.filter(p => !p.isGoalie).length;
-        playerSpots = Math.max(0, MAX_SKATERS - nonGoalieCount);
+        playerSpots = Math.max(0, configuredMaxSkaters - nonGoalieCount);
                 
         const waitlistRes = await pool.query('SELECT * FROM waitlist ORDER BY joined_at');
         waitlist = waitlistRes.rows.map(p => hydratePlayerRatingProfile({
@@ -2788,9 +2797,13 @@ async function createManualSnapshot(reason = 'manual-create-snapshot', req = nul
 function applySnapshotToMemory(snapshot) {
     if (!snapshot || typeof snapshot !== 'object') return;
 
-    playerSpots = snapshot.playerSpots ?? 20;
+    const snapshotCapacity = snapshot.configuredMaxSkaters ?? snapshot.maxSkaters ?? snapshot.skaterCapacity;
+    configuredMaxSkaters = normalizeSkaterCapacity(snapshotCapacity, MAX_SKATERS);
     players = Array.isArray(snapshot.players) ? snapshot.players.map(hydratePlayerRatingProfile) : [];
     waitlist = Array.isArray(snapshot.waitlist) ? snapshot.waitlist.map(hydratePlayerRatingProfile) : [];
+    playerSpots = snapshot.playerSpots !== undefined && snapshot.playerSpots !== null
+        ? normalizeSkaterCapacity(snapshot.playerSpots, 0)
+        : Math.max(0, configuredMaxSkaters - players.filter(p => !(p && p.isGoalie)).length);
     gameLocation = snapshot.gameLocation ?? gameLocation;
     gameTime = snapshot.gameTime ?? gameTime;
     gameDate = snapshot.gameDate ?? calculateNextGameDate();
@@ -2919,7 +2932,7 @@ async function restoreSnapshotItem(item, req, auditAction = 'restore-snapshot-re
         if (typeof s.playerSignupCode === 'string' && s.playerSignupCode.trim()) playerSignupCode = s.playerSignupCode.trim();
     }
 
-    playerSpots = Math.max(0, MAX_SKATERS - players.filter(p => !(p && p.isGoalie)).length);
+    playerSpots = Math.max(0, configuredMaxSkaters - players.filter(p => !(p && p.isGoalie)).length);
     await saveData('restore-selected-snapshot');
 
     try {
@@ -3188,6 +3201,7 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
 
         const settingsEntries = [
             ['playerSpots', playerSpots],
+            ['configuredMaxSkaters', configuredMaxSkaters],
             ['gameLocation', gameLocation],
             ['gameTime', gameTime],
             ['gameDate', gameDate],
@@ -3388,7 +3402,7 @@ async function runDatabaseSelfHeal(reason = 'self-heal') {
         for (const player of missingWaitlist) {
             if (!memoryWaitlistKeys.has(`${player.id}|${normalizePhoneDigits(player.phone)}`)) waitlist.push(hydratePlayerRatingProfile(player));
         }
-        playerSpots = Math.max(0, MAX_SKATERS - players.filter(p => !p.isGoalie).length);
+        playerSpots = Math.max(0, configuredMaxSkaters - players.filter(p => !p.isGoalie).length);
         const saveResult = await saveData(`self-heal-${reason}`);
         await appendDataAudit('self_heal', saveResult.ok ? 'success' : 'error', {
             reason, sourceFile: best.file, missingPlayers: missingPlayers.length, missingWaitlist: missingWaitlist.length, saveResult
@@ -3433,6 +3447,7 @@ function buildFullDataSnapshot() {
     return {
         snapshotVersion: 2,
         playerSpots,
+        configuredMaxSkaters,
         players,
         waitlist,
         cancelledRegistrations,
@@ -3532,7 +3547,7 @@ async function reconcileFromFileBackup() {
         }
 
         if (mergedPlayers || mergedWaitlist) {
-            playerSpots = Math.max(0, MAX_SKATERS - players.filter(p => !p.isGoalie).length);
+            playerSpots = Math.max(0, configuredMaxSkaters - players.filter(p => !p.isGoalie).length);
             console.log(`Reconciled best local snapshot into DB: ${mergedPlayers} players, ${mergedWaitlist} waitlist.`);
             await saveData('reconcile-best-local-snapshot');
         }
@@ -3646,12 +3661,15 @@ function loadDataFromFile() {
         const bestSnapshot = getBestLocalSnapshot();
         if (bestSnapshot && bestSnapshot.data) {
             const data = bestSnapshot.data;
-            playerSpots = data.playerSpots ?? 20;
+            configuredMaxSkaters = normalizeSkaterCapacity(data.configuredMaxSkaters ?? data.maxSkaters ?? data.skaterCapacity, MAX_SKATERS);
             players = Array.isArray(data.players) ? data.players.map(player => hydratePlayerRatingProfile({
                 ...player,
                 registeredAt: player.registeredAt || player.registered_at || player.createdAt || null
             })) : [];
             waitlist = Array.isArray(data.waitlist) ? data.waitlist.map(hydratePlayerRatingProfile) : [];
+            playerSpots = data.playerSpots !== undefined && data.playerSpots !== null
+                ? normalizeSkaterCapacity(data.playerSpots, 0)
+                : Math.max(0, configuredMaxSkaters - players.filter(p => !(p && p.isGoalie)).length);
             gameLocation = data.gameLocation ?? "Capri Recreation Complex";
             gameTime = data.gameTime ?? "Friday 9:30 PM";
             gameDate = data.gameDate ?? calculateNextGameDate();
@@ -5152,7 +5170,7 @@ app.get('/api/status', (req, res) => {
         goalieCount: goalieCount,
         goalieSpotsAvailable: MAX_GOALIES - goalieCount,
         maxGoalies: MAX_GOALIES,
-        maxSkaters: MAX_SKATERS,
+        maxSkaters: configuredMaxSkaters,
         maxRosterSpots: MAX_ROSTER_SPOTS,
         totalPlayers: players.length,
         isFull: playerSpots === 0,
@@ -5350,6 +5368,7 @@ app.post('/api/register-init', registrationLimiter, async (req, res) => {
     const {
         firstName,
         lastName,
+        nickname,
         phone,
         paymentMethod,
         rating,
@@ -5428,6 +5447,7 @@ app.post('/api/register-init', registrationLimiter, async (req, res) => {
             id: Date.now(),
             firstName: cleanFirstName,
             lastName: cleanLastName,
+            nickname: cleanNickname,
             phone: cleanPhone,
             paymentMethod,
             rating: skillProfile.finalRating,
@@ -5501,6 +5521,7 @@ app.post('/api/register-init', registrationLimiter, async (req, res) => {
         tempData: {
             firstName: cleanFirstName,
             lastName: cleanLastName,
+            nickname: cleanNickname,
             phone: cleanPhone,
             paymentMethod,
             rating: skillProfile.finalRating,
@@ -5547,6 +5568,7 @@ app.post('/api/register-final', async (req, res) => {
         id: Date.now(),
         firstName: tempData.firstName,
         lastName: tempData.lastName,
+        nickname: normalizeNickname(tempData.nickname),
         phone: tempData.phone,
         paymentMethod: tempData.paymentMethod,
         paid: false,
@@ -5691,7 +5713,7 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
                 });
 
                 players.splice(playerIndex, 1);
-                if (!player.isGoalie) playerSpots = Math.min(MAX_SKATERS, playerSpots + 1);
+                if (!player.isGoalie) playerSpots = Math.min(configuredMaxSkaters, playerSpots + 1);
 
                 const removedPlayerTeam = player.team === 'White' || player.team === 'Dark' ? player.team : null;
                 const rosterWasReleased = getEffectiveRosterReleasedState();
@@ -6185,7 +6207,7 @@ app.post('/api/admin/players-full', (req, res) => {
         playerCount,
         goalieCount,
         maxGoalies: MAX_GOALIES,
-        maxSkaters: MAX_SKATERS,
+        maxSkaters: configuredMaxSkaters,
         maxRosterSpots: MAX_ROSTER_SPOTS,
         totalPlayers: players.length,
         totalPaid: totalPaid.toFixed(2),
@@ -6619,7 +6641,7 @@ app.post('/api/admin/restore-backup', async (req, res) => {
         }
 
         // Always recalculate spots from the resulting live roster instead of trusting backup counts.
-        playerSpots = Math.max(0, MAX_SKATERS - players.filter(p => !(p && p.isGoalie)).length);
+        playerSpots = Math.max(0, configuredMaxSkaters - players.filter(p => !(p && p.isGoalie)).length);
 
         let historyRestoreResult = { restoredHistoryRows: 0, skippedHistoryRows: 0 };
         if (mode === 'replace' && restoreSettings === true && Array.isArray(backupData.historyRows)) {
@@ -6696,7 +6718,7 @@ app.post('/api/admin/players', (req, res) => {
         playerCount,
         goalieCount,
         maxGoalies: MAX_GOALIES,
-        maxSkaters: MAX_SKATERS,
+        maxSkaters: configuredMaxSkaters,
         maxRosterSpots: MAX_ROSTER_SPOTS,
         totalPlayers: players.length,
         totalPaid: totalPaid.toFixed(2),
@@ -7139,7 +7161,7 @@ app.post('/api/admin/add-player', async (req, res) => {
         return res.json({ success: true, player: waitlistPlayer, inWaitlist: true });
     }
     if (isGoalieBool && !isGoalieSpotsAvailable()) return res.status(400).json({ error: "Goalie spots are full (maximum 2)." });
-    if (!isGoalieBool && playerSpots <= 0) return res.status(400).json({ error: "Skater spots are full (maximum 20 skaters). Add this player to the waitlist instead." });
+    if (!isGoalieBool && playerSpots <= 0) return res.status(400).json({ error: "Skater spots are full. Add this player to the waitlist instead." });
     const nowIso = new Date().toISOString();
     const isLateRosterAddition = !!(rosterReleased && teamForLateAdd);
     const newPlayer = hydratePlayerRatingProfile({
@@ -7184,7 +7206,7 @@ app.post('/api/admin/remove-player', async (req, res) => {
         await runProtectedMutation('remove-player', req, async () => {
             const removedPlayer = players.splice(index, 1)[0];
             appendCancellationLog({ id: removedPlayer.id, firstName: removedPlayer.firstName, lastName: removedPlayer.lastName, phone: removedPlayer.phone, rating: removedPlayer.rating, isGoalie: removedPlayer.isGoalie, paymentMethod: removedPlayer.paymentMethod, source: 'players', action: 'removed', cancelledBy: 'admin', cancelledAt: new Date().toISOString() });
-            if (!removedPlayer.isGoalie) playerSpots = Math.min(MAX_SKATERS, playerSpots + 1);
+            if (!removedPlayer.isGoalie) playerSpots = Math.min(configuredMaxSkaters, playerSpots + 1);
 
             if (rosterReleased) {
                 const replacement = extractWaitlistPlayerToPromote({ preferGoalie: !!removedPlayer.isGoalie });
@@ -7216,11 +7238,17 @@ app.post('/api/admin/remove-player', async (req, res) => {
 app.post('/api/admin/update-spots', async (req, res) => {
     const { password, sessionToken, newSpots } = req.body;
     if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
-    const spotCount = parseInt(newSpots);
-    if (isNaN(spotCount) || spotCount < 0 || spotCount > 30) return res.status(400).json({ error: "Invalid spot count (0-30 allowed)" });
-    try { await runProtectedMutation('update-spots', req, async () => { playerSpots = spotCount; }, { spotCount }); }
+    const spotCount = normalizeSkaterCapacity(newSpots, NaN);
+    if (!Number.isFinite(spotCount) || spotCount < 0 || spotCount > 30) return res.status(400).json({ error: "Invalid player spot capacity (0-30 allowed)" });
+    const nonGoalieCount = players.filter(p => !(p && p.isGoalie)).length;
+    try {
+        await runProtectedMutation('update-spots', req, async () => {
+            configuredMaxSkaters = spotCount;
+            playerSpots = Math.max(0, configuredMaxSkaters - nonGoalieCount);
+        }, { configuredMaxSkaters: spotCount, nonGoalieCount });
+    }
     catch (err) { return res.status(500).json({ error: 'Failed to update spots safely' }); }
-    res.json({ success: true, spots: playerSpots });
+    res.json({ success: true, spots: configuredMaxSkaters, playerSpotsRemaining: playerSpots, maxSkaters: configuredMaxSkaters });
 });
 
 // Update paid amount endpoint
@@ -7722,7 +7750,7 @@ app.post('/api/admin/manual-reset', async (req, res) => {
         await runProtectedMutation('manual-reset', req, async () => {
             // Preserve all active admin-adjusted ratings before clearing the weekly roster.
             rememberCurrentAdminRatings();
-            playerSpots = MAX_SKATERS; players = []; waitlist = []; rosterReleased = false; resetArmed = false; lastResetWeek = week; gameDate = calculateNextGameDate();
+            playerSpots = configuredMaxSkaters; players = []; waitlist = []; rosterReleased = false; resetArmed = false; lastResetWeek = week; gameDate = calculateNextGameDate();
             currentWeekData = { weekNumber: week, year, releaseDate: null, whiteTeam: [], darkTeam: [] };
             manualOverride = true; manualOverrideState = `reset-lock:${nowETMinuteKey(etTime)}`; requirePlayerCode = true; clearAnnouncementState();
             syncScheduledActionRunMarker(resetWeekSchedule.at, 'reset', etTime);
