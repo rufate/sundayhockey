@@ -1214,6 +1214,13 @@
             .game-setup-section, .backup-goalies-section, .add-goalie-fly-section { padding: 14px; }
             .game-setup-grid { grid-template-columns: 1fr; gap: 10px; }
             .game-setup-section .title-preview { font-size: 1rem; padding: 10px; }
+            .game-setup-section .custom-title-input {
+                min-height: 58px !important;
+                line-height: 1.35 !important;
+                padding-top: 12px !important;
+                padding-bottom: 12px !important;
+                overflow: hidden !important;
+            }
             .game-setup-preview-line { font-size: 0.88rem; }
         }
     
@@ -5653,6 +5660,29 @@ th, td{padding:2px 3px !important;}
     }
 }
 </style>
+
+<style id="mobile-game-title-input-fix-v3">
+    @media (max-width: 600px) {
+        .game-setup-section .custom-title-input,
+        textarea#customTitleInput.custom-title-input {
+            box-sizing: border-box !important;
+            min-height: 36px !important;
+            height: 36px;
+            font-size: 0.9rem !important;
+            font-weight: 600 !important;
+            line-height: 1.2 !important;
+            padding: 8px !important;
+            margin: 4px 0 !important;
+            border-radius: 6px !important;
+            overflow: hidden !important;
+            display: block !important;
+            vertical-align: top !important;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+    }
+</style>
+
 </head>
 <body class="admin-layout-option-1">
 <!-- MAINTENANCE BULLETIN - Shows when activated -->
@@ -5953,7 +5983,7 @@ th, td{padding:2px 3px !important;}
 </div>
 
 <div class="registered-players-box">
-<h3 class="section-header">🏒 Registered Players (<span id="playerCount">0</span> Players, <span id="goalieCountDisplay">0</span> Goalies)</h3>
+<h3 class="section-header registered-players-header">🏒 <span class="registered-title-main">Registered Players</span><span class="registered-title-count">(<span id="playerCount">0</span> Players, <span id="goalieCountDisplay">0</span> Goalies)</span></h3>
 <div class="add-player-form">
 <h3 id="manualAddPlayerHeading">➕ Add Player Manually</h3>
 <div class="form-row">
@@ -7187,7 +7217,11 @@ th, td{padding:2px 3px !important;}
             const input = document.getElementById('customTitleInput');
             if (!input) return;
             input.style.height = 'auto';
-            input.style.height = `${input.scrollHeight}px`;
+            const isMobile = window.matchMedia && window.matchMedia('(max-width: 600px)').matches;
+            // Keep the mobile title field the same height as the other controls unless it truly needs more room.
+            const minimumHeight = isMobile ? 36 : 52;
+            const breathingRoom = isMobile ? 0 : 6;
+            input.style.height = `${Math.max(input.scrollHeight + breathingRoom, minimumHeight)}px`;
         }
 
         function setCustomTitleInput(value) {
@@ -11276,6 +11310,15 @@ document.addEventListener('keydown', function(e){
         const summary = document.createElement('div');
         summary.className = 'mobile-collapse-summary';
         summary.textContent = summaryText;
+        if(section.classList.contains('waitlist-section')){
+            const wc=section.querySelector('#waitlistCount');
+            if(wc){
+              const sync=()=>{titleWrap.innerHTML=`⏳ Waitlist (<span id="waitlistCount">${wc.textContent}</span>)`;};
+              sync();
+              const mo=new MutationObserver(sync);
+              mo.observe(wc,{childList:true,characterData:true,subtree:true});
+            }
+        }
 
         section.insertBefore(header, section.firstChild);
         section.appendChild(body);
@@ -12324,6 +12367,237 @@ document.addEventListener('keydown', function(e){
     }
 })();
 </script>
+
+<style id="admin-mobile-arrow-alignment-fix-v1">
+/* Keep all collapsed-section arrows uniform and fixed to the same card position on mobile. */
+@media (max-width: 700px) {
+    .mobile-collapsible,
+    .admin-collapsible-section,
+    .admin-ui-collapsible-section {
+        position: relative !important;
+    }
+
+    .mobile-collapsible > .mobile-collapse-header,
+    .admin-collapsible-section > .admin-collapsible-title,
+    .admin-ui-collapsible-section > .admin-ui-collapsible-title {
+        position: static !important;
+        display: block !important;
+        padding-right: 62px !important;
+        min-height: 46px !important;
+    }
+
+    .mobile-collapsible > .mobile-collapse-header > .mobile-collapse-title,
+    .admin-collapsible-section > .admin-collapsible-title > :not(.admin-collapse-arrow),
+    .admin-ui-collapsible-section > .admin-ui-collapsible-title > :not(.admin-ui-collapse-arrow) {
+        min-width: 0 !important;
+        max-width: 100% !important;
+    }
+
+    .mobile-collapsible > .mobile-collapse-header > .mobile-collapse-chevron,
+    .admin-collapsible-section > .admin-collapsible-title > .admin-collapse-arrow,
+    .admin-ui-collapsible-section > .admin-ui-collapsible-title > .admin-ui-collapse-arrow,
+    .game-setup-section .mobile-collapse-chevron {
+        position: absolute !important;
+        top: 18px !important;
+        right: 18px !important;
+        left: auto !important;
+        margin: 0 !important;
+        min-width: 44px !important;
+        width: 44px !important;
+        height: 44px !important;
+        min-height: 44px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 999px !important;
+        font-size: 1.25rem !important;
+        line-height: 1 !important;
+        z-index: 2 !important;
+    }
+
+    .mobile-collapsible.is-collapsed > .mobile-collapse-summary {
+        padding-right: 62px !important;
+    }
+}
+</style>
+
+
+<style id="admin-mobile-collapsible-title-cutoff-fix-v1">
+/* Mobile: prevent collapsed section titles from being clipped while keeping arrows aligned. */
+@media (max-width: 700px) {
+    .mobile-collapsible > .mobile-collapse-header,
+    .admin-collapsible-section > .admin-collapsible-title,
+    .admin-ui-collapsible-section > .admin-ui-collapsible-title {
+        display: flex !important;
+        align-items: center !important;
+        min-height: 64px !important;
+        padding: 10px 62px 10px 0 !important;
+        overflow: visible !important;
+        box-sizing: border-box !important;
+    }
+
+    .mobile-collapsible > .mobile-collapse-header > .mobile-collapse-title,
+    .mobile-collapse-title h1,
+    .mobile-collapse-title h2,
+    .mobile-collapse-title h3,
+    .mobile-collapse-title .section-header,
+    .admin-collapsible-section > .admin-collapsible-title,
+    .admin-ui-collapsible-section > .admin-ui-collapsible-title {
+        display: flex !important;
+        align-items: center !important;
+        min-height: 44px !important;
+        line-height: 1.25 !important;
+        overflow: visible !important;
+        white-space: normal !important;
+        box-sizing: border-box !important;
+    }
+
+    .mobile-collapsible,
+    .admin-collapsible-section,
+    .admin-ui-collapsible-section {
+        overflow: visible !important;
+    }
+}
+</style>
+
+
+<style id="admin-mobile-card-header-layout-fix-v4">
+/* Mobile card header cleanup: keep title on its own line, put live summary below it, and keep the arrow fixed right. */
+@media (max-width: 700px) {
+    .mobile-collapsible > .mobile-collapse-header {
+        display: block !important;
+        position: relative !important;
+        min-height: 64px !important;
+        padding: 10px 62px 10px 0 !important;
+        overflow: visible !important;
+        box-sizing: border-box !important;
+    }
+
+    .mobile-collapsible > .mobile-collapse-header > .mobile-collapse-title {
+        display: block !important;
+        min-height: 0 !important;
+        max-width: 100% !important;
+        line-height: 1.25 !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        box-sizing: border-box !important;
+    }
+
+    .mobile-collapse-title .admin-collapsible-live-summary {
+        display: block !important;
+        width: 100% !important;
+        margin: 5px 0 0 0 !important;
+        text-align: left !important;
+        color: #b9c7d6 !important;
+        font-size: 0.8rem !important;
+        font-weight: 600 !important;
+        line-height: 1.22 !important;
+        white-space: normal !important;
+        overflow: visible !important;
+    }
+
+    .game-setup-section .mobile-collapse-title {
+        color: #ffffff !important;
+        font-size: 0.92rem !important;
+        font-weight: 700 !important;
+    }
+
+    .game-setup-section .mobile-collapse-title .admin-collapsible-live-summary {
+        font-size: 0.8rem !important;
+        margin-top: 5px !important;
+    }
+}
+</style>
+
+
+<style id="admin-mobile-expand-button-top-right-v1">
+/* Mobile: keep every collapsed-card expand/play button just inside the top-right corner. */
+@media (max-width: 700px) {
+    .mobile-collapsible,
+    .admin-collapsible-section,
+    .admin-ui-collapsible-section {
+        position: relative !important;
+    }
+
+    .mobile-collapsible > .mobile-collapse-header,
+    .admin-collapsible-section > .admin-collapsible-title,
+    .admin-ui-collapsible-section > .admin-ui-collapsible-title {
+        position: static !important;
+        padding-right: 68px !important;
+        min-height: 52px !important;
+        box-sizing: border-box !important;
+    }
+
+    .mobile-collapsible > .mobile-collapse-header > .mobile-collapse-chevron,
+    .admin-collapsible-section > .admin-collapsible-title > .admin-collapse-arrow,
+    .admin-ui-collapsible-section > .admin-ui-collapsible-title > .admin-ui-collapse-arrow,
+    .game-setup-section .mobile-collapse-chevron {
+        position: absolute !important;
+        top: 14px !important;
+        right: 14px !important;
+        left: auto !important;
+        bottom: auto !important;
+        margin: 0 !important;
+        transform-origin: center center !important;
+        min-width: 44px !important;
+        width: 44px !important;
+        height: 44px !important;
+        min-height: 44px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 999px !important;
+        z-index: 5 !important;
+    }
+
+    .mobile-collapsible.is-collapsed > .mobile-collapse-summary,
+    .admin-collapsible-section.admin-collapsed > .admin-collapse-summary,
+    .admin-ui-collapsible-section.admin-ui-collapsed > .admin-ui-collapse-hint {
+        padding-right: 68px !important;
+    }
+
+    /* The Waitlist header already includes the count: Waitlist (0). Do not repeat '0 waitlist' underneath. */
+    .waitlist-section .admin-collapsible-live-summary,
+    .waitlist-section .admin-section-live-summary {
+        display: none !important;
+    }
+}
+</style>
+
+
+
+<style id="registered-players-header-option1-v1">
+/* Registered Players header: clean two-line mobile layout with lighter count line. */
+.registered-players-header .registered-title-count {
+    margin-left: 0.35rem;
+}
+
+@media (max-width: 700px) {
+    .registered-players-box .mobile-collapse-title .registered-players-header,
+    .registered-players-box .registered-players-header {
+        display: block !important;
+        line-height: 1.18 !important;
+        white-space: normal !important;
+        overflow: visible !important;
+    }
+
+    .registered-players-box .registered-title-main {
+        display: inline !important;
+        font-size: 0.92rem !important;
+        font-weight: 700 !important;
+    }
+
+    .registered-players-box .registered-title-count {
+        display: block !important;
+        margin: 3px 0 0 1.65rem !important;
+        font-size: 0.78rem !important;
+        font-weight: 500 !important;
+        line-height: 1.2 !important;
+        color: #ff8a1c !important;
+        white-space: normal !important;
+    }
+}
+</style>
 
 </body>
 </html>
