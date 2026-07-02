@@ -5343,6 +5343,91 @@ th, td{padding:2px 3px !important;}
 .admin-header-box .maintenance-label{
     margin:0 !important;
 }
+
+
+.admin-account-menu{
+    display:flex;
+    justify-content:flex-end;
+    align-items:center;
+    margin:0 0 12px 0;
+    position:relative;
+    z-index:30;
+}
+.admin-account-wrap{
+    position:relative;
+}
+.admin-account-btn{
+    width:44px;
+    height:44px;
+    border-radius:50%;
+    border:2px solid rgba(255,255,255,0.65);
+    background:rgba(255,255,255,0.08);
+    color:#fff;
+    font-size:1.35rem;
+    line-height:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    box-shadow:0 0 14px rgba(0,0,0,0.35);
+}
+.admin-account-btn:hover,
+.admin-account-btn:focus{
+    background:rgba(255,255,255,0.16);
+    outline:none;
+}
+.admin-account-dropdown{
+    position:absolute;
+    top:52px;
+    right:0;
+    min-width:210px;
+    display:none;
+    flex-direction:column;
+    gap:8px;
+    padding:10px;
+    border:1px solid rgba(255,255,255,0.22);
+    border-radius:12px;
+    background:linear-gradient(135deg,#202020,#111);
+    box-shadow:0 14px 34px rgba(0,0,0,0.55);
+}
+.admin-account-dropdown.open{
+    display:flex;
+}
+.admin-account-dropdown button{
+    width:100%;
+    border:none;
+    border-radius:8px;
+    color:#fff;
+    font-weight:700;
+    padding:10px 12px;
+    cursor:pointer;
+    text-align:left;
+}
+.admin-account-dropdown .account-logout-all{
+    background:#6d4c41;
+}
+.admin-account-dropdown .account-logout{
+    background:#666;
+}
+.admin-account-dropdown button:hover,
+.admin-account-dropdown button:focus{
+    filter:brightness(1.12);
+    outline:none;
+}
+@media (max-width:700px){
+    .admin-account-menu{
+        margin-bottom:10px;
+    }
+    .admin-account-btn{
+        width:42px;
+        height:42px;
+        font-size:1.25rem;
+    }
+    .admin-account-dropdown{
+        right:0;
+        min-width:190px;
+    }
+}
 @media (max-width:700px){
     .admin-header-box{
         padding:16px 14px 12px 14px;
@@ -5705,6 +5790,17 @@ th, td{padding:2px 3px !important;}
 </div>
 <div class="container admin-panel" id="adminPanel">
 
+<div class="admin-account-menu">
+    <div class="admin-account-wrap">
+        <button aria-expanded="false" aria-label="Account menu" class="admin-account-btn" id="adminAccountMenuBtn" onclick="toggleAdminAccountMenu(event)" type="button">👤</button>
+        <div aria-label="Account actions" class="admin-account-dropdown" id="adminAccountDropdown">
+            <button class="account-logout" onclick="logout(); closeAdminAccountMenu();" type="button">Logout</button>
+            <button class="account-logout-all" onclick="logoutAllDevices(); closeAdminAccountMenu();" type="button">Logout All Devices</button>
+        </div>
+    </div>
+</div>
+
+
 
 
 
@@ -5740,15 +5836,13 @@ th, td{padding:2px 3px !important;}
 <div class="admin-header-box">
 <div class="admin-header-top">
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:10px; flex-wrap:wrap;">
-<h1 style="margin:0;">Admin Dashboard</h1>
+<h1 style="margin:0;">Portal Backup</h1>
 <div style="display:flex; gap:10px; flex-wrap:wrap;">
 <button class="control-btn" onclick="downloadBackup()" style="background:#2e7d32;">⬇ Backup Portal</button>
 <button class="control-btn" onclick="previewLatestServerBackup()" style="background:#5c6bc0;">👁 Preview Latest</button>
 <button class="control-btn" onclick="restoreLatestServerBackup()" style="background:#3949ab;">♻ Restore Latest</button>
 <button class="control-btn" onclick="document.getElementById('restoreBackupFile').click()" style="background:#8e24aa;">⤴ Restore Portal</button>
 <input accept=".json,application/json" id="restoreBackupFile" onchange="restoreBackupFromFile(event)" style="display:none;" type="file"/>
-<button class="control-btn" onclick="logoutAllDevices()" style="background:#6d4c41;">Logout All Devices</button>
-<button class="logout-btn" onclick="logout()">Logout</button>
 </div>
 </div>
 </div>
@@ -7156,6 +7250,32 @@ th, td{padding:2px 3px !important;}
                 alert('Login failed.');
             }
         }
+
+
+        function toggleAdminAccountMenu(event) {
+            if (event) event.stopPropagation();
+            const dropdown = document.getElementById('adminAccountDropdown');
+            const button = document.getElementById('adminAccountMenuBtn');
+            if (!dropdown) return;
+            const isOpen = dropdown.classList.toggle('open');
+            if (button) button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        }
+
+        function closeAdminAccountMenu() {
+            const dropdown = document.getElementById('adminAccountDropdown');
+            const button = document.getElementById('adminAccountMenuBtn');
+            if (dropdown) dropdown.classList.remove('open');
+            if (button) button.setAttribute('aria-expanded', 'false');
+        }
+
+        document.addEventListener('click', function(event) {
+            const menu = document.querySelector('.admin-account-wrap');
+            if (menu && !menu.contains(event.target)) closeAdminAccountMenu();
+        });
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') closeAdminAccountMenu();
+        });
 
         async function logout() {
             try {
