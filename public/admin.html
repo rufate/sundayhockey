@@ -5768,6 +5768,92 @@ th, td{padding:2px 3px !important;}
     }
 </style>
 
+
+<style id="admin-account-button-topright-visible-v1">
+/* Account button: about half-size, top-right, bright yellow person icon, icon-only pulse */
+.admin-account-menu{
+    display:flex !important;
+    justify-content:flex-end !important;
+    align-items:center !important;
+    width:100% !important;
+    margin:0 0 8px 0 !important;
+    position:relative !important;
+    z-index:50 !important;
+}
+.admin-account-btn{
+    width:22px !important;
+    height:22px !important;
+    min-width:22px !important;
+    min-height:22px !important;
+    max-width:22px !important;
+    max-height:22px !important;
+    padding:0 !important;
+    margin:0 !important;
+    border:1.5px solid rgba(255,255,255,0.9) !important;
+    border-radius:50% !important;
+    background:rgba(255,255,255,0.08) !important;
+    color:transparent !important;
+    font-size:0 !important;
+    line-height:1 !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    box-shadow:0 0 6px rgba(0,0,0,0.35) !important;
+    animation:none !important;
+    transform:none !important;
+    position:relative !important;
+    overflow:hidden !important;
+}
+.admin-account-btn::before{
+    content:"";
+    position:absolute;
+    top:4px;
+    left:50%;
+    width:5px;
+    height:5px;
+    border-radius:50%;
+    background:#FFD400;
+    transform:translateX(-50%);
+    box-shadow:0 0 6px rgba(255,212,0,0.8);
+    animation:adminAccountIconPulse 1.7s ease-in-out infinite;
+}
+.admin-account-btn::after{
+    content:"";
+    position:absolute;
+    left:50%;
+    bottom:4px;
+    width:10px;
+    height:6px;
+    border-radius:8px 8px 5px 5px;
+    background:#FFD400;
+    transform:translateX(-50%);
+    box-shadow:0 0 6px rgba(255,212,0,0.7);
+    animation:adminAccountIconPulse 1.7s ease-in-out infinite;
+}
+.admin-account-btn:hover,
+.admin-account-btn:focus{
+    background:rgba(255,255,255,0.16) !important;
+    border-color:#ffffff !important;
+    outline:none !important;
+    box-shadow:0 0 6px rgba(0,0,0,0.35), 0 0 8px rgba(255,212,0,0.35) !important;
+}
+@keyframes adminAccountIconPulse{
+    0%,100%{ opacity:1; filter:brightness(1); }
+    50%{ opacity:0.72; filter:brightness(1.55); }
+}
+@media (max-width:700px){
+    .admin-account-menu{ margin:0 0 6px 0 !important; }
+    .admin-account-btn{
+        width:22px !important;
+        height:22px !important;
+        min-width:22px !important;
+        min-height:22px !important;
+        max-width:22px !important;
+        max-height:22px !important;
+    }
+}
+</style>
+
 </head>
 <body class="admin-layout-option-1">
 <!-- MAINTENANCE BULLETIN - Shows when activated -->
@@ -5832,30 +5918,6 @@ th, td{padding:2px 3px !important;}
 
 
 
-
-<div class="admin-header-box">
-<div class="admin-header-top">
-<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:10px; flex-wrap:wrap;">
-<h1 style="margin:0;">Portal Backup</h1>
-<div style="display:flex; gap:10px; flex-wrap:wrap;">
-<button class="control-btn" onclick="downloadBackup()" style="background:#2e7d32;">⬇ Backup Portal</button>
-<button class="control-btn" onclick="previewLatestServerBackup()" style="background:#5c6bc0;">👁 Preview Latest</button>
-<button class="control-btn" onclick="restoreLatestServerBackup()" style="background:#3949ab;">♻ Restore Latest</button>
-<button class="control-btn" onclick="document.getElementById('restoreBackupFile').click()" style="background:#8e24aa;">⤴ Restore Portal</button>
-<input accept=".json,application/json" id="restoreBackupFile" onchange="restoreBackupFromFile(event)" style="display:none;" type="file"/>
-</div>
-</div>
-</div>
-<div class="admin-header-bottom">
-<div class="maintenance-control">
-<div class="maintenance-toggle">
-<input class="maintenance-checkbox" id="maintenanceCheckbox" onchange="toggleMaintenance()" type="checkbox"/>
-<label class="maintenance-label" for="maintenanceCheckbox" id="maintenanceLabel">Maintenance Mode Off</label>
-<div class="maintenance-status inactive" id="maintenanceStatus">PORTAL ACTIVE</div>
-</div>
-</div>
-</div>
-</div>
 
 <div class="success-message" id="releaseSuccess">
             ✅ Roster Released Successfully! Players can now see the teams.
@@ -6019,23 +6081,7 @@ th, td{padding:2px 3px !important;}
 <div id="overrideDetails"></div>
 </div>
 </div>
-</div>
-
-<div class="details-box">
-<h3>📍 Game Details</h3>
-<div class="control-row">
-<input id="locationInput" placeholder="Location" readonly="" style="flex:1;" type="text"/>
-<input id="timeInput" placeholder="Time" readonly="" style="flex:1;" type="text"/>
-</div>
-<div class="control-row" style="margin-top:10px;">
-<input id="dateInput" style="flex:1;" type="date"/>
-<button class="control-btn" onclick="updateDetails()">Update Date Only</button>
-</div>
-<div class="status-display" style="margin-top:10px; margin-left:0;">
-<span id="currentDateDisplay">--</span> | <span id="currentLocation">--</span> | <span id="currentTime">--</span>
-</div>
-</div>
-
+<div class="game-setup-subsection announcement-inline-section">
 <div class="announcement-control compact-announcement-control">
 <div class="announcement-topbar">
 <h3>📢 Announcement</h3>
@@ -6075,6 +6121,25 @@ th, td{padding:2px 3px !important;}
 <button class="control-btn secondary-btn" onclick="clearAnnouncementSettings()" type="button">Clear</button>
 </div>
 </div>
+</div>
+</div>
+
+<div class="details-box">
+<h3>📍 Game Details</h3>
+<div class="control-row">
+<input id="locationInput" placeholder="Location" readonly="" style="flex:1;" type="text"/>
+<input id="timeInput" placeholder="Time" readonly="" style="flex:1;" type="text"/>
+</div>
+<div class="control-row" style="margin-top:10px;">
+<input id="dateInput" style="flex:1;" type="date"/>
+<button class="control-btn" onclick="updateDetails()">Update Date Only</button>
+</div>
+<div class="status-display" style="margin-top:10px; margin-left:0;">
+<span id="currentDateDisplay">--</span> | <span id="currentLocation">--</span> | <span id="currentTime">--</span>
+</div>
+</div>
+
+
 
 <div class="registered-players-box">
 <h3 class="section-header registered-players-header">🏒 <span class="registered-title-main">Registered Players</span><span class="registered-title-count">(<span id="playerCount">0</span> Players, <span id="goalieCountDisplay">0</span> Goalies)</span></h3>
@@ -6155,13 +6220,6 @@ th, td{padding:2px 3px !important;}
 </thead>
 <tbody id="playerList"></tbody>
 </table>
-</div>
-
-<div class="regular-summary-section">
-<h3>⭐ Regular Players</h3>
-<p class="regular-summary-note">Use the one-click Regular button in the player list above. Active regulars are highlighted green.</p>
-<div class="regular-summary-list" id="regularSkatersList"></div>
-</div>
 
 <div class="waitlist-section">
 <h3>⏳ Waitlist (<span id="waitlistCount">0</span>)</h3>
@@ -6193,6 +6251,13 @@ th, td{padding:2px 3px !important;}
 </thead>
 <tbody id="cancellationList"></tbody>
 </table>
+</div>
+</div>
+
+<div class="regular-summary-section">
+<h3>⭐ Regular Players</h3>
+<p class="regular-summary-note">Use the one-click Regular button in the player list above. Active regulars are highlighted green.</p>
+<div class="regular-summary-list" id="regularSkatersList"></div>
 </div>
 
 <div class="goalies-section">
@@ -6408,6 +6473,30 @@ th, td{padding:2px 3px !important;}
 <p class="security-notice">
                 ⚠️ Payment and rating data is hidden from public view. Only admins can see this information.
             </p>
+</div>
+
+<div class="admin-header-box">
+<div class="admin-header-top">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:10px; flex-wrap:wrap;">
+<h1 style="margin:0;">Portal Backup</h1>
+<div style="display:flex; gap:10px; flex-wrap:wrap;">
+<button class="control-btn" onclick="downloadBackup()" style="background:#2e7d32;">⬇ Backup Portal</button>
+<button class="control-btn" onclick="previewLatestServerBackup()" style="background:#5c6bc0;">👁 Preview Latest</button>
+<button class="control-btn" onclick="restoreLatestServerBackup()" style="background:#3949ab;">♻ Restore Latest</button>
+<button class="control-btn" onclick="document.getElementById('restoreBackupFile').click()" style="background:#8e24aa;">⤴ Restore Portal</button>
+<input accept=".json,application/json" id="restoreBackupFile" onchange="restoreBackupFromFile(event)" style="display:none;" type="file"/>
+</div>
+</div>
+</div>
+<div class="admin-header-bottom">
+<div class="maintenance-control">
+<div class="maintenance-toggle">
+<input class="maintenance-checkbox" id="maintenanceCheckbox" onchange="toggleMaintenance()" type="checkbox"/>
+<label class="maintenance-label" for="maintenanceCheckbox" id="maintenanceLabel">Maintenance Mode Off</label>
+<div class="maintenance-status inactive" id="maintenanceStatus">PORTAL ACTIVE</div>
+</div>
+</div>
+</div>
 </div>
 
 <div class="snapshot-pro-section">
@@ -11482,7 +11571,8 @@ document.addEventListener('keydown', function(e){
 
         makeCollapsible(document.querySelector('.cancellations-section'), {
             collapsedByDefault: true,
-            summary: 'Cancelled players hidden. Tap to expand.'
+            summary: 'Recent cancellations hidden. Tap to expand.',
+            storageKey: 'adminCollapse:registered-recent-cancellations-v2'
         });
 
         makeCollapsible(document.querySelector('.history-delete-box'), {
@@ -11497,7 +11587,8 @@ document.addEventListener('keydown', function(e){
 
         makeCollapsible(document.querySelector('.waitlist-section'), {
             collapsedByDefault: true,
-            summary: 'Waitlist hidden. Tap to expand.'
+            summary: 'Waitlist hidden. Tap to expand.',
+            storageKey: 'adminCollapse:registered-waitlist-v2'
         });
 
         makeCollapsible(document.querySelector('.roster-status'), {
@@ -12349,9 +12440,12 @@ document.addEventListener('keydown', function(e){
                 <div class="admin-weekly-status-item"><div class="admin-weekly-status-label">Waitlist</div><div class="admin-weekly-status-value" id="weeklyStatusWaitlist">--</div></div>
                 <div class="admin-weekly-status-item"><div class="admin-weekly-status-label">Current Time</div><div class="admin-weekly-status-value" id="weeklyStatusNow">--</div></div>
             </div>`;
-        const after = document.querySelector('.admin-header-box');
-        if (after && after.parentNode) after.parentNode.insertBefore(card, after.nextSibling);
-        else panel.insertBefore(card, panel.firstChild);
+        const accountMenu = panel.querySelector('.admin-account-menu');
+        if (accountMenu && accountMenu.nextSibling) {
+            panel.insertBefore(card, accountMenu.nextSibling);
+        } else {
+            panel.insertBefore(card, panel.firstChild);
+        }
     }
 
     function setSummaryForSection(selector, text) {
@@ -12719,5 +12813,80 @@ document.addEventListener('keydown', function(e){
 }
 </style>
 
+
+<script id="registeredPlayersNestedHiddenSectionsV1">
+(function () {
+    'use strict';
+
+    function text(id) {
+        const el = document.getElementById(id);
+        return el ? String(el.textContent || '').trim() : '0';
+    }
+
+    function setSummary(section, value) {
+        if (!section) return;
+        const summary = section.querySelector(':scope > .mobile-collapse-summary');
+        if (summary) summary.textContent = value;
+        const title = section.querySelector('.mobile-collapse-title');
+        if (title) {
+            if (section.classList.contains('waitlist-section')) {
+                title.innerHTML = '⏳ Waitlist (<span id="waitlistCount">' + text('waitlistCount') + '</span>)';
+            }
+            if (section.classList.contains('cancellations-section')) {
+                title.innerHTML = '📋 Recent Cancellations (<span id="cancellationCount">' + text('cancellationCount') + '</span>)';
+            }
+        }
+    }
+
+    function closeNestedRegisteredSections() {
+        const sections = [
+            { selector: '.registered-players-box .waitlist-section', summary: function () { return 'Waitlist hidden · ' + text('waitlistCount') + ' waiting. Tap to expand.'; } },
+            { selector: '.registered-players-box .cancellations-section', summary: function () { return 'Recent cancellations hidden · ' + text('cancellationCount') + ' listed. Tap to expand.'; } }
+        ];
+
+        sections.forEach(function (item) {
+            const section = document.querySelector(item.selector);
+            if (!section) return;
+            section.classList.add('is-collapsed');
+            const header = section.querySelector(':scope > .mobile-collapse-header');
+            if (header) header.setAttribute('aria-expanded', 'false');
+            setSummary(section, item.summary());
+        });
+    }
+
+    function init() {
+        closeNestedRegisteredSections();
+        ['waitlistCount', 'cancellationCount'].forEach(function (id) {
+            const el = document.getElementById(id);
+            if (!el || !window.MutationObserver) return;
+            new MutationObserver(closeNestedRegisteredSections).observe(el, { childList: true, characterData: true, subtree: true });
+        });
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
+    window.addEventListener('load', closeNestedRegisteredSections);
+})();
+</script>
+<style id="registeredPlayersNestedHiddenSectionsStyleV2">
+/* Keep nested Waitlist + Recent Cancellations completely hidden until Registered Players is expanded. */
+.registered-players-box.admin-collapsed > .waitlist-section,
+.registered-players-box.admin-collapsed > .cancellations-section,
+.registered-players-box.admin-ui-collapsed > .waitlist-section,
+.registered-players-box.admin-ui-collapsed > .cancellations-section,
+.registered-players-box.is-collapsed > .mobile-collapse-body > .waitlist-section,
+.registered-players-box.is-collapsed > .mobile-collapse-body > .cancellations-section {
+    display: none !important;
+}
+
+.registered-players-box .waitlist-section,
+.registered-players-box .cancellations-section {
+    margin-top: 14px !important;
+}
+.registered-players-box .waitlist-section.is-collapsed,
+.registered-players-box .cancellations-section.is-collapsed {
+    padding-bottom: 14px !important;
+}
+</style>
 </body>
 </html>
