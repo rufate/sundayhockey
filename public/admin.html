@@ -5854,6 +5854,53 @@ th, td{padding:2px 3px !important;}
 }
 </style>
 
+
+<style id="pia-date-white-calendar-icon-final-v1">
+/* Force PIA date picker calendar icon to match white date text.
+   Native browser icon is hidden; the clickable date input remains unchanged. */
+.payment-slider-pia-date-wrap{
+    position:relative !important;
+}
+.payment-slider-pia-date-wrap input[type="date"]{
+    color:#ffffff !important;
+    -webkit-text-fill-color:#ffffff !important;
+    padding-right:44px !important;
+}
+.payment-slider-pia-date-wrap input[type="date"]::-webkit-calendar-picker-indicator{
+    opacity:0 !important;
+    filter:none !important;
+    width:44px !important;
+    height:100% !important;
+    cursor:pointer !important;
+}
+.payment-slider-pia-date-wrap::after{
+    content:"";
+    position:absolute;
+    right:14px;
+    bottom:13px;
+    width:18px;
+    height:18px;
+    pointer-events:none;
+    opacity:1;
+    background-repeat:no-repeat;
+    background-position:center;
+    background-size:18px 18px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='3' ry='3'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3Ccircle cx='8' cy='14' r='1.2' fill='%23ffffff' stroke='none'/%3E%3Ccircle cx='12' cy='14' r='1.2' fill='%23ffffff' stroke='none'/%3E%3Ccircle cx='16' cy='14' r='1.2' fill='%23ffffff' stroke='none'/%3E%3Ccircle cx='8' cy='18' r='1.2' fill='%23ffffff' stroke='none'/%3E%3Ccircle cx='12' cy='18' r='1.2' fill='%23ffffff' stroke='none'/%3E%3Ccircle cx='16' cy='18' r='1.2' fill='%23ffffff' stroke='none'/%3E%3C/svg%3E");
+}
+</style>
+
+<style id="pia-date-calendar-click-fix-v2">
+/* PIA date field: keep the true-white custom calendar icon and make that icon area open the native date picker. */
+.payment-slider-pia-date-wrap{
+    cursor:pointer !important;
+}
+.payment-slider-pia-date-wrap input[type="date"]{
+    cursor:pointer !important;
+}
+.payment-slider-pia-date-wrap::after{
+    pointer-events:none !important;
+}
+</style>
 </head>
 <body class="admin-layout-option-1">
 <!-- MAINTENANCE BULLETIN - Shows when activated -->
@@ -9074,11 +9121,12 @@ ${rosterLink}
                             const rawMethod = String(p.paymentMethod || '').toLowerCase();
                             const isCashPaid = isPaid && rawMethod.includes('cash');
                             const compactAmount = isPia
-                                ? 0
+                                ? (Number.isFinite(parseFloat(p.paidAmount)) ? parseFloat(p.paidAmount) : 0)
                                 : (isPaid ? parseFloat(p.paidAmount) : 15);
                             const amountText = Number.isInteger(compactAmount) ? String(compactAmount) : compactAmount.toFixed(2).replace(/\.00$/, '').replace(/0$/, '');
                             const piaDateText = isPia ? formatPiaDateShort(p.piaDate) : '';
-                            const compactLabel = isPia ? `PIA${piaDateText ? ' ' + piaDateText : ''}` : (isPaid ? `${isCashPaid ? '' : 'E'}$${amountText}` : 'OWES');
+                            const piaAmountText = compactAmount > 0 ? ` $${amountText}` : '';
+                            const compactLabel = isPia ? `PIA${piaAmountText}${piaDateText ? ' ' + piaDateText : ''}` : (isPaid ? `${isCashPaid ? '' : 'E'}$${amountText}` : 'OWES');
                             const compactClass = isPia ? 'is-pia' : (isPaid ? (isCashPaid ? 'is-paid-cash' : 'is-paid-etransfer') : 'is-unpaid');
                             const compactMethod = isCashPaid ? 'Cash' : 'E-Transfer';
                             paidInput = `
@@ -9340,7 +9388,9 @@ function todayDateInputValue(){
                         sessionToken: sessionToken,
                         playerId: playerId,
                         status: status,
-                        piaDate: options.piaDate || ''
+                        piaDate: options.piaDate || '',
+                        amount: Object.prototype.hasOwnProperty.call(options, 'amount') ? options.amount : null,
+                        paymentMethod: options.paymentMethod || 'E-Transfer'
                     })
                 });
 
@@ -11409,7 +11459,8 @@ async function markPaymentPia(){
     if(wrap){ wrap.dataset.busy = '1'; wrap.style.opacity = '0.7'; }
     try {
         const piaDate = document.getElementById('paymentSliderPiaDate')?.value || todayDateInputValue();
-        await updatePaymentStatus(playerId, 'pia', { piaDate });
+        const amount = Math.max(0, Number(document.getElementById('paymentSliderNumber')?.value || 0));
+        await updatePaymentStatus(playerId, 'pia', { piaDate, amount, paymentMethod: activePaymentMethod });
         closePaymentSlider();
         await loadData();
     } finally {
@@ -11452,7 +11503,7 @@ document.addEventListener('keydown', function(e){
 <button class="payment-slider-preset" onclick="paymentSliderPreset(0)" type="button">$0</button>
 </div>
 <div class="payment-slider-pia-date-wrap">
-<label for="paymentSliderPiaDate">PIA Date</label>
+<label for="paymentSliderPiaDate">PIA Expires / Date</label>
 <input id="paymentSliderPiaDate" type="date"/>
 </div>
 <div class="payment-slider-actions">
@@ -12888,5 +12939,21 @@ document.addEventListener('keydown', function(e){
     padding-bottom: 14px !important;
 }
 </style>
+
+<script id="pia-date-calendar-click-fix-v2-script">
+(function(){
+    function openPiaDatePickerFromWrap(event){
+        const wrap = event.target && event.target.closest ? event.target.closest('.payment-slider-pia-date-wrap') : null;
+        if (!wrap) return;
+        const input = wrap.querySelector('#paymentSliderPiaDate');
+        if (!input) return;
+        try { input.focus({ preventScroll: true }); } catch (err) { try { input.focus(); } catch (_) {} }
+        if (typeof input.showPicker === 'function') {
+            try { input.showPicker(); } catch (err) { /* Browser may block if not direct user activation. Focus still works. */ }
+        }
+    }
+    document.addEventListener('click', openPiaDatePickerFromWrap, true);
+})();
+</script>
 </body>
 </html>
