@@ -453,13 +453,14 @@ const AUTO_SCHEDULE_LOCK_MINUTE = 0;
 const AUTO_SCHEDULE_RESET_HOUR = 0;
 const AUTO_SCHEDULE_RESET_MINUTE = 0;
 
-// Weekly reset is intentionally exact-minute only.
-// This prevents restored snapshots or Render wake-ups from replaying a missed reset via catch-up.
-const WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT = 0;
+// Weekly reset catch-up window.
+// Scheduled jobs only execute while the server process is awake. If the exact minute is missed,
+// allow the latest scheduled reset occurrence to run once when the server next wakes.
+const WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT = 36 * 60;
 
 // Weekly reset may be scheduled any time after the configured game time,
 // provided the roster has been released and reset arm is ON.
-// The exact-minute scheduler and run marker prevent replay on Render wake-ups.
+// The occurrence run marker prevents replay, while the catch-up window handles missed minutes.
 
 // Admin-configurable schedules (interpreted in America/New_York, repeats weekly)
 let signupLockSchedule = {
@@ -1110,6 +1111,13 @@ function isEtTimeOnOrAfterParts(etDate, parts) {
     return Number.isFinite(nowKey) && Number.isFinite(targetKey) && nowKey >= targetKey;
 }
 
+
+function getWeeklyResetCatchupMinutes() {
+    const configured = Number(process.env.WEEKLY_RESET_CATCHUP_MINUTES);
+    if (Number.isFinite(configured) && configured >= 0) return configured;
+    return WEEKLY_RESET_CATCHUP_MINUTES_DEFAULT;
+}
+
 function canSafelyRunWeeklyReset(etTime = getCurrentETTime(), resetAt = resetWeekSchedule && resetWeekSchedule.at, resetCheck = null) {
     const registeredPlayerCount = Array.isArray(players) ? players.length : 0;
     const waitlistCount = Array.isArray(waitlist) ? waitlist.length : 0;
@@ -1121,7 +1129,7 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime(), resetAt = resetWee
     const resetLagMinutes = resetCheck && Number.isFinite(resetCheck.lagMinutes)
         ? Number(resetCheck.lagMinutes)
         : minutesSinceLatestWeeklyOccurrence(resetAt, etTime);
-    const maxResetCatchupMinutes = Number(process.env.WEEKLY_RESET_CATCHUP_MINUTES || 180);
+    const maxResetCatchupMinutes = getWeeklyResetCatchupMinutes();
 
     if (!Number.isFinite(resetLagMinutes) || resetLagMinutes < 0 || resetLagMinutes > maxResetCatchupMinutes) {
         return {
@@ -1735,7 +1743,7 @@ async function checkWeeklyReset() {
         resetWeekSchedule.at,
         lastExactResetRunAt,
         etTime,
-        Number(process.env.WEEKLY_RESET_CATCHUP_MINUTES || 180)
+        getWeeklyResetCatchupMinutes()
     );
     if (!resetCheck.shouldRun) return false;
 
@@ -4961,7 +4969,7 @@ app.get('/api/debug-time', (req, res) => {
     const etTime = getCurrentETTime();
     const shouldLock = shouldBeLocked();
     const resetCheck = resetWeekSchedule && resetWeekSchedule.at
-        ? shouldRunScheduledAction(resetWeekSchedule.at, lastExactResetRunAt, etTime, 0, { exactMinuteOnly: true })
+        ? shouldRunScheduledAction(resetWeekSchedule.at, lastExactResetRunAt, etTime, getWeeklyResetCatchupMinutes())
         : { shouldRun: false, reason: 'missing_schedule' };
     const resetSafety = resetWeekSchedule && resetWeekSchedule.at
         ? canSafelyRunWeeklyReset(etTime, resetWeekSchedule.at, resetCheck)
@@ -4984,8 +4992,8 @@ app.get('/api/debug-time', (req, res) => {
         signupLockSchedule,
         rosterReleaseSchedule,
         resetWeekSchedule,
-        resetCatchupMinutes: 0,
-        resetMode: 'exact_minute_only',
+        resetCatchupMinutes: getWeeklyResetCatchupMinutes(),
+        resetMode: 'exact_minute_plus_catchup_once_per_occurrence',
         resetCheck,
         resetSafety,
         requirePlayerCode: requirePlayerCode,
@@ -7479,6 +7487,61 @@ app.post('/api/admin/update-nickname', async (req, res) => {
     } catch (err) {
         console.error('Error updating nickname:', err);
         res.status(500).json({ error: "Failed to update nickname safely" });
+    }
+});
+
+
+// Admin override for player phone number. Updates registered players, waitlist, current roster history payload, and persistent profile keys.
+app.post('/api/admin/update-phone', async (req, res) => {
+    const { password, sessionToken, playerId, phone } = req.body;
+    if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
+
+    const normalizedPlayerId = parseInt(playerId, 10);
+    if (!Number.isFinite(normalizedPlayerId)) return res.status(400).json({ error: "Invalid player id" });
+    if (!validatePhoneNumber(phone)) return res.status(400).json({ error: "Please enter a valid 10-digit phone number." });
+
+    const cleanPhone = formatPhoneNumber(phone);
+    const cleanPhoneDigits = normalizePhoneDigits(cleanPhone);
+    const player = players.find(p => parseInt(p.id, 10) === normalizedPlayerId) || waitlist.find(p => parseInt(p.id, 10) === normalizedPlayerId);
+    if (!player) return res.status(404).json({ error: "Player not found" });
+
+    const duplicate = [...players, ...waitlist].find(p =>
+        parseInt(p.id, 10) !== normalizedPlayerId &&
+        normalizePhoneDigits(p.phone) === cleanPhoneDigits
+    );
+    if (duplicate) {
+        return res.status(400).json({ error: `That phone number already belongs to ${duplicate.firstName || 'another'} ${duplicate.lastName || 'player'}.` });
+    }
+
+    try {
+        await runProtectedMutation('update-phone', req, async () => {
+            player.phone = cleanPhone;
+            rememberPersistentPlayerNickname(player, player.nickname);
+            rememberPersistentAdminRating(player, player.adminRating ?? player.finalRating ?? player.rating);
+
+            for (const teamKey of ['whiteTeam', 'darkTeam']) {
+                if (!Array.isArray(currentWeekData?.[teamKey])) continue;
+                const currentPlayer = currentWeekData[teamKey].find(p => parseInt(p.id, 10) === normalizedPlayerId);
+                if (currentPlayer) currentPlayer.phone = cleanPhone;
+            }
+
+            if (pool) {
+                await pool.query('UPDATE players SET phone = $1 WHERE id = $2', [cleanPhone, normalizedPlayerId]);
+                await pool.query('UPDATE waitlist SET phone = $1 WHERE id = $2', [cleanPhone, normalizedPlayerId]).catch(() => {});
+            }
+
+            if (rosterReleased) {
+                const etNow = getCurrentETTime();
+                const { week, year } = getWeekNumber(etNow);
+                await saveWeekHistory(year, week, currentWeekData.whiteTeam || [], currentWeekData.darkTeam || []);
+            }
+        }, { playerId: normalizedPlayerId, phone: cleanPhone });
+
+        await saveData();
+        res.json({ success: true, player, displayName: getRosterFullName(player) });
+    } catch (err) {
+        console.error('Error updating phone:', err);
+        res.status(500).json({ error: "Failed to update phone safely" });
     }
 });
 

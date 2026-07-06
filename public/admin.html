@@ -3025,6 +3025,7 @@ button {
     user-select:none;
     border-bottom:1px dotted rgba(255,255,255,0.22);
 }
+#playerList .phone-tap-target{cursor:pointer;}
 #playerList .nickname-tap-target.has-nickname::after{
     content:' ✎';
     color:rgba(255,255,255,0.55);
@@ -9022,8 +9023,8 @@ ${rosterLink}
                 
                 const data = await res.json();
                 currentRosterReleased = !!data.rosterReleased;
-                adminPlayersById = Object.fromEntries((data.players || []).map(p => [String(p.id), p]));
                 adminWaitlist = Array.isArray(data.waitlist) ? data.waitlist : [];
+                adminPlayersById = Object.fromEntries([...(data.players || []), ...adminWaitlist].map(p => [String(p.id), p]));
                 updateLatePlayerTeamUI();
                 latestAdminPlayers = Array.isArray(data.players) ? data.players : [];
                 renderTeamRebalanceControls();
@@ -9165,7 +9166,7 @@ ${rosterLink}
                                         ondblclick="handleNicknameNameDoubleTap(${p.id}, event)"
                                         ontouchend="handleNicknameNameTouch(${p.id}, event)">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}</span>
                                 </div>
-                                <span class="player-phone-sub">${escapeHtml(p.phone || '')}</span>
+                                <span class="player-phone-sub phone-tap-target" title="Double-tap to edit phone" onclick="handlePhoneTap(${p.id}, event)" ondblclick="handlePhoneDoubleTap(${p.id}, event)" ontouchend="handlePhoneTouch(${p.id}, event)">${escapeHtml(p.phone || '')}</span>
                                 ${p.registeredAt ? `<span class="player-time-sub"><span class="locked-time-chip" title="Locked signup timestamp — saved when the player registered and does not change">${formatLockedSignupTime(p.registeredAt)}</span></span>` : ``}
                             </td>
                             <td class="phone-col-hidden">${p.phone}</td>
@@ -9198,7 +9199,7 @@ ${rosterLink}
                             <td class="player-name-cell">
                                 <span class="player-name-main">${p.firstName} ${p.lastName}</span>
                                 <span class="player-badge-row">${goalieBadge}${bypassBadge}</span>
-                                <span class="player-phone-sub">${p.phone}</span>
+                                <span class="player-phone-sub phone-tap-target" title="Double-tap to edit phone" onclick="handlePhoneTap(${p.id}, event)" ondblclick="handlePhoneDoubleTap(${p.id}, event)" ontouchend="handlePhoneTouch(${p.id}, event)">${escapeHtml(p.phone || '')}</span>
                                 ${p.joinedAt ? `<span class="player-time-sub"><span class="locked-time-chip" title="Locked signup timestamp — saved when the player joined the waitlist and does not change">${formatLockedSignupTime(p.joinedAt)}</span></span>` : ``}
                             </td>
                             <td>
@@ -9794,6 +9795,77 @@ function todayDateInputValue(){
             } catch (err) {
                 console.error('Update nickname error:', err);
                 alert('Error updating nickname');
+                loadData();
+            }
+        }
+
+
+        const phoneTapTracker = {};
+
+        function handlePhoneDoubleTap(id, event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            phoneTapTracker[String(id)] = 0;
+            openPhonePrompt(id);
+        }
+
+        function handlePhoneTap(id, event) {
+            if (event) event.stopPropagation();
+            const now = Date.now();
+            const key = String(id);
+            if (phoneTapTracker[key] && (now - phoneTapTracker[key]) < 500) {
+                handlePhoneDoubleTap(id, event);
+            } else {
+                phoneTapTracker[key] = now;
+            }
+        }
+
+        function handlePhoneTouch(id, event) {
+            const now = Date.now();
+            const key = String(id);
+            if (phoneTapTracker[key] && (now - phoneTapTracker[key]) < 650) {
+                handlePhoneDoubleTap(id, event);
+            } else {
+                phoneTapTracker[key] = now;
+            }
+        }
+
+        function openPhonePrompt(id) {
+            const player = adminPlayersById[String(id)];
+            if (!player) return;
+            const fullName = `${player.firstName || ''} ${player.lastName || ''}`.trim();
+            const currentPhone = String(player.phone || '').trim();
+            const nextPhone = prompt(`Phone number for ${fullName}:`, currentPhone);
+            if (nextPhone === null) return;
+            updatePlayerPhone(id, nextPhone);
+        }
+
+        async function updatePlayerPhone(id, phone) {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/update-phone`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken: sessionToken, playerId: id, phone: String(phone || '').trim() })
+                });
+
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.success !== false) {
+                    showNotification('✅ Phone saved', 'success');
+                    if (data.player && adminPlayersById[String(id)]) {
+                        adminPlayersById[String(id)].phone = data.player.phone || '';
+                    }
+                    loadData();
+                } else if (res.status === 401) {
+                    logout();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to update phone'));
+                    loadData();
+                }
+            } catch (err) {
+                console.error('Update phone error:', err);
+                alert('Error updating phone');
                 loadData();
             }
         }
