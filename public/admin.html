@@ -887,6 +887,26 @@
             margin: 0;
         }
 
+
+        .arena-add-btn {
+            width: 38px;
+            min-width: 38px;
+            height: 38px;
+            border: 1px solid rgba(255,255,255,0.28);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.12);
+            color: #fff;
+            font-size: 1.3rem;
+            font-weight: 800;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .arena-add-btn:hover {
+            background: rgba(255,255,255,0.22);
+            transform: translateY(-1px);
+        }
+
         .update-arena-btn {
             background: #00bcd4;
             margin: 0;
@@ -5913,6 +5933,30 @@ th, td{padding:2px 3px !important;}
     pointer-events:none !important;
 }
 </style>
+
+<style id="admin-global-white-date-picker-icons-v2">
+/* Force every Admin date input to use a visible white calendar icon.
+   Chromium's native date icon can stay black on dark inputs, so we hide
+   the native glyph but keep its clickable picker area, then draw a white SVG. */
+input[type="date"]{
+    color-scheme: dark !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3Ccircle cx='8' cy='14' r='0.8' fill='white' stroke='white'/%3E%3Ccircle cx='12' cy='14' r='0.8' fill='white' stroke='white'/%3E%3Ccircle cx='16' cy='14' r='0.8' fill='white' stroke='white'/%3E%3Ccircle cx='8' cy='18' r='0.8' fill='white' stroke='white'/%3E%3Ccircle cx='12' cy='18' r='0.8' fill='white' stroke='white'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 12px center !important;
+    background-size: 18px 18px !important;
+    padding-right: 42px !important;
+}
+input[type="date"]::-webkit-calendar-picker-indicator{
+    opacity: 0 !important;
+    width: 42px !important;
+    height: 100% !important;
+    cursor: pointer !important;
+}
+/* PIA date picker already has its own working white overlay icon. */
+.payment-slider-pia-date-wrap input[type="date"]{
+    background-image: none !important;
+}
+</style>
 </head>
 <body class="admin-layout-option-1">
 <!-- MAINTENANCE BULLETIN - Shows when activated -->
@@ -6010,9 +6054,10 @@ th, td{padding:2px 3px !important;}
 <option value="WFCU Grenon">WFCU Grenon</option>
 <option value="WFCU AM800">WFCU AM800</option>
 <option value="Capri Recreation Complex">Capri Recreation Complex</option>
-<option value="Vollmer Recreation Complex">Vollmer Recreation Complex</option>
-<option value="Atlas Tube Recreation Centre">Atlas Tube Recreation Centre</option>
+<option value="Vollmer Lasalle Arena">Vollmer Lasalle Arena</option>
+<option value="Atlas Tube Lakeshore">Atlas Tube Lakeshore</option>
 </select>
+<button class="arena-add-btn" type="button" onclick="addArenaOption()" title="Add arena">+</button>
 </div>
 </div>
 </div>
@@ -6422,11 +6467,12 @@ th, td{padding:2px 3px !important;}
 </div>
 <div class="roster-text-export-box" id="rosterTextExportBox">
 <h4>📱 Mass Text Signup Players</h4>
-<p>Use this anytime to text the current signup list from Android. Phan Ly and all goalies are automatically excluded.</p>
+<p>Use this anytime to text the current signup list. Android can open a group text directly. iPhone users should copy the numbers, open Messages, tap To, then paste. Phan Ly and all goalies are automatically excluded.</p>
 <div class="roster-text-export-actions">
 <button class="control-btn" onclick="copySignupPhonesOnly()" style="background:#2e7d32;">Copy Phone Numbers</button>
 <button class="control-btn" onclick="copySignupNamesAndPhones()" style="background:#4a90e2;">Copy Names + Phones</button>
-<button class="control-btn" onclick="openSignupSmsDraft()" style="background:#8e44ad;">Open Android Text</button>
+<button class="control-btn" onclick="copySignupIphoneNumbers()" style="background:#111827;">iPhone: Copy for Messages</button>
+<button class="control-btn" onclick="openSignupSmsDraft()" style="background:#8e44ad;">Android: Open Text</button>
 <button class="control-btn" onclick="downloadSignupContactsCsv()" style="background:#546e7a;">Download CSV</button>
 </div>
 <textarea class="roster-text-export-preview" id="rosterTextExportPreview" placeholder="Signup contact export appears here after players sign up." readonly=""></textarea>
@@ -7589,6 +7635,9 @@ th, td{padding:2px 3px !important;}
                 }
                 
                 // Update arena selector
+                if (Array.isArray(data.arenaOptions)) {
+                    setArenaOptions(data.arenaOptions, data.selectedArena);
+                }
                 if (data.selectedArena) {
                     document.getElementById('arenaSelect').value = data.selectedArena;
                     document.getElementById('currentArenaDisplay').innerText = data.selectedArena;
@@ -7759,6 +7808,76 @@ th, td{padding:2px 3px !important;}
             updateGameSetupPreview();
         }
 
+
+        function getArenaOptionsFromSelect() {
+            const select = document.getElementById('arenaSelect');
+            if (!select) return [];
+            return Array.from(select.options || [])
+                .map(option => String(option.value || option.textContent || '').trim())
+                .filter(Boolean);
+        }
+
+        function setArenaOptions(options, selectedArena) {
+            const select = document.getElementById('arenaSelect');
+            if (!select) return;
+            const current = String(selectedArena || select.value || '').trim();
+            const seen = new Set();
+            const cleaned = [];
+            (Array.isArray(options) ? options : []).forEach(item => {
+                const name = String(item || '').trim();
+                if (!name) return;
+                const key = name.toLowerCase();
+                if (seen.has(key)) return;
+                seen.add(key);
+                cleaned.push(name);
+            });
+            if (current && !seen.has(current.toLowerCase())) cleaned.push(current);
+            select.innerHTML = cleaned.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+            if (current) select.value = current;
+            updateGameSetupPreview();
+        }
+
+        async function addArenaOption() {
+            const entered = prompt('Add Arena\n\nEnter arena name:');
+            const arenaName = String(entered || '').trim();
+            if (!arenaName) return;
+            const existing = getArenaOptionsFromSelect();
+            if (existing.some(name => name.toLowerCase() === arenaName.toLowerCase())) {
+                document.getElementById('arenaSelect').value = existing.find(name => name.toLowerCase() === arenaName.toLowerCase());
+                updateGameSetupPreview();
+                alert('Arena already exists. It has been selected.');
+                return;
+            }
+            const updatedOptions = [...existing, arenaName];
+            setArenaOptions(updatedOptions, arenaName);
+            try {
+                const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({
+                        sessionToken: sessionToken,
+                        arenaOptions: updatedOptions,
+                        selectedArena: arenaName
+                    })
+                });
+                const result = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    document.getElementById('currentArenaDisplay').innerText = arenaName;
+                    const locationInput = document.getElementById('locationInput');
+                    if (locationInput) locationInput.value = arenaName;
+                    alert(`✅ Arena added: ${arenaName}`);
+                    await loadSettings();
+                } else {
+                    alert(result.error || 'Failed to add arena');
+                    await loadAppSettings();
+                }
+            } catch (err) {
+                console.error('Error adding arena:', err);
+                alert('Error adding arena');
+                await loadAppSettings();
+            }
+        }
+
         function updateGameSetupPreview() {
             const titleText = getPublicTitleFromInput((document.getElementById('dynamicTitlePreview')?.innerText || document.getElementById('titlePreview')?.innerText || "Phan's Hockey").trim());
             const arenaText = (document.getElementById('arenaSelect')?.value || document.getElementById('currentArenaDisplay')?.innerText || '--').trim() || '--';
@@ -7796,7 +7915,8 @@ th, td{padding:2px 3px !important;}
                             customTitle: newTitle,
                             selectedDayTime: dayTime,
                             gameDate: selectedGameDate,
-                            selectedArena: arena
+                            selectedArena: arena,
+                            arenaOptions: getArenaOptionsFromSelect()
                         })
                     });
 
@@ -7887,7 +8007,8 @@ Date: ${selectedGameDate}`);
                         headers: getAdminHeaders(),
                         body: JSON.stringify({ 
                             sessionToken: sessionToken,
-                            selectedArena: arena
+                            selectedArena: arena,
+                            arenaOptions: getArenaOptionsFromSelect()
                         })
                     });
 
@@ -8697,6 +8818,15 @@ Date: ${selectedGameDate}`);
             await copyTextToClipboard(data.namePhoneLines, `Copied ${data.total || 0} signup names and phone numbers.`);
         }
 
+        async function copySignupIphoneNumbers() {
+            const data = buildSignupMassTextExport();
+            if (!data.phoneOnly) {
+                alert('No eligible signup phone numbers available. Phan Ly and goalies are excluded automatically.');
+                return;
+            }
+            await copyTextToClipboard(data.phoneOnly, `Copied ${data.total || 0} numbers. On iPhone, open Messages, start a new message, tap To, then paste.`);
+        }
+
         async function openSignupSmsDraft() {
             const data = buildSignupMassTextExport();
             if (!data.phoneOnly) {
@@ -9192,7 +9322,7 @@ ${rosterLink}
                             <td class="phone-col-hidden">${p.phone}</td>
                             <td>
                                 <div class="rating-wrap">
-                                    <input type="number" id="rating-${p.id}" class="rating-pill-input" value="${Number(p.finalRating ?? p.rating ?? 5).toFixed(1)}" min="1" max="10" step="0.1"
+                                    <input type="number" id="rating-${p.id}" class="rating-pill-input" value="${parseFloat(Number(p.finalRating ?? p.rating ?? 5).toFixed(1)).toString()}" min="1" max="10" step="0.1"
                                         onchange="updateRating(${p.id}, this.value)">
 
                                 </div>
@@ -9224,7 +9354,7 @@ ${rosterLink}
                             </td>
                             <td>
                                 <div class="waitlist-rating-wrap">
-                                    <input type="number" id="rating-${p.id}" class="rating-pill-input" value="${Number(p.finalRating ?? p.rating ?? 5).toFixed(1)}" min="1" max="10" step="0.1"
+                                    <input type="number" id="rating-${p.id}" class="rating-pill-input" value="${parseFloat(Number(p.finalRating ?? p.rating ?? 5).toFixed(1)).toString()}" min="1" max="10" step="0.1"
                                         onchange="updateRating(${p.id}, this.value)">
                                 </div>
                             </td>
@@ -10142,7 +10272,7 @@ function todayDateInputValue(){
                 select.innerHTML = '<option value="">No waitlist players available</option>';
             } else {
                 select.innerHTML = '<option value="">-- Select waitlist player --</option>' + list.map((p, index) => {
-                    const rating = Number(p.finalRating ?? p.rating ?? 5).toFixed(1);
+                    const rating = parseFloat(Number(p.finalRating ?? p.rating ?? 5).toFixed(1)).toString();
                     const goalie = p.isGoalie ? ' - GOALIE' : '';
                     return `<option value="${p.id}">#${index + 1} - ${p.firstName} ${p.lastName}${goalie} - Rating ${rating}</option>`;
                 }).join('');
