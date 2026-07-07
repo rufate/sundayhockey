@@ -3003,6 +3003,17 @@ button {
     min-width:0 !important;
 }
 #playerList .player-name-main{font-size:0.99rem !important; font-weight:700 !important; color:#ffffff !important;}
+
+#playerList .admin-rating-footnote {
+    display: inline-block;
+    margin-left: 3px;
+    font-size: 0.54em !important;
+    line-height: 1;
+    vertical-align: super;
+    opacity: 0.78;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
 #playerList .player-phone-sub{
     display:block;
     color:#b9b9b9;
@@ -6017,7 +6028,7 @@ th, td{padding:2px 3px !important;}
 <div class="player-spots-inline-section">
 <h4>🔧 Player Spots</h4>
 <div class="control-row">
-<input class="control-input" id="playerSpotInput" max="30" min="0" type="number" value="20"/>
+<input class="control-input" id="playerSpotInput" max="50" min="0" type="number" value="20"/>
 <button class="control-btn" onclick="updatePlayerSpots()">Update</button>
 <div class="status-display">
 <div class="count-box">
@@ -9100,8 +9111,17 @@ ${rosterLink}
                         return 0;
                     });
 
+                    const formatAdminRatingFootnote = (player) => {
+                        const raw = player.finalRating ?? player.rating ?? player.directRating ?? '';
+                        const rating = parseFloat(raw);
+                        if (!Number.isFinite(rating)) return '';
+                        return parseFloat(rating.toFixed(1)).toString();
+                    };
+
                     sortedPlayers.forEach(p => {
                         const tr = document.createElement('tr');
+                        const adminRatingFootnote = formatAdminRatingFootnote(p);
+                        const adminRatingHtml = adminRatingFootnote ? `<span class="admin-rating-footnote">${adminRatingFootnote}</span>` : '';
                         const goalieBadge = p.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
                         const protectedBadge = (p.firstName.toLowerCase() === 'phan' && p.lastName.toLowerCase() === 'ly') ? 
                             '<span class="protected-badge">PROTECTED</span>' : '';
@@ -9164,7 +9184,7 @@ ${rosterLink}
                                         title="Double-tap to edit nickname"
                                         onclick="handleNicknameNameTap(${p.id}, event)"
                                         ondblclick="handleNicknameNameDoubleTap(${p.id}, event)"
-                                        ontouchend="handleNicknameNameTouch(${p.id}, event)">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}</span>
+                                        ontouchend="handleNicknameNameTouch(${p.id}, event)">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}${adminRatingHtml}</span>
                                 </div>
                                 <span class="player-phone-sub phone-tap-target" title="Double-tap to edit phone" onclick="handlePhoneTap(${p.id}, event)" ondblclick="handlePhoneDoubleTap(${p.id}, event)" ontouchend="handlePhoneTouch(${p.id}, event)">${escapeHtml(p.phone || '')}</span>
                                 ${p.registeredAt ? `<span class="player-time-sub"><span class="locked-time-chip" title="Locked signup timestamp — saved when the player registered and does not change">${formatLockedSignupTime(p.registeredAt)}</span></span>` : ``}

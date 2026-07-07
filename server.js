@@ -246,7 +246,7 @@ function normalizeSkaterCapacity(value, fallback = MAX_SKATERS) {
     if (value === undefined || value === null || value === '') return fallback;
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return fallback;
-    return Math.max(0, Math.min(30, Math.floor(parsed)));
+    return Math.max(0, Math.min(50, Math.floor(parsed)));
 }
 let configuredMaxSkaters = MAX_SKATERS;
 const MAX_ROSTER_SPOTS = 22;
@@ -5241,9 +5241,13 @@ app.get('/api/status', (req, res) => {
         firstName: p.firstName,
         lastName: p.lastName,
         isGoalie: p.isGoalie,
+        // Public display-only rating marker beside registered names.
+        // Uses the current saved player rating at render time; it is not frozen by weekly reset.
+        rating: roundRating(p.finalRating ?? p.rating ?? p.derivedRating ?? p.selfRatingRaw ?? 5),
+        finalRating: roundRating(p.finalRating ?? p.rating ?? p.derivedRating ?? p.selfRatingRaw ?? 5),
         // Phan Ly cannot cancel from signup page - only admin can remove
         canCancel: cancellationAllowedNow && !(String(p.firstName || '').toLowerCase() === 'phan' && String(p.lastName || '').toLowerCase() === 'ly'),
-        // Public replacement display fields only. Still excludes rating, payment, and phone.
+        // Public replacement display fields only. Still excludes payment and phone.
         promotedFromWaitlist: !!p.promotedFromWaitlist,
         lateAddedAfterRelease: !!p.lateAddedAfterRelease,
         isLateAddition: !!p.lateAddedAfterRelease,
@@ -7339,7 +7343,7 @@ app.post('/api/admin/update-spots', async (req, res) => {
     const { password, sessionToken, newSpots } = req.body;
     if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
     const spotCount = normalizeSkaterCapacity(newSpots, NaN);
-    if (!Number.isFinite(spotCount) || spotCount < 0 || spotCount > 30) return res.status(400).json({ error: "Invalid player spot capacity (0-30 allowed)" });
+    if (!Number.isFinite(spotCount) || spotCount < 0 || spotCount > 50) return res.status(400).json({ error: "Invalid player spot capacity (0-50 allowed)" });
     const nonGoalieCount = players.filter(p => !(p && p.isGoalie)).length;
     try {
         await runProtectedMutation('update-spots', req, async () => {
