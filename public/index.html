@@ -653,6 +653,76 @@
             .roster-header #rosterGameInfo { font-size: 0.86rem; letter-spacing: 0.15px; }
         }
 
+
+
+        .image-zoom-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 20000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.88);
+            padding: 18px;
+            touch-action: none;
+        }
+
+        .image-zoom-overlay.active {
+            display: flex;
+        }
+
+        .image-zoom-wrap {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            cursor: zoom-in;
+            touch-action: none;
+        }
+
+        .image-zoom-wrap.zoomed {
+            cursor: grab;
+        }
+
+        .image-zoom-wrap.dragging {
+            cursor: grabbing;
+        }
+
+        .image-zoom-img {
+            max-width: 96vw;
+            max-height: 92vh;
+            object-fit: contain;
+            border-radius: 12px;
+            user-select: none;
+            -webkit-user-drag: none;
+            transform: translate3d(0, 0, 0) scale(1);
+            transition: transform 160ms ease;
+            touch-action: none;
+        }
+
+        .image-zoom-close {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            width: 44px;
+            height: 44px;
+            border: 0;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.16);
+            color: #fff;
+            font-size: 28px;
+            font-weight: 800;
+            line-height: 1;
+            cursor: pointer;
+            z-index: 20001;
+        }
+
+        .announcement-thumb.visible {
+            cursor: zoom-in;
+        }
+
         @media (max-width: 600px) {
             .container { padding: 20px; }
             .spot-number { font-size: 2.5rem; }
@@ -3065,10 +3135,19 @@ function updateCalculatedRating() {
             const generalText = String(data.announcementText || '').trim();
             const rosterText = String(data.rosterReleaseAnnouncementText || '').trim();
             const defaultRosterText = "Etransfer: okosoff@outlook.com\n{spots}\n{joinMessage}";
-            const rawText = isRosterReleased ? (rosterText || defaultRosterText) : generalText;
             const images = Array.isArray(data.announcementImages) ? data.announcementImages : [];
-            const image = (!isRosterReleased && images.length) ? String(images[0] || '').trim() : '';
-            const shouldShow = isRosterReleased ? !!rawText : (generalEnabled && (!!rawText || !!image));
+            const image = (generalEnabled && images.length) ? String(images[0] || '').trim() : '';
+            const hasGeneralAnnouncement = generalEnabled && (!!generalText || !!image);
+
+            // General announcements are intentionally independent of roster release.
+            // If enabled, they can be posted before, during, or after roster release.
+            // When no general announcement is enabled, the automatic roster-release
+            // payment/spots message still appears after the roster is released.
+            const isRosterAnnouncement = !hasGeneralAnnouncement && isRosterReleased;
+            const rawText = hasGeneralAnnouncement
+                ? generalText
+                : (isRosterAnnouncement ? (rosterText || defaultRosterText) : '');
+            const shouldShow = hasGeneralAnnouncement || (isRosterAnnouncement && !!rawText);
 
             if (!shouldShow) {
                 bulletin.classList.remove('active');
@@ -3104,7 +3183,7 @@ function updateCalculatedRating() {
                 ? "'Join Game', recheck roster, see you at the rink."
                 : "'Join Waitlist', 1st on waitlist is guaranteed a spot if a player cancels.";
 
-            if (isRosterReleased) {
+            if (isRosterAnnouncement) {
                 if (text.includes('{joinMessage}')) {
                     text = text.split('{joinMessage}').join(joinMessage);
                 } else if (/You\s+can\s+still\s+['’‘"]?Join Game['’‘"]?/i.test(text)) {
@@ -4007,7 +4086,122 @@ function updateCalculatedRating() {
             }
         });
 
+
+
+        function setupAnnouncementImageZoom() {
+            const thumb = document.getElementById('announcementThumb');
+            const overlay = document.getElementById('imageZoomOverlay');
+            const wrap = document.getElementById('imageZoomWrap');
+            const img = document.getElementById('imageZoomImg');
+            const closeBtn = document.getElementById('imageZoomClose');
+            if (!thumb || !overlay || !wrap || !img || !closeBtn) return;
+
+            let scale = 1;
+            let translateX = 0;
+            let translateY = 0;
+            let dragging = false;
+            let startX = 0;
+            let startY = 0;
+            let startTranslateX = 0;
+            let startTranslateY = 0;
+            let lastTap = 0;
+
+            const applyTransform = () => {
+                img.style.transform = `translate3d(${translateX}px, ${translateY}px, 0) scale(${scale})`;
+                wrap.classList.toggle('zoomed', scale > 1);
+            };
+
+            const resetZoom = () => {
+                scale = 1;
+                translateX = 0;
+                translateY = 0;
+                applyTransform();
+            };
+
+            const toggleZoom = (clientX, clientY) => {
+                if (scale > 1) {
+                    resetZoom();
+                    return;
+                }
+                scale = 2;
+                const rect = img.getBoundingClientRect();
+                const offsetX = clientX ? clientX - (rect.left + rect.width / 2) : 0;
+                const offsetY = clientY ? clientY - (rect.top + rect.height / 2) : 0;
+                translateX = -offsetX * 0.55;
+                translateY = -offsetY * 0.55;
+                applyTransform();
+            };
+
+            const openViewer = () => {
+                if (!thumb.src) return;
+                img.src = thumb.src;
+                resetZoom();
+                overlay.classList.add('active');
+                overlay.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+            };
+
+            const closeViewer = () => {
+                overlay.classList.remove('active');
+                overlay.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+                dragging = false;
+                wrap.classList.remove('dragging');
+            };
+
+            thumb.addEventListener('click', openViewer);
+            closeBtn.addEventListener('click', closeViewer);
+            overlay.addEventListener('click', (event) => {
+                if (event.target === overlay) closeViewer();
+            });
+
+            wrap.addEventListener('pointerdown', (event) => {
+                event.preventDefault();
+                const now = Date.now();
+                if (now - lastTap < 300) {
+                    toggleZoom(event.clientX, event.clientY);
+                    lastTap = 0;
+                    return;
+                }
+                lastTap = now;
+
+                if (scale <= 1) return;
+                dragging = true;
+                startX = event.clientX;
+                startY = event.clientY;
+                startTranslateX = translateX;
+                startTranslateY = translateY;
+                wrap.classList.add('dragging');
+                wrap.setPointerCapture?.(event.pointerId);
+            });
+
+            wrap.addEventListener('pointermove', (event) => {
+                if (!dragging || scale <= 1) return;
+                event.preventDefault();
+                translateX = startTranslateX + (event.clientX - startX);
+                translateY = startTranslateY + (event.clientY - startY);
+                applyTransform();
+            });
+
+            const stopDrag = (event) => {
+                dragging = false;
+                wrap.classList.remove('dragging');
+                try { wrap.releasePointerCapture?.(event.pointerId); } catch (_) {}
+            };
+            wrap.addEventListener('pointerup', stopDrag);
+            wrap.addEventListener('pointercancel', stopDrag);
+            wrap.addEventListener('dblclick', (event) => {
+                event.preventDefault();
+                toggleZoom(event.clientX, event.clientY);
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && overlay.classList.contains('active')) closeViewer();
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
+            setupAnnouncementImageZoom();
             loadSavedFormData();
             renderQuickReturnProfiles();
             updateQuickReturnVisibility();
@@ -4069,6 +4263,15 @@ function updateCalculatedRating() {
             });
         });
     </script>
+
+
+
+    <div class="image-zoom-overlay" id="imageZoomOverlay" aria-hidden="true">
+        <button type="button" class="image-zoom-close" id="imageZoomClose" aria-label="Close image">×</button>
+        <div class="image-zoom-wrap" id="imageZoomWrap">
+            <img class="image-zoom-img" id="imageZoomImg" alt="Announcement image preview">
+        </div>
+    </div>
 
     <div class="copyright-footer">© 2026 Phan Anthony Ly. All Rights Reserved.</div>
 </body>
