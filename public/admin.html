@@ -9378,7 +9378,7 @@ ${rosterLink}
                         const regularClass = regularInfo.active ? 'regular-toggle-btn active' : 'regular-toggle-btn';
 
                         const isProtectedPlayer = isProtectedOrAdminOnlyPlayer(p);
-                        const hideAdminPaymentUi = !!p.isGoalie;
+                        const hideAdminPaymentUi = !!p.isGoalie || isLegacyPhanLyPlayerAdmin(p);
 
                         let paidInput = '';
                         if (!hideAdminPaymentUi) {
