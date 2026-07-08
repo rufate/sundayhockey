@@ -3677,22 +3677,23 @@ function updateCalculatedRating() {
             }
 
             const sortedPlayers = [...players].sort((a, b) => {
-                const aFirst = String(a.firstName || '').toLowerCase();
-                const aLast = String(a.lastName || '').toLowerCase();
-                const bFirst = String(b.firstName || '').toLowerCase();
-                const bLast = String(b.lastName || '').toLowerCase();
+                const nameKey = (player) => `${String(player.firstName || '').trim()} ${String(player.lastName || '').trim()}`.trim().toLowerCase();
+                const isPhan = (player) => {
+                    const first = String(player.firstName || '').trim().toLowerCase();
+                    const last = String(player.lastName || '').trim().toLowerCase();
+                    return first === 'phan' && last === 'ly';
+                };
 
-                const aProtected = !!(a.protected || a.adminOnlyRemove);
-                const bProtected = !!(b.protected || b.adminOnlyRemove);
                 const aIsGoalie = !!a.isGoalie;
                 const bIsGoalie = !!b.isGoalie;
-
                 if (aIsGoalie !== bIsGoalie) return aIsGoalie ? -1 : 1;
-                if (aProtected !== bProtected) return aProtected ? -1 : 1;
+                if (aIsGoalie && bIsGoalie) return nameKey(a).localeCompare(nameKey(b));
 
-                const nameA = `${aLast} ${aFirst}`.trim();
-                const nameB = `${bLast} ${bFirst}`.trim();
-                return nameA.localeCompare(nameB);
+                const aIsPhan = isPhan(a);
+                const bIsPhan = isPhan(b);
+                if (aIsPhan !== bIsPhan) return aIsPhan ? -1 : 1;
+
+                return nameKey(a).localeCompare(nameKey(b));
             });
 
             countSpan.innerText = sortedPlayers.length;
