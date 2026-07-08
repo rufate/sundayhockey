@@ -59,15 +59,22 @@ body{margin:0;background:#111;color:#fff;font-family:Arial}
 .btn + .btn{margin-top:1px}
 
 
-/* Admin date picker icons: keep native picker clickable and make icon visible on dark backgrounds */
+
+
+
+
+
+/* HP final date/datetime picker fix: native clickable picker, white visible icon. */
 input[type="date"],
-input[type="datetime-local"]{
+input[type="datetime-local"] {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
   color-scheme: dark !important;
 }
 input[type="date"]::-webkit-calendar-picker-indicator,
-input[type="datetime-local"]::-webkit-calendar-picker-indicator{
-  filter: invert(1) brightness(2) !important;
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   opacity: 1 !important;
+  filter: brightness(0) invert(1) !important;
   cursor: pointer !important;
+  pointer-events: auto !important;
 }
-

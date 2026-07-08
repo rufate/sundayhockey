@@ -406,7 +406,7 @@
             </div>
 
             <div class="roster-cancel-note" id="rosterCancelNote" style="display:none;">
-                Players may self-cancel after roster release until the 3-hour cancellation deadline.
+                Players may self-cancel after roster release until the cancellation deadline.
             </div>
 
             <div id="teamsDisplay" style="display:none;">
@@ -443,7 +443,7 @@
         <div class="modal-content">
             <h3>Cancel Roster Spot</h3>
             <p>Enter the same 10-digit phone number used when you registered.</p>
-            <p style="color:#ffcc80; font-weight:bold;">This is allowed only before the 3-hour cancellation deadline.</p>
+            <p style="color:#ffcc80; font-weight:bold;">This is allowed only before the cancellation deadline.</p>
             <input type="tel" id="cancelPhoneInput" placeholder="(555) 555-5555" maxlength="14">
             <div class="cancel-error" id="cancelError"></div>
             <div class="cancel-success" id="cancelSuccess"></div>
@@ -592,8 +592,12 @@
                 document.getElementById('teamsDisplay').style.display = 'block';
                 const cancelNote = document.getElementById('rosterCancelNote');
                 if (cancelNote) {
+                    const policyText = data.cancellationPolicy || data.cancellationDeadlineLine || '';
+                    cancelNote.innerText = policyText || 'Players may self-cancel after roster release until the cancellation deadline.';
                     cancelNote.style.display = data.cancellationAllowedNow ? 'block' : 'none';
                 }
+                const modalPolicy = document.querySelector('#cancelModal .modal-content p[style*="color:#ffcc80"]');
+                if (modalPolicy) modalPolicy.innerText = data.cancellationPolicy || data.cancellationDeadlineLine || 'This is allowed only before the cancellation deadline.';
 
                 document.getElementById('whiteCount').innerText = Number.isFinite(data.whiteActiveCount) ? data.whiteActiveCount : data.whiteTeam.length;
                 document.getElementById('darkCount').innerText = Number.isFinite(data.darkActiveCount) ? data.darkActiveCount : data.darkTeam.length;

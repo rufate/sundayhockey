@@ -130,11 +130,11 @@ function renderPlayers(players){
     return String(a.lastName || '').localeCompare(String(b.lastName || ''), undefined, {sensitivity:'base'});
   });
   for(const p of sorted){
-    const isPhan = String(p.firstName||'').toLowerCase()==='phan' && String(p.lastName||'').toLowerCase()==='ly';
+    const isProtectedPlayer = !!(p.protected || p.adminOnlyRemove);
     const state = paymentState(p);
-    const actions = (p.isGoalie || isPhan) ? '<span class="goalie-note">No collection</span>' : `<div class="action-stack"><button class="paid-btn" onclick="setPaid(${p.id},15,'Cash')">$15</button><button class="amount-btn" onclick="customAmount(${p.id})">Other</button><button class="owes-btn" onclick="setPaid(${p.id},null)">Owes</button></div>`;
+    const actions = (p.isGoalie || isProtectedPlayer) ? '<span class="goalie-note">No collection</span>' : `<div class="action-stack"><button class="paid-btn" onclick="setPaid(${p.id},15,'Cash')">$15</button><button class="amount-btn" onclick="customAmount(${p.id})">Other</button><button class="owes-btn" onclick="setPaid(${p.id},null)">Owes</button></div>`;
     const tr = document.createElement('tr');
-    const pillAction = (p.isGoalie || isPhan) ? '' : `onclick="payPillTap(${p.id}, '${state.cls}', '${state.method || 'E-Transfer'}')" style="cursor:pointer" title="Tap OWES for E$15. Tap paid to switch cash/e-transfer."`;
+    const pillAction = (p.isGoalie || isProtectedPlayer) ? '' : `onclick="payPillTap(${p.id}, '${state.cls}', '${state.method || 'E-Transfer'}')" style="cursor:pointer" title="Tap OWES for E$15. Tap paid to switch cash/e-transfer."`;
     tr.innerHTML = `<td><span class="name-main">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}${p.isGoalie?' <span class="goalie-note">GOALIE</span>':''}</span><span class="phone">${escapeHtml(p.phone||'')}</span>${p.registeredAt?`<span class="time">🔒 ${fmtTime(p.registeredAt)}</span>`:''}</td><td><span class="pay-pill ${state.cls}" ${pillAction}>${state.label}</span></td><td>${actions}</td>`;
     tbody.appendChild(tr);
   }

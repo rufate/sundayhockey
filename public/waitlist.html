@@ -333,7 +333,7 @@
         </div>
 
         <div style="text-align:center; color:#ffb366; margin: 14px 0 18px 0; font-size: 0.95rem;">
-            Notice: Waitlist position 1 will automatically be promoted if a player cancels before the 3-hour deadline.
+            Notice: Waitlist position 1 will automatically be promoted when a player cancels before the cancellation deadline.
         </div>
 
         <ul class="waitlist-list" id="waitlistList">
@@ -506,7 +506,7 @@
 
                 const waitlistNote = document.querySelector('.container > div[style*="text-align:center; color:#ffb366"]');
                 if (waitlistNote && data.cancellationDeadlineLine) {
-                    waitlistNote.innerText = `Notice: Waitlist position 1 will automatically be promoted if a player cancels before the 3-hour deadline. ${data.cancellationDeadlineLine}`;
+                    waitlistNote.innerText = `Notice: Waitlist position 1 will automatically be promoted when a player cancels before the cancellation deadline. ${data.cancellationDeadlineLine}`;
                 }
 
                 const list = document.getElementById('waitlistList');

@@ -2289,7 +2289,7 @@
         <div class="modal-content">
             <h3>⚠️ Cancel Registration</h3>
             <p>Enter the phone number you used to register to confirm cancellation.</p>
-            <p id="cancelPolicyModalText" style="color:#ffb3b3; font-weight:bold; margin-top:-6px;">Cancel anytime. Last-minute cancellations must be made at least 3 hours before game time to give waitlisted players a chance to play. No-show owes.</p>
+            <p id="cancelPolicyModalText" style="color:#ffb3b3; font-weight:bold; margin-top:-6px;">Cancel anytime before the cancellation cutoff. No-show owes.</p>
             <input type="tel" id="cancelPhoneInput" placeholder="Phone Number" inputmode="numeric" autocomplete="tel" maxlength="14" style="margin-bottom: 15px;">
             <div class="cancel-error" id="cancelError"></div>
             <div class="cancel-success" id="cancelSuccess"></div>
@@ -2302,6 +2302,7 @@
 
     <script>
         const API_URL = window.location.origin;
+        let PORTAL_TIMEZONE = 'America/Toronto';
         let verifiedCode = null;
         let codeRequired = true;
         let currentLocation = "";
@@ -3089,7 +3090,7 @@ function updateCalculatedRating() {
                             : '';
                         const safeFirstName = String(player.firstName || '').replace(/'/g, "\'");
                         const safeLastName = String(player.lastName || '').replace(/'/g, "\'");
-                        const buttonHtml = (!player.cancelled && player.canCancel !== false && player.id != null)
+                        const buttonHtml = (!player.isGoalie && !player.cancelled && player.canCancel !== false && player.id != null)
                             ? `<button class="cancel-btn" onclick="openCancelModal(${JSON.stringify(player.id)}, '${safeFirstName}', '${safeLastName}')">Cancel</button>`
                             : '';
                         li.innerHTML = `<span class="player-name">${player.firstName || ''} ${player.lastName || ''} ${goalieBadge} ${cancelBadge} ${subBadge}${subNote}</span>${buttonHtml}`;
@@ -3274,7 +3275,7 @@ function updateCalculatedRating() {
             }
 
             const datePart = new Intl.DateTimeFormat('en-US', {
-                timeZone: 'America/New_York',
+                timeZone: PORTAL_TIMEZONE,
                 weekday: 'long',
                 month: 'long',
                 day: 'numeric',
@@ -3282,7 +3283,7 @@ function updateCalculatedRating() {
             }).format(releaseDate);
 
             const timePart = new Intl.DateTimeFormat('en-US', {
-                timeZone: 'America/New_York',
+                timeZone: PORTAL_TIMEZONE,
                 hour: 'numeric',
                 minute: '2-digit',
                 hour12: true
@@ -3556,7 +3557,7 @@ function updateCalculatedRating() {
                 document.getElementById('rosterMeta').innerText =
                     data.rosterReleaseAt
                         ? new Intl.DateTimeFormat('en-US', {
-                            timeZone: 'America/New_York',
+                            timeZone: PORTAL_TIMEZONE,
                             weekday: 'long',
                             month: 'long',
                             day: 'numeric',
@@ -3681,13 +3682,13 @@ function updateCalculatedRating() {
                 const bFirst = String(b.firstName || '').toLowerCase();
                 const bLast = String(b.lastName || '').toLowerCase();
 
-                const aIsPhan = aFirst === 'phan' && aLast === 'ly';
-                const bIsPhan = bFirst === 'phan' && bLast === 'ly';
+                const aProtected = !!(a.protected || a.adminOnlyRemove);
+                const bProtected = !!(b.protected || b.adminOnlyRemove);
                 const aIsGoalie = !!a.isGoalie;
                 const bIsGoalie = !!b.isGoalie;
 
                 if (aIsGoalie !== bIsGoalie) return aIsGoalie ? -1 : 1;
-                if (aIsPhan !== bIsPhan) return aIsPhan ? -1 : 1;
+                if (aProtected !== bProtected) return aProtected ? -1 : 1;
 
                 const nameA = `${aLast} ${aFirst}`.trim();
                 const nameB = `${bLast} ${bFirst}`.trim();
@@ -3702,7 +3703,7 @@ function updateCalculatedRating() {
 
                 const firstName = String(player.firstName || '');
                 const lastName = String(player.lastName || '');
-                const isProtected = firstName.toLowerCase() === 'phan' && lastName.toLowerCase() === 'ly';
+                const isProtected = !!(player.protected || player.adminOnlyRemove);
                 const isGoalie = !!player.isGoalie;
 
                 let cardClass = 'player-card';

@@ -241,15 +241,68 @@ app.use(durableMutationGuardMiddleware);
 app.use(schedulerCatchupMiddleware);
 
 // --- DATA STORE ---
-const MAX_SKATERS = 20;
+// Single-source portal defaults. Same codebase can run Friday, Sunday, or any other game
+// by changing saved settings or environment variables instead of editing source code.
+// One-time bootstrap defaults for first install/migration only.
+// Normal runtime reads from saved settings, not hidden fallback literals.
+const PORTAL_BOOTSTRAP_DEFAULTS = {
+    timezone: 'America/Toronto',
+    signupCode: '9855',
+    gameLocation: 'Capri Recreation Complex',
+    gameTime: 'Friday 9:30 PM'
+};
+
+const PORTAL_DEFAULTS = {
+    timezone: String(process.env.PORTAL_TIMEZONE || PORTAL_BOOTSTRAP_DEFAULTS.timezone).trim(),
+    skaterCapacity: Number(process.env.DEFAULT_SKATER_CAPACITY || 20),
+    maxSkaterCapacityInput: Number(process.env.MAX_SKATER_CAPACITY_INPUT || 50),
+    maxGoalies: Number(process.env.DEFAULT_MAX_GOALIES || 2),
+    signupCode: String(process.env.DEFAULT_SIGNUP_CODE || PORTAL_BOOTSTRAP_DEFAULTS.signupCode).trim(),
+    gameLocation: String(process.env.DEFAULT_GAME_LOCATION || PORTAL_BOOTSTRAP_DEFAULTS.gameLocation).trim(),
+    gameTime: String(process.env.DEFAULT_GAME_TIME || PORTAL_BOOTSTRAP_DEFAULTS.gameTime).trim(),
+    announcementImageBytes: Number(process.env.MAX_ANNOUNCEMENT_IMAGE_BYTES || (900 * 1024)),
+    announcementImages: Number(process.env.MAX_ANNOUNCEMENT_IMAGES || 1),
+    cancellationCutoffHours: Number(process.env.DEFAULT_CANCELLATION_CUTOFF_HOURS || 3)
+};
+
+const REQUIRED_PORTAL_SETTING_KEYS = ['timezone', 'signupCode', 'gameLocation', 'gameTime'];
+let portalSettingsWarnings = [];
+
+function getBootstrapPortalSettings(existing = {}) {
+    return {
+        timezone: String(existing.timezone || existing.portalTimezone || PORTAL_DEFAULTS.timezone).trim(),
+        signupCode: String(existing.signupCode || existing.playerSignupCode || existing.editableDefaultSignupCode || PORTAL_DEFAULTS.signupCode).trim(),
+        gameLocation: String(existing.gameLocation || existing.selectedArena || PORTAL_DEFAULTS.gameLocation).trim(),
+        gameTime: String(existing.gameTime || existing.selectedDayTime || PORTAL_DEFAULTS.gameTime).trim()
+    };
+}
+
+function validateRequiredPortalSettings(settings = {}) {
+    const warnings = [];
+    if (!String(settings.timezone || '').trim()) warnings.push('Portal timezone is missing.');
+    if (!/^\d{4}$/.test(String(settings.signupCode || '').trim())) warnings.push('Default signup code is missing or invalid.');
+    if (!String(settings.gameLocation || '').trim()) warnings.push('Game arena/location is missing.');
+    if (!parseGameTimeStringLoose(settings.gameTime)) warnings.push('Game day/time is missing or invalid.');
+    portalSettingsWarnings = warnings;
+    return warnings;
+}
+
+function applyRequiredPortalSettings(settings = {}) {
+    const migrated = getBootstrapPortalSettings(settings);
+    validateRequiredPortalSettings(migrated);
+    return migrated;
+}
+
+
+const MAX_SKATERS = Number.isFinite(PORTAL_DEFAULTS.skaterCapacity) ? PORTAL_DEFAULTS.skaterCapacity : 20;
 function normalizeSkaterCapacity(value, fallback = MAX_SKATERS) {
     if (value === undefined || value === null || value === '') return fallback;
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return fallback;
-    return Math.max(0, Math.min(50, Math.floor(parsed)));
+    return Math.max(0, Math.min(PORTAL_DEFAULTS.maxSkaterCapacityInput || 50, Math.floor(parsed)));
 }
 let skaterCapacity = MAX_SKATERS;
-const MAX_ROSTER_SPOTS = 22;
+function getMaxRosterSpots() { return skaterCapacity + maxGoalies; }
 let remainingSkaterSpots = skaterCapacity;
 let players = []; 
 let waitlist = [];
@@ -264,14 +317,14 @@ const ADMIN_SESSION_TOKEN_TTL_HOURS = Number(process.env.ADMIN_SESSION_HOURS || 
 const ADMIN_SESSION_FILE = './admin-sessions.json';
 
 // Game details - FRIDAY HOCKEY
-let gameLocation = "Capri Recreation Complex";
-let gameTime = "Friday 9:30 PM";
+let gameLocation = PORTAL_DEFAULTS.gameLocation;
+let gameTime = PORTAL_DEFAULTS.gameTime;
 let gameDate = "";
 
 // ---- Game-day helpers (dynamic Friday/Sunday etc.) ----
 
-const MAX_ANNOUNCEMENT_IMAGE_BYTES = 900 * 1024;
-const MAX_ANNOUNCEMENT_IMAGES = 1;
+const MAX_ANNOUNCEMENT_IMAGE_BYTES = PORTAL_DEFAULTS.announcementImageBytes || (900 * 1024);
+const MAX_ANNOUNCEMENT_IMAGES = PORTAL_DEFAULTS.announcementImages || 1;
 const ALLOWED_ANNOUNCEMENT_IMAGE_PREFIXES = [
     'data:image/jpeg;base64,',
     'data:image/jpg;base64,',
@@ -330,20 +383,26 @@ const DAY_NAME_TO_INDEX = {
 };
 const INDEX_TO_DAY_NAME = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
-function parseGameTimeString(gameTimeStr) {
-    // Expected formats: "Friday 9:30 PM", "Sunday 10:00 AM"
+function parseGameTimeStringLoose(gameTimeStr) {
     const m = String(gameTimeStr || "").trim().match(/^([A-Za-z]+)\s+(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i);
-    if (!m) {
-        return { dayName: "Friday", dayIndex: 5, hour24: 21, minute: 30 }; // safe fallback
-    }
+    if (!m) return null;
     const dayNameRaw = m[1].toLowerCase();
-    const dayIndex = DAY_NAME_TO_INDEX[dayNameRaw] ?? 5;
+    if (!(dayNameRaw in DAY_NAME_TO_INDEX)) return null;
     const hour12 = parseInt(m[2], 10);
     const minute = m[3] ? parseInt(m[3], 10) : 0;
-    const ampm = m[4].toUpperCase();
+    if (hour12 < 1 || hour12 > 12 || minute < 0 || minute > 59) return null;
+    const dayIndex = DAY_NAME_TO_INDEX[dayNameRaw];
     let hour24 = hour12 % 12;
-    if (ampm === "PM") hour24 += 12;
+    if (m[4].toUpperCase() === "PM") hour24 += 12;
     return { dayName: INDEX_TO_DAY_NAME[dayIndex], dayIndex, hour24, minute };
+}
+
+function parseGameTimeString(gameTimeStr) {
+    // Expected formats: "Friday 9:30 PM", "Sunday 10:00 AM"
+    const parsed = parseGameTimeStringLoose(gameTimeStr);
+    if (parsed) return parsed;
+    portalSettingsWarnings = [...new Set([...(portalSettingsWarnings || []), 'Game day/time is missing or invalid.'])];
+    return parseGameTimeStringLoose(PORTAL_DEFAULTS.gameTime);
 }
 
 function getGameDayName() {
@@ -351,7 +410,7 @@ function getGameDayName() {
 }
 
 
-const DEFAULT_SIGNUP_CODE = '9855';
+const DEFAULT_SIGNUP_CODE = /^\d{4}$/.test(PORTAL_DEFAULTS.signupCode) ? PORTAL_DEFAULTS.signupCode : '';
 
 // One permanent default code, plus optional temporary override.
 let editableDefaultSignupCode = DEFAULT_SIGNUP_CODE;
@@ -391,7 +450,8 @@ function getDynamicSignupCode(dayName = getGameDayName()) {
         return editableDefaultSignupCode;
     }
 
-    return DEFAULT_SIGNUP_CODE;
+    portalSettingsWarnings = [...new Set([...(portalSettingsWarnings || []), 'Default signup code is missing or invalid.'])];
+    return '';
 }
 
 
@@ -413,7 +473,7 @@ function refreshDynamicSignupCode() {
 function calculateNextGameDate() {
     // Calculate next occurrence of the configured game day/time in America/New_York
     const now = new Date();
-    const etNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const etNow = new Date(now.toLocaleString("en-US", { timeZone: PORTAL_DEFAULTS.timezone }));
     const { dayIndex, hour24, minute } = parseGameTimeString(gameTime);
 
     const currentDow = etNow.getDay();
@@ -628,8 +688,24 @@ let currentWeekData = {
     darkTeam: []
 };
 
-const MAX_GOALIES = 2;
-const DEFAULT_NO_SHOW_POLICY_TEXT = 'Cancel anytime. Last-minute cancellations must be made at least 3 hours before game time to give waitlisted players a chance to play. After the 3-hour deadline, the spot is your responsibility. No-show owes.';
+function normalizeCancellationCutoffHours(value, fallback = 3) {
+    if (value === undefined || value === null || value === '') return fallback;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(0, Math.min(72, Math.round(parsed * 100) / 100));
+}
+let cancellationCutoffHours = normalizeCancellationCutoffHours(PORTAL_DEFAULTS.cancellationCutoffHours, 3);
+function formatCancellationCutoffHours(value = cancellationCutoffHours) {
+    const hours = normalizeCancellationCutoffHours(value, 3);
+    return Number.isInteger(hours) ? String(hours) : String(hours).replace(/\.0+$/, '');
+}
+function buildDefaultNoShowPolicyText(hours = cancellationCutoffHours) {
+    const h = formatCancellationCutoffHours(hours);
+    const hourWord = Number(h) === 1 ? 'hour' : 'hours';
+    return `Cancel anytime. Last-minute cancellations must be made at least ${h} ${hourWord} before game time to give waitlisted players a chance to play. After the ${h}-${hourWord} deadline, the spot is your responsibility. No-show owes.`;
+}
+let maxGoalies = Number.isFinite(PORTAL_DEFAULTS.maxGoalies) ? Math.max(0, Math.floor(PORTAL_DEFAULTS.maxGoalies)) : 2;
+let DEFAULT_NO_SHOW_POLICY_TEXT = buildDefaultNoShowPolicyText();
 let NO_SHOW_POLICY_TEXT = DEFAULT_NO_SHOW_POLICY_TEXT;
 
 const DEFAULT_GAME_RULES = [
@@ -659,6 +735,7 @@ function extractNoShowPolicyFromRules(rules) {
 }
 
 function syncNoShowPolicyWithRules() {
+    DEFAULT_NO_SHOW_POLICY_TEXT = buildDefaultNoShowPolicyText();
     NO_SHOW_POLICY_TEXT = String(NO_SHOW_POLICY_TEXT || DEFAULT_NO_SHOW_POLICY_TEXT).trim() || DEFAULT_NO_SHOW_POLICY_TEXT;
     GAME_RULES = normalizeGameRules(GAME_RULES);
     const idx = GAME_RULES.findIndex(rule => /no[- ]?show owes/i.test(rule) || /last[- ]?minute cancellations/i.test(rule));
@@ -677,6 +754,27 @@ function syncNoShowPolicyWithRules() {
 // Defaults are only used to seed persisted admin-managed settings.
 // Protected players and regular goalies are now saved settings, not hard-coded weekly state.
 const DEFAULT_PROTECTED_PLAYERS_BY_DAY = {
+    // Protected players are intentionally omitted. Use Regular players for weekly auto-add.
+    everyday: [],
+    friday: [],
+    sunday: []
+};
+
+let protectedPlayersByDay = JSON.parse(JSON.stringify(DEFAULT_PROTECTED_PLAYERS_BY_DAY));
+
+const DEFAULT_REGULAR_GOALIES_BY_DAY = {
+    // Intentionally empty. Regular goalies are now admin-managed data, not hard-coded names.
+    everyday: [],
+    friday: [],
+    sunday: []
+};
+
+let regularGoaliesByDay = JSON.parse(JSON.stringify(DEFAULT_REGULAR_GOALIES_BY_DAY));
+
+// --- REGULAR SKATERS FOR WEEKLY RESET AUTO-ADD ---
+// Supported keys: everyday, friday, sunday, wednesday, saturday, etc.
+// protected: false is recommended for most regulars so they can still cancel from the signup page.
+const DEFAULT_REGULAR_SKATERS_BY_DAY = {
     everyday: [
         {
             firstName: "Phan",
@@ -686,66 +784,10 @@ const DEFAULT_PROTECTED_PLAYERS_BY_DAY = {
             isGoalie: false,
             isFree: true,
             paymentMethod: "FREE",
-            protected: true,
-            adminOnlyRemove: true
+            protected: false,
+            adminOnlyRemove: false
         }
     ],
-    friday: [],
-    sunday: []
-};
-
-let protectedPlayersByDay = JSON.parse(JSON.stringify(DEFAULT_PROTECTED_PLAYERS_BY_DAY));
-
-const DEFAULT_REGULAR_GOALIES_BY_DAY = {
-    friday: [
-        {
-            firstName: "Craig",
-            lastName: "Scolack",
-            phone: "(519) 982-6311",
-            rating: 9,
-            isGoalie: true,
-            isFree: false,
-            paymentMethod: "N/A"
-        },
-        {
-            firstName: "Hao",
-            lastName: "Chau",
-            phone: "(519) 995-9884",
-            rating: 8,
-            isGoalie: true,
-            isFree: false,
-            paymentMethod: "N/A"
-        }
-    ],
-    sunday: [
-        {
-            firstName: "Craig",
-            lastName: "Scolack",
-            phone: "(519) 982-6311",
-            rating: 9,
-            isGoalie: true,
-            isFree: false,
-            paymentMethod: "N/A"
-        },
-        {
-            firstName: "Mat",
-            lastName: "Carriere",
-            phone: "(226) 350-0217",
-            rating: 7,
-            isGoalie: true,
-            isFree: false,
-            paymentMethod: "N/A"
-        }
-    ]
-};
-
-let regularGoaliesByDay = JSON.parse(JSON.stringify(DEFAULT_REGULAR_GOALIES_BY_DAY));
-
-// --- REGULAR SKATERS FOR WEEKLY RESET AUTO-ADD ---
-// Supported keys: everyday, friday, sunday, wednesday, saturday, etc.
-// protected: false is recommended for most regulars so they can still cancel from the signup page.
-const DEFAULT_REGULAR_SKATERS_BY_DAY = {
-    everyday: [],
     friday: [],
     sunday: []
 };
@@ -764,6 +806,69 @@ let persistentPlayerNicknames = {};
 // Keyed the same way as ratings/nicknames, preferring phone number.
 let persistentPiaPayments = {};
 
+
+function getNormalizedPlayerFullName(player = {}) {
+    return `${String(player.firstName || '').trim()} ${String(player.lastName || '').trim()}`.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function isLegacyPhanLyPlayer(player = {}) {
+    return getNormalizedPlayerFullName(player) === 'phan ly';
+}
+
+function isProtectedOrAdminOnlyPlayer(player = {}) {
+    return !!(player && (player.protected || player.adminOnlyRemove));
+}
+
+function isPublicCancelLockedPlayer(player = {}) {
+    // Phan is managed with the normal Regular toggle in Admin, but never gets a public Cancel button.
+    return isLegacyPhanLyPlayer(player);
+}
+
+function getFirstNameSortKey(player = {}) {
+    return `${String(player.firstName || '').trim()} ${String(player.lastName || '').trim()}`.trim().toLowerCase();
+}
+
+function comparePlayersByFirstName(a = {}, b = {}) {
+    return getFirstNameSortKey(a).localeCompare(getFirstNameSortKey(b));
+}
+
+function compareWeeklyRegisteredOrder(a = {}, b = {}) {
+    const aGoalie = !!a.isGoalie;
+    const bGoalie = !!b.isGoalie;
+    if (aGoalie && !bGoalie) return -1;
+    if (!aGoalie && bGoalie) return 1;
+    if (aGoalie && bGoalie) return comparePlayersByFirstName(a, b);
+
+    const aPhan = isLegacyPhanLyPlayer(a);
+    const bPhan = isLegacyPhanLyPlayer(b);
+    if (aPhan && !bPhan) return -1;
+    if (!aPhan && bPhan) return 1;
+
+    return comparePlayersByFirstName(a, b);
+}
+
+function compareRosterTeamDisplayOrder(a = {}, b = {}) {
+    const aGoalie = !!a.isGoalie;
+    const bGoalie = !!b.isGoalie;
+    if (aGoalie && !bGoalie) return -1;
+    if (!aGoalie && bGoalie) return 1;
+    return comparePlayersByFirstName(a, b);
+}
+
+function applyProtectedPlayerFlags(player = {}) {
+    if (!player || typeof player !== 'object') return player;
+    if (isLegacyPhanLyPlayer(player)) {
+        player.protected = false;
+        player.adminOnlyRemove = false;
+        player.isFree = player.isFree ?? true;
+        player.paymentMethod = player.paymentMethod || 'FREE';
+        if (player.paidAmount === undefined || player.paidAmount === null) player.paidAmount = 0;
+        if (player.paymentStatus === undefined || player.paymentStatus === null) player.paymentStatus = 'paid';
+        if (player.paid === undefined || player.paid === null) player.paid = true;
+    }
+    return player;
+}
+
 function normalizeAutoAddEntry(input = {}, defaults = {}) {
     const firstName = String(input.firstName || defaults.firstName || '').trim();
     const lastName = String(input.lastName || defaults.lastName || '').trim();
@@ -772,7 +877,7 @@ function normalizeAutoAddEntry(input = {}, defaults = {}) {
     const rating = Number.isFinite(ratingNumber) ? Math.max(1, Math.min(10, Number(ratingNumber.toFixed(1)))) : 5;
     const paymentMethodRaw = String(input.paymentMethod || defaults.paymentMethod || 'N/A').trim();
 
-    return {
+    return applyProtectedPlayerFlags({
         firstName,
         lastName,
         phone,
@@ -783,7 +888,7 @@ function normalizeAutoAddEntry(input = {}, defaults = {}) {
         protected: !!(input.protected ?? defaults.protected),
         adminOnlyRemove: !!(input.adminOnlyRemove ?? defaults.adminOnlyRemove),
         regularGoalie: !!(input.regularGoalie ?? defaults.regularGoalie)
-    };
+    });
 }
 
 function normalizeAutoAddByDayMap(input = undefined, defaultMap = {}, entryDefaults = {}) {
@@ -818,13 +923,18 @@ function autoAddMapHasEntries(map) {
 }
 
 function normalizeProtectedPlayersByDayMap(input = undefined) {
-    return normalizeAutoAddByDayMap(input, DEFAULT_PROTECTED_PLAYERS_BY_DAY, {
+    const normalized = normalizeAutoAddByDayMap(input, DEFAULT_PROTECTED_PLAYERS_BY_DAY, {
         isGoalie: false,
         isFree: true,
         paymentMethod: 'FREE',
-        protected: true,
-        adminOnlyRemove: true
+        protected: false,
+        adminOnlyRemove: false
     });
+    // Drop legacy Phan protected entries. Phan now belongs in Regular Skaters, not Protected.
+    Object.keys(normalized).forEach(bucket => {
+        normalized[bucket] = (normalized[bucket] || []).filter(player => !isLegacyPhanLyPlayer(player));
+    });
+    return normalized;
 }
 
 function normalizeRegularGoaliesByDayMap(input = undefined) {
@@ -842,18 +952,14 @@ function getProtectedPlayersForDay(dayName = getGameDayName()) {
     const dayKey = String(dayName || '').trim().toLowerCase();
     const everydayPlayers = Array.isArray(protectedPlayersByDay.everyday) ? protectedPlayersByDay.everyday : [];
     const dayPlayers = Array.isArray(protectedPlayersByDay[dayKey]) ? protectedPlayersByDay[dayKey] : [];
-    return [...everydayPlayers, ...dayPlayers].map(player => ({
-        ...player,
-        protected: true,
-        adminOnlyRemove: true
-    }));
+    return [...everydayPlayers, ...dayPlayers].filter(player => !isLegacyPhanLyPlayer(player));
 }
 
 function getRegularGoaliesForDay(dayName = getGameDayName()) {
     const dayKey = String(dayName || '').trim().toLowerCase();
-    return Array.isArray(regularGoaliesByDay[dayKey])
-        ? regularGoaliesByDay[dayKey]
-        : (Array.isArray(regularGoaliesByDay.friday) ? regularGoaliesByDay.friday : []);
+    const everydayGoalies = Array.isArray(regularGoaliesByDay.everyday) ? regularGoaliesByDay.everyday : [];
+    const dayGoalies = Array.isArray(regularGoaliesByDay[dayKey]) ? regularGoaliesByDay[dayKey] : [];
+    return [...everydayGoalies, ...dayGoalies];
 }
 
 function removeAutoAddPlayerByPhone(map, phone) {
@@ -880,7 +986,7 @@ function normalizeRegularSkaterEntry(input = {}) {
     const rating = Number.isFinite(ratingNumber) ? Math.max(1, Math.min(10, Number(ratingNumber.toFixed(1)))) : 5;
     const paymentMethodRaw = String(input.paymentMethod || 'N/A').trim();
 
-    return {
+    return applyProtectedPlayerFlags({
         firstName,
         lastName,
         phone,
@@ -889,7 +995,7 @@ function normalizeRegularSkaterEntry(input = {}) {
         isFree: !!input.isFree,
         paymentMethod: paymentMethodRaw || 'N/A',
         protected: !!input.protected
-    };
+    });
 }
 
 function normalizeRegularSkatersByDayMap(input = {}) {
@@ -897,16 +1003,22 @@ function normalizeRegularSkatersByDayMap(input = {}) {
         'everyday','sunday','monday','tuesday','wednesday','thursday','friday','saturday'
     ]);
 
-    const merged = { ...DEFAULT_REGULAR_SKATERS_BY_DAY };
-    if (!input || typeof input !== 'object') return merged;
+    const merged = JSON.parse(JSON.stringify(DEFAULT_REGULAR_SKATERS_BY_DAY));
+    if (input && typeof input === 'object') {
+        for (const [rawKey, rawList] of Object.entries(input)) {
+            const key = String(rawKey || '').trim().toLowerCase();
+            if (!allowedKeys.has(key)) continue;
+            const list = Array.isArray(rawList) ? rawList : [];
+            merged[key] = list
+                .map(normalizeRegularSkaterEntry)
+                .filter(player => player.firstName && player.lastName && normalizePhoneDigits(player.phone).length === 10);
+        }
+    }
 
-    for (const [rawKey, rawList] of Object.entries(input)) {
-        const key = String(rawKey || '').trim().toLowerCase();
-        if (!allowedKeys.has(key)) continue;
-        const list = Array.isArray(rawList) ? rawList : [];
-        merged[key] = list
-            .map(normalizeRegularSkaterEntry)
-            .filter(player => player.firstName && player.lastName && normalizePhoneDigits(player.phone).length === 10);
+    const hasPhan = Object.values(merged).some(list => Array.isArray(list) && list.some(isLegacyPhanLyPlayer));
+    if (!hasPhan) {
+        merged.everyday = Array.isArray(merged.everyday) ? merged.everyday : [];
+        merged.everyday.push(normalizeRegularSkaterEntry(DEFAULT_REGULAR_SKATERS_BY_DAY.everyday[0]));
     }
 
     return merged;
@@ -928,7 +1040,9 @@ function getWeeklyAutoAddPlayers(dayName = getGameDayName()) {
     const protectedList = getProtectedPlayersForDay(dayKey);
     const goalieList = getRegularGoaliesForDay(dayKey);
     const skaterList = getRegularSkatersForDay(dayKey);
-    return [...protectedList, ...goalieList, ...skaterList].map(player => ({ ...player }));
+    return [...protectedList, ...goalieList, ...skaterList]
+        .map(player => ({ ...player }))
+        .sort(compareWeeklyRegisteredOrder);
 }
 
 function normalizeWeeklyCarryoverPlayer(player = {}) {
@@ -969,7 +1083,7 @@ function mergeAutoAddPlayers(...groups) {
             merged.push({ ...player });
         }
     }
-    return merged;
+    return merged.sort(compareWeeklyRegisteredOrder);
 }
 
 function getWeeklyCarryoverPlayersFromRoster() {
@@ -1032,7 +1146,17 @@ const DEFAULT_ARENA_OPTIONS = [
     "Atlas Tube Lakeshore"
 ];
 
-let arenaOptions = [...DEFAULT_ARENA_OPTIONS];
+let arenaOptions = normalizeArenaOptionSeed([...DEFAULT_ARENA_OPTIONS, PORTAL_DEFAULTS.gameLocation]);
+
+function normalizeArenaOptionSeed(value) {
+    const seen = new Set();
+    return (Array.isArray(value) ? value : []).map(v => String(v || '').trim()).filter(Boolean).filter(v => {
+        const key = v.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
 
 function normalizeArenaOptions(value) {
     const source = Array.isArray(value) ? value : DEFAULT_ARENA_OPTIONS;
@@ -1050,7 +1174,8 @@ function normalizeArenaOptions(value) {
 }
 
 // --- DAY/TIME OPTIONS FOR TITLE ---
-const DAY_TIME_OPTIONS = [
+const DAY_TIME_OPTIONS = normalizeArenaOptionSeed([
+    PORTAL_DEFAULTS.gameTime,
     "Sunday 8:30 PM",
     "Sunday 9:30 PM",
     "Sunday 10:00 PM",
@@ -1063,7 +1188,7 @@ const DAY_TIME_OPTIONS = [
     "Saturday 8:30 PM",
     "Saturday 9:30 PM",
     "Saturday 10:00 PM"
-];
+]);
 
 // --- APP SETTINGS ---
 let maintenanceMode = false;
@@ -1084,7 +1209,7 @@ let collectorPageEnabled = false; // Payment page ON/OFF toggle from main admin;
 function getCurrentETTime() {
     const now = new Date();
     const etString = now.toLocaleString('en-US', {
-        timeZone: 'America/New_York',
+        timeZone: PORTAL_DEFAULTS.timezone,
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
@@ -2402,13 +2527,24 @@ async function loadDataFromDB() {
             settings[row.key] = parsePersistedSettingValue(row.value);
         });
         
+        const requiredPortalSettings = applyRequiredPortalSettings({
+            timezone: settings.timezone,
+            signupCode: settings.playerSignupCode || settings.editableDefaultSignupCode,
+            gameLocation: settings.gameLocation,
+            gameTime: settings.gameTime
+        });
         if (settings.skaterCapacity !== undefined || settings.configuredMaxSkaters !== undefined) skaterCapacity = normalizeSkaterCapacity(settings.skaterCapacity ?? settings.configuredMaxSkaters, MAX_SKATERS);
+        if (settings.cancellationCutoffHours !== undefined) {
+            cancellationCutoffHours = normalizeCancellationCutoffHours(settings.cancellationCutoffHours, cancellationCutoffHours);
+            DEFAULT_NO_SHOW_POLICY_TEXT = buildDefaultNoShowPolicyText();
+        }
+        if (settings.maxGoalies !== undefined) { const mg = Number(settings.maxGoalies); if (Number.isFinite(mg)) maxGoalies = Math.max(0, Math.floor(mg)); }
         if (settings.remainingSkaterSpots !== undefined || settings.playerSpots !== undefined) remainingSkaterSpots = normalizeSkaterCapacity(settings.remainingSkaterSpots ?? settings.playerSpots, 0);
-        if (settings.gameLocation) gameLocation = settings.gameLocation;
-        if (settings.gameTime) gameTime = settings.gameTime;
+        gameLocation = String(settings.gameLocation || requiredPortalSettings.gameLocation).trim();
+        gameTime = String(settings.gameTime || requiredPortalSettings.gameTime).trim();
         if (settings.gameDate) gameDate = settings.gameDate;
         else gameDate = calculateNextGameDate();
-        if (settings.playerSignupCode) playerSignupCode = settings.playerSignupCode;
+        playerSignupCode = /^\d{4}$/.test(String(settings.playerSignupCode || '').trim()) ? String(settings.playerSignupCode).trim() : requiredPortalSettings.signupCode;
         if (settings.requirePlayerCode !== undefined) requirePlayerCode = settings.requirePlayerCode;
         if (settings.manualOverride !== undefined) manualOverride = settings.manualOverride;
         if (settings.manualOverrideState !== undefined) manualOverrideState = settings.manualOverrideState;
@@ -2420,10 +2556,8 @@ async function loadDataFromDB() {
         if (settings.protectedPlayersByDay !== undefined) protectedPlayersByDay = normalizeProtectedPlayersByDayMap(settings.protectedPlayersByDay);
         if (settings.regularGoaliesByDay !== undefined) regularGoaliesByDay = normalizeRegularGoaliesByDayMap(settings.regularGoaliesByDay);
         if (settings.regularSkatersByDay !== undefined) regularSkatersByDay = normalizeRegularSkatersByDayMap(settings.regularSkatersByDay);
-        // Safety repair for prior builds that accidentally saved empty auto-add maps.
-        // This preserves the intended defaults unless Admin has an actual saved list.
+        // Safety repair for protected players only. Regular goalies are admin-managed data and may validly be empty.
         if (!autoAddMapHasEntries(protectedPlayersByDay)) protectedPlayersByDay = normalizeProtectedPlayersByDayMap(undefined);
-        if (!autoAddMapHasEntries(regularGoaliesByDay)) regularGoaliesByDay = normalizeRegularGoaliesByDayMap(undefined);
         if (settings.persistentAdminRatings) persistentAdminRatings = normalizePersistentAdminRatings(settings.persistentAdminRatings);
         if (settings.persistentPlayerNicknames) persistentPlayerNicknames = normalizePersistentPlayerNicknames(settings.persistentPlayerNicknames);
         if (settings.persistentPiaPayments) persistentPiaPayments = normalizePersistentPiaPayments(settings.persistentPiaPayments);
@@ -2431,7 +2565,7 @@ async function loadDataFromDB() {
             extraGoalieContacts = normalizePersistedGoalieContacts(settings.extraGoalieContacts, extraGoalieContacts);
         }
         if (settings.customSignupCode !== undefined) customSignupCode = String(settings.customSignupCode || '').trim();
-        if (settings.editableDefaultSignupCode !== undefined) editableDefaultSignupCode = /^\d{4}$/.test(String(settings.editableDefaultSignupCode || '').trim()) ? String(settings.editableDefaultSignupCode).trim() : DEFAULT_SIGNUP_CODE;
+        if (settings.editableDefaultSignupCode !== undefined) editableDefaultSignupCode = /^\d{4}$/.test(String(settings.editableDefaultSignupCode || '').trim()) ? String(settings.editableDefaultSignupCode).trim() : requiredPortalSettings.signupCode;
         if (settings.weeklyDefaultSignupCodes !== undefined) weeklyDefaultSignupCodes = normalizeWeeklyDefaultSignupCodes(settings.weeklyDefaultSignupCodes);
         if (settings.scheduleMode !== undefined) scheduleMode = String(settings.scheduleMode || 'auto').toLowerCase() === 'manual' ? 'manual' : 'auto';
         if (settings.signupLockStartAt !== undefined) signupLockStartAt = settings.signupLockStartAt || '';
@@ -2500,7 +2634,7 @@ async function loadDataFromDB() {
             protected: !!p.protected,
             adminOnlyRemove: !!p.admin_only_remove,
             regularGoalie: !!p.regular_goalie
-        }));
+        })).map(applyProtectedPlayerFlags);
         
         // FIX: Recalculate remainingSkaterSpots based on actual player count
         const nonGoalieCount = players.filter(p => !p.isGoalie).length;
@@ -2545,9 +2679,15 @@ async function loadDataFromDB() {
             appSettings[row.key] = row.value;
         });
         
+        if (appSettings.maxGoalies !== undefined) { const mg = Number(appSettings.maxGoalies); if (Number.isFinite(mg)) maxGoalies = Math.max(0, Math.floor(mg)); }
+        if (appSettings.editableDefaultSignupCode !== undefined) editableDefaultSignupCode = /^\d{4}$/.test(String(appSettings.editableDefaultSignupCode || '').trim()) ? String(appSettings.editableDefaultSignupCode).trim() : editableDefaultSignupCode;
         if (appSettings.maintenanceMode) maintenanceMode = appSettings.maintenanceMode === 'true';
         if (appSettings.customTitle) customTitle = appSettings.customTitle;
         if (appSettings.selectedDayTime) gameTime = appSettings.selectedDayTime;
+        if (appSettings.cancellationCutoffHours !== undefined) {
+            cancellationCutoffHours = normalizeCancellationCutoffHours(appSettings.cancellationCutoffHours, cancellationCutoffHours);
+            DEFAULT_NO_SHOW_POLICY_TEXT = buildDefaultNoShowPolicyText();
+        }
         if (appSettings.selectedArena) gameLocation = appSettings.selectedArena;
         if (appSettings.announcementEnabled !== undefined) announcementEnabled = appSettings.announcementEnabled === 'true';
         if (appSettings.announcementText !== undefined) announcementText = appSettings.announcementText || '';
@@ -2707,7 +2847,7 @@ function sanitizeFileSegment(value, fallback = 'backup') {
 function getEtDateParts(date = new Date()) {
     const source = date instanceof Date ? date : new Date(date);
     const etString = source.toLocaleString('en-US', {
-        timeZone: 'America/New_York',
+        timeZone: PORTAL_DEFAULTS.timezone,
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
@@ -3095,14 +3235,15 @@ function applySnapshotToMemory(snapshot) {
 
     const snapshotCapacity = snapshot.skaterCapacity ?? snapshot.configuredMaxSkaters ?? snapshot.maxSkaters;
     skaterCapacity = normalizeSkaterCapacity(snapshotCapacity, MAX_SKATERS);
-    players = Array.isArray(snapshot.players) ? snapshot.players.map(hydratePlayerRatingProfile) : [];
+    if (snapshot.maxGoalies !== undefined || snapshot.appSettings?.maxGoalies !== undefined || snapshot.summary?.maxGoalies !== undefined) { const mg = Number(snapshot.maxGoalies ?? snapshot.appSettings?.maxGoalies ?? snapshot.summary?.maxGoalies); if (Number.isFinite(mg)) maxGoalies = Math.max(0, Math.floor(mg)); }
+    players = Array.isArray(snapshot.players) ? snapshot.players.map(hydratePlayerRatingProfile).map(applyProtectedPlayerFlags) : [];
     waitlist = Array.isArray(snapshot.waitlist) ? snapshot.waitlist.map(hydratePlayerRatingProfile) : [];
     const snapshotRemainingSpots = snapshot.remainingSkaterSpots ?? snapshot.playerSpots;
     remainingSkaterSpots = snapshotRemainingSpots !== undefined && snapshotRemainingSpots !== null
         ? normalizeSkaterCapacity(snapshotRemainingSpots, 0)
         : Math.max(0, skaterCapacity - players.filter(p => !(p && p.isGoalie)).length);
-    gameLocation = snapshot.gameLocation ?? gameLocation;
-    gameTime = snapshot.gameTime ?? gameTime;
+    gameLocation = snapshot.gameLocation ?? snapshot.appSettings?.selectedArena ?? gameLocation;
+    gameTime = snapshot.gameTime ?? snapshot.appSettings?.selectedDayTime ?? gameTime;
     gameDate = snapshot.gameDate ?? calculateNextGameDate();
     playerSignupCode = snapshot.playerSignupCode ?? playerSignupCode;
     requirePlayerCode = snapshot.requirePlayerCode ?? requirePlayerCode;
@@ -3145,6 +3286,7 @@ function applySnapshotToMemory(snapshot) {
     announcementText = snapshot.announcementText ?? announcementText;
     announcementImages = Array.isArray(snapshot.announcementImages) ? snapshot.announcementImages : [];
     paymentEmail = typeof snapshot.paymentEmail === 'string' ? snapshot.paymentEmail : paymentEmail;
+    if (snapshot.cancellationCutoffHours !== undefined) { cancellationCutoffHours = normalizeCancellationCutoffHours(snapshot.cancellationCutoffHours, cancellationCutoffHours); DEFAULT_NO_SHOW_POLICY_TEXT = buildDefaultNoShowPolicyText(); }
     if (typeof snapshot.noShowPolicyText === 'string') NO_SHOW_POLICY_TEXT = snapshot.noShowPolicyText.trim() || DEFAULT_NO_SHOW_POLICY_TEXT;
     if (Array.isArray(snapshot.gameRules)) GAME_RULES = normalizeGameRules(snapshot.gameRules);
     syncNoShowPolicyWithRules();
@@ -3231,6 +3373,7 @@ async function restoreSnapshotItem(item, req, auditAction = 'restore-snapshot-re
         if (typeof s.requirePlayerCode === 'boolean') requirePlayerCode = s.requirePlayerCode;
         if (typeof s.playerSignupCode === 'string' && s.playerSignupCode.trim()) playerSignupCode = s.playerSignupCode.trim();
         if (Array.isArray(s.arenaOptions)) arenaOptions = normalizeArenaOptions(s.arenaOptions);
+        if (s.cancellationCutoffHours !== undefined) { cancellationCutoffHours = normalizeCancellationCutoffHours(s.cancellationCutoffHours, cancellationCutoffHours); DEFAULT_NO_SHOW_POLICY_TEXT = buildDefaultNoShowPolicyText(); }
         if (typeof s.noShowPolicyText === 'string') NO_SHOW_POLICY_TEXT = s.noShowPolicyText.trim() || DEFAULT_NO_SHOW_POLICY_TEXT;
         if (Array.isArray(s.gameRules)) GAME_RULES = normalizeGameRules(s.gameRules);
         syncNoShowPolicyWithRules();
@@ -3552,6 +3695,8 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
             ['signupLockSchedule', signupLockSchedule],
             ['rosterReleaseSchedule', rosterReleaseSchedule],
             ['resetWeekSchedule', resetWeekSchedule],
+            ['cancellationCutoffHours', cancellationCutoffHours],
+            ['timezone', PORTAL_DEFAULTS.timezone],
             ['noShowPolicyText', NO_SHOW_POLICY_TEXT],
             ['gameRules', GAME_RULES]
         ];
@@ -3580,8 +3725,15 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
             ['selectedArena', gameLocation],
             ['arenaOptions', JSON.stringify(arenaOptions)],
             ['gameDate', gameDate],
+            ['cancellationCutoffHours', cancellationCutoffHours],
+            ['timezone', PORTAL_DEFAULTS.timezone],
             ['noShowPolicyText', NO_SHOW_POLICY_TEXT],
-            ['gameRules', JSON.stringify(GAME_RULES)]
+            ['gameRules', JSON.stringify(GAME_RULES)],
+            ['cancellationCutoffHours', cancellationCutoffHours],
+            ['portalDefaults', JSON.stringify(PORTAL_DEFAULTS)],
+            ['portalSettingsWarnings', JSON.stringify(portalSettingsWarnings)],
+            ['maxGoalies', String(maxGoalies)],
+            ['editableDefaultSignupCode', editableDefaultSignupCode]
         ];
         for (const [key, value] of appSettingsEntries) {
             await client.query(
@@ -3823,6 +3975,7 @@ function buildFullDataSnapshot() {
         paymentEmail,
         rosterReleaseAnnouncementText,
         collectorPageEnabled,
+        cancellationCutoffHours,
         noShowPolicyText: NO_SHOW_POLICY_TEXT,
         gameRules: GAME_RULES,
         summary: {
@@ -3831,8 +3984,13 @@ function buildFullDataSnapshot() {
             gameDate,
             rosterReleased,
             requirePlayerCode,
-            playerSignupCode
+            playerSignupCode,
+            editableDefaultSignupCode,
+            maxGoalies,
+            cancellationCutoffHours
         },
+        portalDefaults: PORTAL_DEFAULTS,
+        portalSettingsWarnings,
         appSettings: {
             maintenanceMode,
             customTitle,
@@ -3840,6 +3998,7 @@ function buildFullDataSnapshot() {
             announcementText,
             announcementImages,
             paymentEmail,
+            cancellationCutoffHours,
             noShowPolicyText: NO_SHOW_POLICY_TEXT,
             gameRules: GAME_RULES,
             protectedPlayersByDay,
@@ -3909,6 +4068,7 @@ function getSettingsSnapshot() {
         paymentEmail,
         rosterReleaseAnnouncementText,
         collectorPageEnabled,
+        cancellationCutoffHours,
         noShowPolicyText: NO_SHOW_POLICY_TEXT,
         gameRules: GAME_RULES,
         gameTime,
@@ -3939,6 +4099,7 @@ function getSettingsSnapshot() {
         editableDefaultSignupCode,
         weeklyDefaultSignupCodes,
         scheduleMode,
+        portalSettingsWarnings,
         lastExactResetMinuteKey,
         lastExactRosterReleaseMinuteKey
     };
@@ -4009,20 +4170,28 @@ function loadDataFromFile() {
         const bestSnapshot = getBestLocalSnapshot();
         if (bestSnapshot && bestSnapshot.data) {
             const data = bestSnapshot.data;
+            const requiredPortalSettings = applyRequiredPortalSettings({
+                timezone: data.timezone || data.appSettings?.timezone,
+                signupCode: data.playerSignupCode || data.editableDefaultSignupCode || data.appSettings?.playerSignupCode || data.appSettings?.editableDefaultSignupCode,
+                gameLocation: data.gameLocation || data.appSettings?.selectedArena,
+                gameTime: data.gameTime || data.appSettings?.selectedDayTime
+            });
             skaterCapacity = normalizeSkaterCapacity(data.skaterCapacity ?? data.configuredMaxSkaters ?? data.maxSkaters, MAX_SKATERS);
+            if (data.maxGoalies !== undefined || data.appSettings?.maxGoalies !== undefined || data.summary?.maxGoalies !== undefined) { const mg = Number(data.maxGoalies ?? data.appSettings?.maxGoalies ?? data.summary?.maxGoalies); if (Number.isFinite(mg)) maxGoalies = Math.max(0, Math.floor(mg)); }
             players = Array.isArray(data.players) ? data.players.map(player => hydratePlayerRatingProfile({
                 ...player,
                 registeredAt: player.registeredAt || player.registered_at || player.createdAt || null
-            })) : [];
+            })).map(applyProtectedPlayerFlags) : [];
             waitlist = Array.isArray(data.waitlist) ? data.waitlist.map(hydratePlayerRatingProfile) : [];
             const savedRemainingSpots = data.remainingSkaterSpots ?? data.playerSpots;
             remainingSkaterSpots = savedRemainingSpots !== undefined && savedRemainingSpots !== null
                 ? normalizeSkaterCapacity(savedRemainingSpots, 0)
                 : Math.max(0, skaterCapacity - players.filter(p => !(p && p.isGoalie)).length);
-            gameLocation = data.gameLocation ?? "Capri Recreation Complex";
-            gameTime = data.gameTime ?? "Friday 9:30 PM";
+            if (data.cancellationCutoffHours !== undefined || data.appSettings?.cancellationCutoffHours !== undefined) { cancellationCutoffHours = normalizeCancellationCutoffHours(data.cancellationCutoffHours ?? data.appSettings?.cancellationCutoffHours, cancellationCutoffHours); DEFAULT_NO_SHOW_POLICY_TEXT = buildDefaultNoShowPolicyText(); }
+            gameLocation = String(data.gameLocation ?? data.appSettings?.selectedArena ?? requiredPortalSettings.gameLocation).trim();
+            gameTime = String(data.gameTime ?? data.appSettings?.selectedDayTime ?? requiredPortalSettings.gameTime).trim();
             gameDate = data.gameDate ?? calculateNextGameDate();
-            playerSignupCode = data.playerSignupCode ?? '9855';
+            playerSignupCode = /^\d{4}$/.test(String(data.playerSignupCode ?? data.appSettings?.playerSignupCode ?? '').trim()) ? String(data.playerSignupCode ?? data.appSettings?.playerSignupCode).trim() : requiredPortalSettings.signupCode;
             requirePlayerCode = data.requirePlayerCode ?? true;
             manualOverride = data.manualOverride ?? false;
             manualOverrideState = data.manualOverrideState ?? null;
@@ -4052,7 +4221,7 @@ function loadDataFromFile() {
             persistentPlayerNicknames = normalizePersistentPlayerNicknames(data.persistentPlayerNicknames || data.appSettings?.persistentPlayerNicknames || {});
             persistentPiaPayments = normalizePersistentPiaPayments(data.persistentPiaPayments || data.appSettings?.persistentPiaPayments || {});
             customSignupCode = String(data.customSignupCode || '').trim();
-            editableDefaultSignupCode = /^\d{4}$/.test(String(data.editableDefaultSignupCode || '').trim()) ? String(data.editableDefaultSignupCode).trim() : DEFAULT_SIGNUP_CODE;
+            editableDefaultSignupCode = /^\d{4}$/.test(String(data.editableDefaultSignupCode || data.appSettings?.editableDefaultSignupCode || '').trim()) ? String(data.editableDefaultSignupCode || data.appSettings?.editableDefaultSignupCode).trim() : requiredPortalSettings.signupCode;
             if (data.weeklyDefaultSignupCodes !== undefined) weeklyDefaultSignupCodes = normalizeWeeklyDefaultSignupCodes(data.weeklyDefaultSignupCodes);
             scheduleMode = String(data.scheduleMode || scheduleMode || 'auto').toLowerCase() === 'manual' ? 'manual' : 'auto';
             currentWeekData = data.currentWeekData ?? {
@@ -4162,7 +4331,7 @@ function getCancellationTimingStatus(etNow = getCurrentETTime()) {
     return {
         gameStart,
         hoursUntilGame,
-        isLateCancelWindow: hoursUntilGame < 3
+        isLateCancelWindow: hoursUntilGame < cancellationCutoffHours
     };
 }
 
@@ -4792,7 +4961,7 @@ function getGoalieCount() {
 }
 
 function isGoalieSpotsAvailable() {
-    return getGoalieCount() < MAX_GOALIES;
+    return getGoalieCount() < maxGoalies;
 }
 
 function getLevelPlayedBoost(levelPlayed) {
@@ -4913,12 +5082,16 @@ function buildRosterTeamRuleValidation(teams = {}) {
 
 
     // Full-capacity hockey rule: 20 skaters + 2 goalies = 10 skaters and 1 goalie per team.
-    if (totalPlayers === MAX_ROSTER_SPOTS) {
-        if (totalSkaters !== MAX_SKATERS || totalGoalies !== MAX_GOALIES) {
-            problems.push(`Full roster must be ${MAX_SKATERS} skaters and ${MAX_GOALIES} goalies; found ${totalSkaters} skaters and ${totalGoalies} goalies.`);
+    if (totalPlayers === getMaxRosterSpots()) {
+        if (totalSkaters !== skaterCapacity || totalGoalies !== maxGoalies) {
+            problems.push(`Full roster must be ${skaterCapacity} skaters and ${maxGoalies} goalies; found ${totalSkaters} skaters and ${totalGoalies} goalies.`);
         }
-        if (whiteSkaters !== 10 || darkSkaters !== 10 || whiteGoalies !== 1 || darkGoalies !== 1) {
-            problems.push(`Full roster must be White 10 skaters + 1 goalie and Dark 10 skaters + 1 goalie; found White ${whiteSkaters}+${whiteGoalies}, Dark ${darkSkaters}+${darkGoalies}.`);
+        const targetWhiteSkaters = Math.ceil(skaterCapacity / 2);
+        const targetDarkSkaters = Math.floor(skaterCapacity / 2);
+        const targetWhiteGoalies = Math.ceil(maxGoalies / 2);
+        const targetDarkGoalies = Math.floor(maxGoalies / 2);
+        if (whiteSkaters !== targetWhiteSkaters || darkSkaters !== targetDarkSkaters || whiteGoalies !== targetWhiteGoalies || darkGoalies !== targetDarkGoalies) {
+            problems.push(`Full roster must be White ${targetWhiteSkaters} skaters + ${targetWhiteGoalies} goalie(s) and Dark ${targetDarkSkaters} skaters + ${targetDarkGoalies} goalie(s); found White ${whiteSkaters}+${whiteGoalies}, Dark ${darkSkaters}+${darkGoalies}.`);
         }
     }
 
@@ -4957,11 +5130,7 @@ function generateFairTeams() {
     const goalies = players.filter(p => p.isGoalie).map(hydratePlayerRatingProfile).sort(sortByBalance);
     const skaters = players.filter(p => !p.isGoalie).map(hydratePlayerRatingProfile).sort(sortByBalance);
 
-    const sortTeamForDisplay = (team) => team.sort((a, b) => {
-        if (a.isGoalie && !b.isGoalie) return -1;
-        if (!a.isGoalie && b.isGoalie) return 1;
-        return `${a.firstName} ${a.lastName}`.toLowerCase().localeCompare(`${b.firstName} ${b.lastName}`.toLowerCase());
-    });
+    const sortTeamForDisplay = (team) => team.sort(compareRosterTeamDisplayOrder);
 
     const assignSkatersAndOptimize = (initialWhite = [], initialDark = [], label = 'default') => {
         let whiteTeam = initialWhite.map(p => ({ ...p, team: 'White' }));
@@ -5169,8 +5338,8 @@ function buildPaymentReportCsv() {
     });
 
     const totalCollected = players.reduce((sum, p) => sum + (parseFloat(p.paidAmount) || 0), 0);
-    const paidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) !== 'owes' && !p.isGoalie && !(p.firstName === 'Phan' && p.lastName === 'Ly')).length;
-    const unpaidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'owes' && !p.isGoalie && !(p.firstName === 'Phan' && p.lastName === 'Ly')).length;
+    const paidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) !== 'owes' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
+    const unpaidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'owes' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
 
     csvRows.push('');
     csvRows.push([escapeCsvValue('SUMMARY'), '', '', '', '', '', '', '', '', ''].join(','));
@@ -5518,6 +5687,7 @@ app.get('/api/rules', (req, res) => {
     syncNoShowPolicyWithRules();
     res.json({
         rules: GAME_RULES,
+        cancellationCutoffHours,
         noShowPolicy: NO_SHOW_POLICY_TEXT,
         customTitle,
         gameDayName: getGameDayName()
@@ -5558,7 +5728,7 @@ function etPartsToIso(etParts) {
 
     const probe = new Date(Date.UTC(etParts.year, etParts.month - 1, etParts.day, 12, 0, 0));
     const tzName = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/New_York',
+        timeZone: PORTAL_DEFAULTS.timezone,
         timeZoneName: 'short'
     }).formatToParts(probe).find(p => p.type === 'timeZoneName')?.value || 'EST';
 
@@ -5625,13 +5795,7 @@ function isLateCancelledPlayer(player = {}) {
 }
 
 function buildPublicRosterPayload() {
-    const sortPlayers = (a, b) => {
-        if (a.isGoalie && !b.isGoalie) return -1;
-        if (!a.isGoalie && b.isGoalie) return 1;
-        const nameA = `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase();
-        const nameB = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
-        return nameA.localeCompare(nameB);
-    };
+    const sortPlayers = compareRosterTeamDisplayOrder;
 
     const cancellationTiming = getCancellationTimingStatus();
     const cancellationAllowedNow = !cancellationTiming.isLateCancelWindow;
@@ -5639,7 +5803,9 @@ function buildPublicRosterPayload() {
     const sanitizePlayer = (p) => {
         const cancelled = isLateCancelledPlayer(p);
         const protectedPlayer = !!(p.protected || p.adminOnlyRemove);
-        const canCancel = !cancelled && cancellationAllowedNow && !protectedPlayer;
+        const cancelLockedPlayer = isPublicCancelLockedPlayer(p);
+        const isGoalie = !!p.isGoalie;
+        const canCancel = !isGoalie && !cancelled && cancellationAllowedNow && !protectedPlayer && !cancelLockedPlayer;
         return {
             id: p.id,
             firstName: getReleasedRosterFirstName(p),
@@ -5681,6 +5847,7 @@ function buildPublicRosterPayload() {
 
     return {
         released: getEffectiveRosterReleasedState(),
+        timezone: PORTAL_DEFAULTS.timezone,
         whiteTeam: whiteSource.map(sanitizePlayer),
         darkTeam: darkSource.map(sanitizePlayer),
         whiteActiveCount: activeWhite.length,
@@ -5704,7 +5871,7 @@ app.get('/api/status', (req, res) => {
     // Players see: id, name, goalie status, cancel permission ONLY
     const cancellationTiming = getCancellationTimingStatus();
     const cancellationAllowedNow = !cancellationTiming.isLateCancelWindow;
-    const publicPlayers = players.map(p => ({
+    const publicPlayers = [...players].sort(compareWeeklyRegisteredOrder).map(p => ({
         id: p.id,
         firstName: p.firstName,
         lastName: p.lastName,
@@ -5714,8 +5881,9 @@ app.get('/api/status', (req, res) => {
         rating: roundRating(p.finalRating ?? p.rating ?? p.derivedRating ?? p.selfRatingRaw ?? 5),
         finalRating: roundRating(p.finalRating ?? p.rating ?? p.derivedRating ?? p.selfRatingRaw ?? 5),
         // Protected/admin-only players cannot cancel from signup page - only admin can remove
-        canCancel: cancellationAllowedNow && !(p.protected || p.adminOnlyRemove),
-        protected: !!p.protected,
+        canCancel: cancellationAllowedNow && !p.isGoalie && !(p.protected || p.adminOnlyRemove) && !isPublicCancelLockedPlayer(p),
+        protected: isPublicCancelLockedPlayer(p) ? false : !!p.protected,
+        adminOnlyRemove: isPublicCancelLockedPlayer(p) ? false : !!p.adminOnlyRemove,
         // Public replacement display fields only. Still excludes payment and phone.
         promotedFromWaitlist: !!p.promotedFromWaitlist,
         lateAddedAfterRelease: !!p.lateAddedAfterRelease,
@@ -5738,10 +5906,12 @@ app.get('/api/status', (req, res) => {
     res.json({
         playerSpotsRemaining: remainingSkaterSpots > 0 ? remainingSkaterSpots : 0,
         goalieCount: goalieCount,
-        goalieSpotsAvailable: MAX_GOALIES - goalieCount,
-        maxGoalies: MAX_GOALIES,
+        goalieSpotsAvailable: maxGoalies - goalieCount,
+        maxGoalies: maxGoalies,
         maxSkaters: skaterCapacity,
-        maxRosterSpots: MAX_ROSTER_SPOTS,
+        maxRosterSpots: getMaxRosterSpots(),
+        timezone: PORTAL_DEFAULTS.timezone,
+        portalDefaults: PORTAL_DEFAULTS,
         totalPlayers: players.length,
         isFull: remainingSkaterSpots === 0,
         waitlistCount: waitlist.length,
@@ -5757,6 +5927,7 @@ app.get('/api/status', (req, res) => {
         formattedDate: formatGameDate(gameDate),
         rosterReleased: getEffectiveRosterReleasedState(),
         resetArmed: resetArmed,
+        cancellationCutoffHours,
         noShowPolicy: NO_SHOW_POLICY_TEXT,
         rosterReleaseTime: currentWeekData.rosterReleaseTime,
         currentWeek: week,
@@ -5791,6 +5962,7 @@ app.get('/api/status', (req, res) => {
         rosterReleaseAtLocal: dynamicScheduleDates.rosterReleaseAt,
         resetWeekAt: dynamicScheduleDates.resetWeekAt,
         scheduleMode,
+        cancellationCutoffHours,
         cancellationDeadlineLine: NO_SHOW_POLICY_TEXT,
         cancellationAllowedNow,
         hoursUntilGame: cancellationTiming.hoursUntilGame
@@ -5808,7 +5980,7 @@ app.get('/api/waitlist', (req, res) => {
         lastName: p.lastName,
         fullName: `${p.firstName} ${p.lastName}`,
         isGoalie: p.isGoalie,
-        canCancel: cancellationAllowedNow && !(String(p.firstName || '').toLowerCase() === 'phan' && String(p.lastName || '').toLowerCase() === 'ly')
+        canCancel: cancellationAllowedNow && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p) && !isPublicCancelLockedPlayer(p)
         // EXCLUDED: rating, phone, paymentMethod
     }));
     
@@ -5842,6 +6014,7 @@ app.get('/api/roster', (req, res) => {
         darkActiveCount: rosterPayload.darkActiveCount,
         whiteRating: rosterPayload.whiteRating,
         darkRating: rosterPayload.darkRating,
+        cancellationCutoffHours,
         cancellationPolicy: NO_SHOW_POLICY_TEXT,
         cancellationAllowedNow: !getCancellationTimingStatus().isLateCancelWindow,
         hoursUntilGame: getCancellationTimingStatus().hoursUntilGame,
@@ -6225,10 +6398,6 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
         return res.status(400).json({ error: "Phone number is required." });
     }
 
-    const isProtectedPlayer = (p) => !!(p?.protected || p?.adminOnlyRemove) ||
-        (String(p?.firstName || '').toLowerCase() === 'phan' &&
-        String(p?.lastName || '').toLowerCase() === 'ly');
-
     const findById = (arr) => arr.findIndex(p => String(p.id).trim() === idToRemove);
 
     const playerIndex = findById(players);
@@ -6240,8 +6409,12 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
         return res.status(404).json({ error: "Player not found." });
     }
 
-    if (isProtectedPlayer(foundPlayer)) {
+    if (isProtectedOrAdminOnlyPlayer(foundPlayer) || isPublicCancelLockedPlayer(foundPlayer)) {
         return res.status(403).json({ error: "This player cannot be cancelled online. Please contact admin." });
+    }
+
+    if (foundPlayer.isGoalie) {
+        return res.status(403).json({ error: "Goalies cannot cancel from the public roster. Please manage goalie changes through the Goalies portal." });
     }
 
     const storedPhone = normalizePhoneDigits(foundPlayer.phone);
@@ -6254,7 +6427,7 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
 
     if (isLateCancelWindow) {
         return res.status(403).json({
-            error: "Cancellation cutoff has passed. Players can cancel only until 3 hours before game time. Please contact the admin.",
+            error: `Cancellation cutoff has passed. Players can cancel only until ${formatCancellationCutoffHours()} ${Number(formatCancellationCutoffHours()) === 1 ? 'hour' : 'hours'} before game time. Please contact the admin.`,
             lateCancel: false,
             cancellationAllowedNow: false,
             policy: NO_SHOW_POLICY_TEXT,
@@ -6478,6 +6651,7 @@ app.post('/api/admin/app-settings', (req, res) => {
         paymentEmail,
         rosterReleaseAnnouncementText,
         collectorPageEnabled,
+        cancellationCutoffHours,
         noShowPolicyText: NO_SHOW_POLICY_TEXT,
         gameRules: GAME_RULES,
         selectedDayTime: gameTime,
@@ -6485,6 +6659,9 @@ app.post('/api/admin/app-settings', (req, res) => {
         gameDate,
         arenaOptions: arenaOptions,
         dayTimeOptions: DAY_TIME_OPTIONS,
+        timezone: PORTAL_DEFAULTS.timezone,
+        portalDefaults: PORTAL_DEFAULTS,
+        maxGoalies,
         backupGoalies: BACKUP_GOALIES,
         extraGoalieContacts,
         regularSkatersByDay
@@ -6497,7 +6674,7 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
             announcementEnabled: newAnnouncementEnabled, announcementText: newAnnouncementText, announcementImages: newAnnouncementImages,
             rosterReleaseAnnouncementText: newRosterReleaseAnnouncementText, paymentEmail: newPaymentEmail, selectedDayTime, selectedArena, arenaOptions: newArenaOptions, gameDate: newGameDate,
             regularSkatersByDay: newRegularSkatersByDay, collectorPageEnabled: newCollectorPageEnabled,
-            noShowPolicyText: newNoShowPolicyText, gameRules: newGameRules } = req.body;
+            noShowPolicyText: newNoShowPolicyText, gameRules: newGameRules, maxGoalies: newMaxGoalies, cancellationCutoffHours: newCancellationCutoffHours } = req.body;
 
     if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -6515,8 +6692,17 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
                 GAME_RULES = normalizeGameRules(newGameRules);
                 NO_SHOW_POLICY_TEXT = extractNoShowPolicyFromRules(GAME_RULES) || NO_SHOW_POLICY_TEXT;
             }
+            if (newCancellationCutoffHours !== undefined) {
+                const previousDefault = DEFAULT_NO_SHOW_POLICY_TEXT;
+                cancellationCutoffHours = normalizeCancellationCutoffHours(newCancellationCutoffHours, cancellationCutoffHours);
+                DEFAULT_NO_SHOW_POLICY_TEXT = buildDefaultNoShowPolicyText();
+                if (!newNoShowPolicyText && (!NO_SHOW_POLICY_TEXT || NO_SHOW_POLICY_TEXT === previousDefault || /Last-minute cancellations must be made at least \d+(?:\.\d+)? hours? before game time/i.test(NO_SHOW_POLICY_TEXT))) {
+                    NO_SHOW_POLICY_TEXT = DEFAULT_NO_SHOW_POLICY_TEXT;
+                }
+            }
             if (newNoShowPolicyText !== undefined) NO_SHOW_POLICY_TEXT = String(newNoShowPolicyText || DEFAULT_NO_SHOW_POLICY_TEXT).trim() || DEFAULT_NO_SHOW_POLICY_TEXT;
             syncNoShowPolicyWithRules();
+            if (newMaxGoalies !== undefined) { const mg = Number(newMaxGoalies); if (Number.isFinite(mg)) maxGoalies = Math.max(0, Math.floor(mg)); }
             if (newCollectorPageEnabled !== undefined) collectorPageEnabled = !!newCollectorPageEnabled;
             if (newAnnouncementImages !== undefined) {
                 announcementImages = normalizeAnnouncementImages(newAnnouncementImages);
@@ -6564,6 +6750,7 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
             announcementText,
             rosterReleaseAnnouncementText,
             announcementImages,
+            cancellationCutoffHours,
             noShowPolicyText: NO_SHOW_POLICY_TEXT,
             gameRules: GAME_RULES,
             regularSkatersByDay,
@@ -6624,6 +6811,83 @@ function removeRegularPlayerByPhone(phone) {
     return removed;
 }
 
+function findRegularBucketForGoalie(goalie = {}) {
+    regularGoaliesByDay = normalizeRegularGoaliesByDayMap(regularGoaliesByDay || {});
+    const normalizedPhone = normalizePhoneDigits(goalie.phone);
+    const firstName = String(goalie.firstName || '').trim().toLowerCase();
+    const lastName = String(goalie.lastName || '').trim().toLowerCase();
+
+    for (const bucket of getRegularBucketsOrder()) {
+        const list = Array.isArray(regularGoaliesByDay[bucket]) ? regularGoaliesByDay[bucket] : [];
+        const match = list.find(existing => {
+            const existingPhone = normalizePhoneDigits(existing.phone);
+            if (normalizedPhone && existingPhone && normalizedPhone === existingPhone) return true;
+            return String(existing.firstName || '').trim().toLowerCase() === firstName &&
+                   String(existing.lastName || '').trim().toLowerCase() === lastName;
+        });
+        if (match) return bucket;
+    }
+    return null;
+}
+
+function removeRegularGoalieByPhone(phone) {
+    regularGoaliesByDay = normalizeRegularGoaliesByDayMap(regularGoaliesByDay || {});
+    return removeAutoAddPlayerByPhone(regularGoaliesByDay, phone);
+}
+
+function normalizeRegularGoalieEntryFromPlayer(player = {}) {
+    return normalizeAutoAddEntry({
+        firstName: player.firstName,
+        lastName: player.lastName,
+        phone: player.phone,
+        rating: Number(player.finalRating ?? player.rating ?? 7),
+        isGoalie: true,
+        isFree: false,
+        paymentMethod: 'N/A',
+        protected: false,
+        adminOnlyRemove: false,
+        regularGoalie: true
+    }, {
+        isGoalie: true,
+        isFree: false,
+        paymentMethod: 'N/A',
+        protected: false,
+        adminOnlyRemove: false,
+        regularGoalie: true
+    });
+}
+
+
+app.post('/api/admin/toggle-goalie-regular', async (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) return res.status(401).json({ error: "Unauthorized" });
+    try {
+        const playerId = Number(req.body.playerId);
+        if (!Number.isFinite(playerId)) return res.status(400).json({ error: 'Invalid goalie id' });
+        const goalie = players.find(p => Number(p.id) === playerId && !!p.isGoalie);
+        if (!goalie) return res.status(404).json({ error: 'Goalie not found in registered goalies' });
+
+        const existingBucket = findRegularBucketForGoalie(goalie);
+        if (existingBucket) {
+            await runProtectedMutation('toggle-goalie-regular-remove', req, async () => {
+                removeRegularGoalieByPhone(goalie.phone);
+            }, { playerId, removedFrom: existingBucket });
+            return res.json({ success: true, active: false, removedFrom: existingBucket, regularGoaliesByDay });
+        }
+
+        const regularGoalie = normalizeRegularGoalieEntryFromPlayer(goalie);
+        await runProtectedMutation('toggle-goalie-regular-add', req, async () => {
+            regularGoaliesByDay = normalizeRegularGoaliesByDayMap(regularGoaliesByDay || {});
+            regularGoaliesByDay.everyday = Array.isArray(regularGoaliesByDay.everyday) ? regularGoaliesByDay.everyday : [];
+            regularGoaliesByDay.everyday.push(regularGoalie);
+        }, { playerId, bucket: 'everyday' });
+
+        return res.json({ success: true, active: true, bucket: 'everyday', regularGoaliesByDay });
+    } catch (err) {
+        console.error('Error toggling goalie regular status:', err);
+        return res.status(500).json({ error: 'Failed to update regular goalie' });
+    }
+});
+
 app.post('/api/admin/promote-player-to-regular', async (req, res) => {
     if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -6660,7 +6924,8 @@ app.post('/api/admin/promote-player-to-regular', async (req, res) => {
             rating: Number(player.finalRating ?? player.rating ?? 5),
             paymentMethod: player.paymentMethod || 'N/A',
             isFree: !!(player.paidAmount === 0 && String(player.paymentMethod || '').toUpperCase() === 'FREE'),
-            protected: !!player.protected
+            protected: false,
+            adminOnlyRemove: false
         });
 
         await runProtectedMutation('promote-player-to-regular', req, async () => {
@@ -6695,7 +6960,7 @@ app.post('/api/admin/toggle-player-regular', async (req, res) => {
         const promotedRegular = normalizeRegularSkaterEntry({
             firstName: player.firstName, lastName: player.lastName, phone: player.phone,
             rating: Number(player.finalRating ?? player.rating ?? 5), paymentMethod: player.paymentMethod || 'N/A',
-            isFree: !!(player.paidAmount === 0 && String(player.paymentMethod || '').toUpperCase() === 'FREE'), protected: !!player.protected
+            isFree: !!(player.paidAmount === 0 && String(player.paymentMethod || '').toUpperCase() === 'FREE'), protected: false, adminOnlyRemove: false
         });
         await runProtectedMutation('toggle-player-regular-add', req, async () => {
             regularSkatersByDay = normalizeRegularSkatersByDayMap(regularSkatersByDay || {});
@@ -6810,7 +7075,7 @@ app.post('/api/admin/remove-regular-goalie', async (req, res) => {
         if (!phone) return res.status(400).json({ error: 'Phone is required' });
         let removed = false;
         await runProtectedMutation('remove-regular-goalie', req, async () => {
-            removed = removeAutoAddPlayerByPhone(regularGoaliesByDay, phone);
+            removed = removeRegularGoalieByPhone(phone);
         }, { phone });
         return res.json({ success: true, removed, regularGoaliesByDay });
     } catch (err) {
@@ -6860,8 +7125,8 @@ app.post('/api/admin/players-full', (req, res) => {
         return sum;
     }, 0);
     
-    const paidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) !== 'owes' && !p.isGoalie && !(p.firstName === 'Phan' && p.lastName === 'Ly')).length;
-    const unpaidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'owes' && !p.isGoalie && !(p.firstName === 'Phan' && p.lastName === 'Ly')).length;
+    const paidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) !== 'owes' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
+    const unpaidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'owes' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
     
     // Return FULL data including payment info AND ratings (admin only)
     res.json({ 
@@ -6870,9 +7135,9 @@ app.post('/api/admin/players-full', (req, res) => {
         playerSpotsRemaining: remainingSkaterSpots,
         playerCount,
         goalieCount,
-        maxGoalies: MAX_GOALIES,
+        maxGoalies: maxGoalies,
         maxSkaters: skaterCapacity,
-        maxRosterSpots: MAX_ROSTER_SPOTS,
+        maxRosterSpots: getMaxRosterSpots(),
         totalPlayers: players.length,
         totalPaid: totalPaid.toFixed(2),
         paidCount: paidCount,
@@ -7267,10 +7532,10 @@ app.post('/api/admin/restore-backup', async (req, res) => {
         const originalWaitlist = Array.isArray(waitlist) ? waitlist.map(clonePlain) : [];
 
         if (mode === 'replace') {
-            players = restoredPlayers.map(clonePlain);
+            players = restoredPlayers.map(clonePlain).map(applyProtectedPlayerFlags);
             waitlist = restoredWaitlist.map(clonePlain);
         } else {
-            players = mergeUnique(originalPlayers, restoredPlayers);
+            players = mergeUnique(originalPlayers, restoredPlayers).map(applyProtectedPlayerFlags);
             waitlist = mergeUnique(originalWaitlist, restoredWaitlist);
         }
 
@@ -7375,8 +7640,8 @@ app.post('/api/admin/players', (req, res) => {
         }
         return sum;
     }, 0);
-    const paidCount = players.filter(p => p.paid && !p.isGoalie && !(p.firstName === 'Phan' && p.lastName === 'Ly')).length;
-    const unpaidCount = players.filter(p => !p.paid && !p.isGoalie && !(p.firstName === 'Phan' && p.lastName === 'Ly')).length;
+    const paidCount = players.filter(p => p.paid && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
+    const unpaidCount = players.filter(p => !p.paid && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
 
     return res.json({
         remainingSkaterSpots,
@@ -7384,9 +7649,9 @@ app.post('/api/admin/players', (req, res) => {
         playerSpotsRemaining: remainingSkaterSpots,
         playerCount,
         goalieCount,
-        maxGoalies: MAX_GOALIES,
+        maxGoalies: maxGoalies,
         maxSkaters: skaterCapacity,
-        maxRosterSpots: MAX_ROSTER_SPOTS,
+        maxRosterSpots: getMaxRosterSpots(),
         totalPlayers: players.length,
         totalPaid: totalPaid.toFixed(2),
         paidCount,
@@ -7439,7 +7704,11 @@ app.post('/api/admin/settings', (req, res) => {
         usingCustomSignupCode: /^\d{4}$/.test(String(customSignupCode || '').trim()),
         regularSkatersByDay,
                 defaultSignupCode: getDynamicSignupCode(),
-        weeklyDefaultSignupCodes
+        weeklyDefaultSignupCodes,
+        cancellationCutoffHours,
+        noShowPolicyText: NO_SHOW_POLICY_TEXT,
+        portalDefaults: PORTAL_DEFAULTS,
+        portalSettingsWarnings
     });
 });
 
@@ -8288,6 +8557,8 @@ function buildAdminRosterContactExport() {
             phoneDigits,
             team: teamName,
             isGoalie: !!(full.isGoalie || publicPlayer.isGoalie),
+            protected: !!(full.protected || publicPlayer.protected),
+            adminOnlyRemove: !!(full.adminOnlyRemove || publicPlayer.adminOnlyRemove),
             cancelled: !!publicPlayer.cancelled
         };
     };
@@ -8302,8 +8573,8 @@ function buildAdminRosterContactExport() {
             .toLowerCase()
             .replace(/\s+/g, ' ');
 
-        // Exclude Phan Ly from Android Mass Text Export contact lists.
-        if (normalizedName === 'phan ly') return false;
+        // Exclude protected/admin-only players from Android Mass Text Export contact lists.
+        if (isProtectedOrAdminOnlyPlayer(player)) return false;
 
         return true;
     };
@@ -8400,16 +8671,8 @@ app.post('/api/admin/release-roster', async (req, res) => {
 function rebuildCurrentWeekTeamsFromPlayers() {
     const whiteTeam = players.filter(p => p && p.team === 'White').map(p => ({ ...p, team: 'White' }));
     const darkTeam = players.filter(p => p && p.team === 'Dark').map(p => ({ ...p, team: 'Dark' }));
-    const sortedWhite = whiteTeam.sort((a, b) => {
-        if (a.isGoalie && !b.isGoalie) return -1;
-        if (!a.isGoalie && b.isGoalie) return 1;
-        return `${a.firstName || ''} ${a.lastName || ''}`.toLowerCase().localeCompare(`${b.firstName || ''} ${b.lastName || ''}`.toLowerCase());
-    });
-    const sortedDark = darkTeam.sort((a, b) => {
-        if (a.isGoalie && !b.isGoalie) return -1;
-        if (!a.isGoalie && b.isGoalie) return 1;
-        return `${a.firstName || ''} ${a.lastName || ''}`.toLowerCase().localeCompare(`${b.firstName || ''} ${b.lastName || ''}`.toLowerCase());
-    });
+    const sortedWhite = whiteTeam.sort(compareRosterTeamDisplayOrder);
+    const sortedDark = darkTeam.sort(compareRosterTeamDisplayOrder);
     const whiteMetrics = summarizeTeamMetrics(sortedWhite);
     const darkMetrics = summarizeTeamMetrics(sortedDark);
     return {
@@ -9367,6 +9630,8 @@ initDatabase().then(async () => {
         await reconcileFromFileBackup();
         await runDatabaseSelfHeal('startup');
     }
+    // Persist required portal settings after bootstrap migration so normal runtime has a saved source of truth.
+    await saveData('startup-required-settings-check');
     checkAutoLock();
     refreshPersistedStateFingerprint();
     await runSchedulerTick();
@@ -9375,7 +9640,7 @@ initDatabase().then(async () => {
         cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '* * * * *', async () => {
             await runSchedulerTick();
         }, {
-            timezone: 'America/New_York'
+            timezone: PORTAL_DEFAULTS.timezone
         });
     }
 
@@ -9416,7 +9681,7 @@ app.listen(PORT, () => {
         cron.schedule(process.env.INTERNAL_SCHEDULER_CRON || '* * * * *', async () => {
             await runSchedulerTick();
         }, {
-            timezone: 'America/New_York'
+            timezone: PORTAL_DEFAULTS.timezone
         });
     }
 

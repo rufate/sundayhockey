@@ -1,5 +1,26 @@
 {
   "players": [],
   "waitlist": [],
-  "savedAt": "2026-03-30T17:16:51Z"
+  "savedAt": "2026-03-30T17:16:51Z",
+  "gameLocation": "Capri Recreation Complex",
+  "gameTime": "Friday 9:30 PM",
+  "playerSignupCode": "9855",
+  "editableDefaultSignupCode": "9855",
+  "weeklyDefaultSignupCodes": {
+    "sunday": "9855",
+    "monday": "9855",
+    "tuesday": "9855",
+    "wednesday": "9855",
+    "thursday": "9855",
+    "friday": "9855",
+    "saturday": "9855"
+  },
+  "timezone": "America/Toronto",
+  "appSettings": {
+    "selectedArena": "Capri Recreation Complex",
+    "selectedDayTime": "Friday 9:30 PM",
+    "playerSignupCode": "9855",
+    "editableDefaultSignupCode": "9855",
+    "timezone": "America/Toronto"
+  }
 }

@@ -967,8 +967,9 @@
             min-height: 52px;
             padding: 14px 16px !important;
             margin: 0 !important;
-            font-size: 1.28rem !important;
-            font-weight: 800;
+            font-size: 1rem !important;
+            font-weight: 400;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.3;
             border-radius: 12px;
             border: 2px solid #555;
@@ -1044,7 +1045,7 @@
             min-height: 160px;
             padding: 10px 12px !important;
             font-size: 0.95rem !important;
-            font-weight: 600 !important;
+            font-weight: 400 !important;
             line-height: 1.4 !important;
             resize: vertical;
             overflow: auto;
@@ -5857,7 +5858,7 @@ th, td{padding:2px 3px !important;}
             min-height: 36px !important;
             height: 36px;
             font-size: 0.9rem !important;
-            font-weight: 600 !important;
+            font-weight: 400 !important;
             line-height: 1.2 !important;
             padding: 8px !important;
             margin: 4px 0 !important;
@@ -5958,64 +5959,23 @@ th, td{padding:2px 3px !important;}
 </style>
 
 
-<style id="pia-date-white-calendar-icon-final-v1">
-/* Force PIA date picker calendar icon to match white date text.
-   Native browser icon is hidden; the clickable date input remains unchanged. */
-.payment-slider-pia-date-wrap{
-    position:relative !important;
-}
-.payment-slider-pia-date-wrap input[type="date"]{
-    color:#ffffff !important;
-    -webkit-text-fill-color:#ffffff !important;
-    padding-right:44px !important;
-}
-.payment-slider-pia-date-wrap input[type="date"]::-webkit-calendar-picker-indicator{
-    opacity:0 !important;
-    filter:none !important;
-    width:44px !important;
-    height:100% !important;
-    cursor:pointer !important;
-}
-.payment-slider-pia-date-wrap::after{
-    content:"";
-    position:absolute;
-    right:14px;
-    bottom:13px;
-    width:18px;
-    height:18px;
-    pointer-events:none;
-    opacity:1;
-    background-repeat:no-repeat;
-    background-position:center;
-    background-size:18px 18px;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='3' ry='3'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3Ccircle cx='8' cy='14' r='1.2' fill='%23ffffff' stroke='none'/%3E%3Ccircle cx='12' cy='14' r='1.2' fill='%23ffffff' stroke='none'/%3E%3Ccircle cx='16' cy='14' r='1.2' fill='%23ffffff' stroke='none'/%3E%3Ccircle cx='8' cy='18' r='1.2' fill='%23ffffff' stroke='none'/%3E%3Ccircle cx='12' cy='18' r='1.2' fill='%23ffffff' stroke='none'/%3E%3Ccircle cx='16' cy='18' r='1.2' fill='%23ffffff' stroke='none'/%3E%3C/svg%3E");
-}
-</style>
 
-<style id="pia-date-calendar-click-fix-v2">
-/* PIA date field: keep the true-white custom calendar icon and make that icon area open the native date picker. */
-.payment-slider-pia-date-wrap{
-    cursor:pointer !important;
-}
-.payment-slider-pia-date-wrap input[type="date"]{
-    cursor:pointer !important;
-}
-.payment-slider-pia-date-wrap::after{
-    pointer-events:none !important;
-}
-</style>
 
-<style id="admin-global-white-date-picker-icons-v3">
-/* Keep all Admin date/datetime pickers native and clickable; only brighten the browser icon. */
+
+<style id="hp-native-white-date-icons-clickable-final">
+/* Native clickable date picker; no overlay, no hidden indicator. */
 input[type="date"],
-input[type="datetime-local"]{
-    color-scheme: dark !important;
+input[type="datetime-local"] {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  color-scheme: dark !important;
 }
 input[type="date"]::-webkit-calendar-picker-indicator,
-input[type="datetime-local"]::-webkit-calendar-picker-indicator{
-    filter: invert(1) brightness(2) !important;
-    opacity: 1 !important;
-    cursor: pointer !important;
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  opacity: 1 !important;
+  filter: brightness(0) invert(1) !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
 }
 </style>
 </head>
@@ -6121,6 +6081,13 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{
 <button class="arena-add-btn" type="button" onclick="addArenaOption()" title="Add arena">+</button>
 </div>
 </div>
+<div class="title-control-group">
+<label for="cancellationCutoffHoursInput">Cancellation cutoff</label>
+<div style="display:flex; align-items:center; gap:8px;">
+<input class="control-input" id="cancellationCutoffHoursInput" min="0" max="72" step="0.5" type="number" value="3" style="max-width:120px;"/>
+<span class="custom-title-note" style="margin:0;">hours before game</span>
+</div>
+</div>
 </div>
 <div class="game-setup-preview-line">
 <strong>Preview:</strong>
@@ -6187,7 +6154,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{
 </div>
 <div class="compact-row">
 <label for="selectedDayCodeInput">Default Code</label>
-<input id="selectedDayCodeInput" maxlength="4" placeholder="9855" type="text"/>
+<input id="selectedDayCodeInput" maxlength="4" placeholder="4-digit code" type="text"/>
 </div>
 <button class="control-btn compact-save-btn" onclick="saveSelectedDayCode()">Save Selected Day Code</button>
 <button class="control-btn compact-save-btn" onclick="generateSelectedDayCode()" style="background:#4a90e2;">Auto Generate</button>
@@ -6351,7 +6318,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{
 <summary>Manage Spare / Quick Goalies</summary>
 <div class="spare-goalie-ratings-section nested-spare-goalie-ratings">
 <h3>🥅 Manage Spare / Quick Goalies</h3>
-<p class="spare-goalie-rating-note">One goalie list for Admin quick-select and the private goalie page. Built-in goalies stay visible; saved spares/ratings sync through the server.</p>
+<p class="spare-goalie-rating-note">One goalie list for Admin quick-select and the private goalie page. Saved spares/ratings sync through the server. Regular goalies are set with the Regular button after a goalie is added.</p>
 <div class="spare-goalie-add-grid">
 <input id="adminSpareGoalieFirst" placeholder="First name" type="text"/>
 <input id="adminSpareGoalieLast" placeholder="Last name" type="text"/>
@@ -6436,9 +6403,9 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{
 <div class="regular-summary-list" id="regularSkatersList"></div>
 </div>
 
-<div class="regular-summary-section">
+<div class="regular-summary-section" style="display:none !important;">
 <h3>🛡️ Protected Auto-Add Players</h3>
-<p class="regular-summary-note">These players return every weekly reset, are marked protected, and can only be removed by admin.</p>
+<p class="regular-summary-note">Protected players omitted. Use Regular players for weekly auto-add.</p>
 <div class="regular-summary-list" id="protectedPlayersList"></div>
 </div>
 
@@ -6449,49 +6416,16 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{
 </div>
 
 <div class="goalies-section">
-<h3>🥅 Auto-Add Regular Goalies (Weekly Reset)</h3>
+<h3>🥅 Regular Goalies (Weekly Reset)</h3>
 <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">
-                These goalies can be added manually now. Weekly reset is dynamic: Friday auto-adds Craig + Hao, Sunday auto-adds Craig + Mat.
+                No goalies are hard-coded anymore. Add a goalie manually or from Quick Select, then use the Regular button in the registered players table. Regular goalies carry over after weekly reset and are still managed through the Goalies portal.
             </p>
-<div class="goalie-list" id="predefinedGoalies">
-<div class="goalie-item">
-<div class="goalie-checkbox-wrapper">
-<input id="goalieCraig" type="checkbox" value="Craig Scolack"/>
-<label for="goalieCraig">Craig Scolack</label>
-</div>
-<div class="goalie-rating">
-<label>Rating:</label>
-<input id="ratingCraig" max="10" min="1" type="number" value="9"/>
-</div>
-</div>
-<div class="goalie-item">
-<div class="goalie-checkbox-wrapper">
-<input id="goalieHao" type="checkbox" value="Hao Chau"/>
-<label for="goalieHao">Hao Chau</label>
-</div>
-<div class="goalie-rating">
-<label>Rating:</label>
-<input id="ratingHao" max="10" min="1" type="number" value="8"/>
-</div>
-</div>
-<div class="goalie-item">
-<div class="goalie-checkbox-wrapper">
-<input id="goalieMat" type="checkbox" value="Mat Carriere"/>
-<label for="goalieMat">Mat Carriere</label>
-</div>
-<div class="goalie-rating">
-<label>Rating:</label>
-<input id="ratingMat" max="10" min="1" type="number" value="7"/>
-</div>
-</div>
-</div>
-<button class="add-goalies-btn" onclick="addSelectedGoalies()">➕ Add Selected Goalies Now</button>
 </div>
 
 <div class="backup-goalies-section">
 <h3>🔄 Backup Goalies (Substitutions)</h3>
 <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 15px;">
-                Select a backup goalie to substitute when needed. Sunday regular setup now uses Craig + Mat.
+                Select a backup goalie to substitute when needed. Regular goalies are managed with the Regular button, not hard-coded names.
             </p>
 <div class="backup-goalie-select">
 <select id="backupGoalieSelect">
@@ -6551,7 +6485,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{
 </div>
 <div class="roster-text-export-box" id="rosterTextExportBox">
 <h4>📱 Mass Text Signup Players</h4>
-<p>Use this anytime to text the current signup list. Android can open a group text directly. iPhone users should copy the numbers, open Messages, tap To, then paste. Phan Ly and all goalies are automatically excluded.</p>
+<p>Use this anytime to text the current signup list. Android can open a group text directly. iPhone users should copy the numbers, open Messages, tap To, then paste. Protected players and all goalies are automatically excluded.</p>
 <div class="roster-text-export-actions">
 <button class="control-btn" onclick="copySignupPhonesOnly()" style="background:#2e7d32;">Copy Phone Numbers</button>
 <button class="control-btn" onclick="copySignupNamesAndPhones()" style="background:#4a90e2;">Copy Names + Phones</button>
@@ -6763,6 +6697,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{
 </div>
 <script>
         const API_URL = window.location.origin;
+        let PORTAL_TIMEZONE = 'America/Toronto';
         const SESSION_KEY = 'hockey_admin_session';
         const REMEMBER_KEY = 'hockey_admin_remember_device';
         const REGULARS_LOCAL_KEY = 'hockey_admin_regulars_local';
@@ -6845,7 +6780,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{
 
         function getETNowDate() {
             // Creates a Date object representing "now" in America/New_York (approx).
-            return new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+            return new Date(new Date().toLocaleString("en-US", { timeZone: PORTAL_TIMEZONE }));
         }
 
         function nextOccurrenceDate(dow, hour, minute) {
@@ -7284,12 +7219,8 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{
         let latestRosterContactExport = null;
         let latestAdminPlayers = [];
 
-        // Pre-defined goalie data
-        const PREDEFINED_GOALIES = [
-            { id: 'goalieCraig', name: 'Craig Scolack', phone: '(519) 982-6311', defaultRating: 9 },
-            { id: 'goalieHao', name: 'Hao Chau', phone: '(519) 995-9884', defaultRating: 8 },
-            { id: 'goalieMat', name: 'Mat Carriere', phone: '(226) 350-0217', defaultRating: 7 }
-        ];
+        // Regular goalies are admin-managed data. No goalie names are hard-coded.
+        const PREDEFINED_GOALIES = [];
 
         function formatAuditAction(action) {
             return String(action || '')
@@ -7998,6 +7929,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{
                 const newTitle = getPublicTitleFromInput(defaultTitle);
                 const dayTime = `${parts.weekday} ${formatTime12(parts.hour24, parts.minute)}`;
                 const selectedGameDate = parts.dateVal;
+                const cancellationCutoffHours = Number(document.getElementById('cancellationCutoffHoursInput')?.value ?? 3);
 
                 const hiddenInput = document.getElementById('titleDayTime');
                 if (hiddenInput) {
@@ -8014,6 +7946,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{
                             selectedDayTime: dayTime,
                             gameDate: selectedGameDate,
                             selectedArena: arena,
+                            cancellationCutoffHours: cancellationCutoffHours,
                             arenaOptions: getArenaOptionsFromSelect(),
                             gameRules: getRulesFromGameSetupInput()
                         })
@@ -8032,7 +7965,8 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator{
 Title: ${newTitle}
 Arena: ${arena}
 Time: ${formatEtDateTimeLocal(buildDatetimeLocal(parts.dateVal, parts.hour24, parts.minute))}
-Date: ${selectedGameDate}`);
+Date: ${selectedGameDate}
+Cancellation cutoff: ${cancellationCutoffHours} hour${cancellationCutoffHours === 1 ? '' : 's'} before game`);
                         await loadSettings();
                     } else {
                         alert(result.error || 'Failed to update game setup');
@@ -8058,6 +7992,7 @@ Date: ${selectedGameDate}`);
                 const newTitle = getPublicTitleFromInput(defaultTitle);
                 const dayTime = `${parts.weekday} ${formatTime12(parts.hour24, parts.minute)}`;
                 const selectedGameDate = parts.dateVal;
+                const cancellationCutoffHours = Number(document.getElementById('cancellationCutoffHoursInput')?.value ?? 3);
 
                 const hiddenInput = document.getElementById('titleDayTime');
                 if (hiddenInput) {
@@ -8221,83 +8156,10 @@ Date: ${selectedGameDate}`);
         }
 
         // Add selected predefined goalies
+        // Legacy compatibility: predefined hard-coded goalies were removed.
         async function addSelectedGoalies() {
-            const selectedGoalies = [];
-            
-            PREDEFINED_GOALIES.forEach(goalie => {
-                const checkbox = document.getElementById(goalie.id);
-                if (checkbox && checkbox.checked) {
-                    const ratingInput = document.getElementById('rating' + goalie.id.replace('goalie', ''));
-                    const rating = parseInt(ratingInput.value) || goalie.defaultRating;
-                    selectedGoalies.push({
-                        ...goalie,
-                        rating: rating
-                    });
-                }
-            });
-
-            if (selectedGoalies.length === 0) {
-                alert("Please select at least one goalie to add.");
-                return;
-            }
-
-            if (selectedGoalies.length > maxGoalies) {
-                alert(`You can only add up to ${maxGoalies} goalies. Please uncheck some goalies.`);
-                return;
-            }
-
-            if (currentGoalies + selectedGoalies.length > maxGoalies) {
-                alert(`Only ${maxGoalies - currentGoalies} goalie spot(s) remaining. Please uncheck some goalies.`);
-                return;
-            }
-
-            let addedCount = 15;
-            let errors = [];
-
-            for (const goalie of selectedGoalies) {
-                try {
-                    const res = await fetch(`${API_URL}/api/admin/add-player`, {
-                        method: 'POST',
-                        headers: getAdminHeaders(),
-                        body: JSON.stringify({ 
-                            sessionToken: sessionToken, 
-                            firstName: goalie.name.split(' ')[0], 
-                            lastName: goalie.name.split(' ').slice(1).join(' '), 
-                            phone: goalie.phone, 
-                            rating: goalie.rating,
-                            paymentMethod: 'N/A', 
-                            isGoalie: true,
-                            toWaitlist: false 
-                        })
-                    });
-
-                    if (res.ok) {
-                        addedCount++;
-                    } else {
-                        const err = await res.json();
-                        errors.push(`${goalie.name}: ${err.error}`);
-                    }
-                } catch (err) {
-                    console.error("Add goalie error:", err);
-                    errors.push(`${goalie.name}: Network error`);
-                }
-            }
-
-            // Uncheck all
-            PREDEFINED_GOALIES.forEach(goalie => {
-                const checkbox = document.getElementById(goalie.id);
-                if (checkbox) checkbox.checked = false;
-            });
-
-            loadData();
-
-            if (addedCount > 0) {
-                alert(`✅ Successfully added ${addedCount} goalie(s)!\n${errors.length > 0 ? '\nErrors:\n' + errors.join('\n') : ''}`);
-            } else {
-                alert(`❌ Failed to add goalies:\n${errors.join('\n')}`);
-            }
+            alert('Hard-coded goalies have been removed. Add a goalie manually or from Quick Select, then tap Regular in the registered players table.');
         }
-
 
         function normalizeRegularDayBucketMap(input = {}) {
             const defaults = {
@@ -8374,6 +8236,26 @@ Date: ${selectedGameDate}`);
             }
 
             return { active: false, bucket: null, player: null };
+        }
+
+        function getGoalieRegularInfo(goalie) {
+            const goaliePhone = normalizePhoneDigitsClient(goalie && goalie.phone);
+            const first = String(goalie && goalie.firstName || '').trim().toLowerCase();
+            const last = String(goalie && goalie.lastName || '').trim().toLowerCase();
+            const map = normalizeRegularDayBucketMap(currentRegularGoaliesByDay);
+            const order = ['everyday','friday','sunday','wednesday','saturday','monday','tuesday','thursday'];
+
+            for (const day of order) {
+                const match = (map[day] || []).find(existing => {
+                    const existingPhone = normalizePhoneDigitsClient(existing.phone);
+                    if (goaliePhone && existingPhone && existingPhone === goaliePhone) return true;
+                    return String(existing.firstName || '').trim().toLowerCase() === first &&
+                           String(existing.lastName || '').trim().toLowerCase() === last;
+                });
+                if (match) return { active: true, bucket: day, goalie: match };
+            }
+
+            return { active: false, bucket: null, goalie: null };
         }
 
         function renderRegularSkatersList() {
@@ -8608,6 +8490,7 @@ Date: ${selectedGameDate}`);
                     return;
                 }
                 const data = await res.json();
+                PORTAL_TIMEZONE = data.timezone || data.portalDefaults?.timezone || PORTAL_TIMEZONE;
                 
                 document.getElementById('currentLocation').innerText = data.location;
                 document.getElementById('currentTime').innerText = data.time;
@@ -8615,17 +8498,20 @@ Date: ${selectedGameDate}`);
                 document.getElementById('locationInput').value = data.location;
                 document.getElementById('timeInput').value = data.time;
                 document.getElementById('dateInput').value = data.date || '';
+                const cancellationCutoffInput = document.getElementById('cancellationCutoffHoursInput');
+                if (cancellationCutoffInput) cancellationCutoffInput.value = data.cancellationCutoffHours ?? data.portalDefaults?.cancellationCutoffHours ?? 3;
                 document.getElementById('currentCodeDisplay').innerText = data.code;
                 
                 const weeklyCodes = data.weeklyDefaultSignupCodes || {};
+                adminDefaultSignupCode = data.defaultSignupCode || data.code || adminDefaultSignupCode;
                 weeklyCodeState = {
-                    sunday: weeklyCodes.sunday || data.defaultSignupCode || '9855',
-                    monday: weeklyCodes.monday || data.defaultSignupCode || '9855',
-                    tuesday: weeklyCodes.tuesday || data.defaultSignupCode || '9855',
-                    wednesday: weeklyCodes.wednesday || data.defaultSignupCode || '9855',
-                    thursday: weeklyCodes.thursday || data.defaultSignupCode || '9855',
-                    friday: weeklyCodes.friday || data.defaultSignupCode || '9855',
-                    saturday: weeklyCodes.saturday || data.defaultSignupCode || '9855'
+                    sunday: weeklyCodes.sunday || adminDefaultSignupCode,
+                    monday: weeklyCodes.monday || adminDefaultSignupCode,
+                    tuesday: weeklyCodes.tuesday || adminDefaultSignupCode,
+                    wednesday: weeklyCodes.wednesday || adminDefaultSignupCode,
+                    thursday: weeklyCodes.thursday || adminDefaultSignupCode,
+                    friday: weeklyCodes.friday || adminDefaultSignupCode,
+                    saturday: weeklyCodes.saturday || adminDefaultSignupCode
                 };
                 loadSelectedDayCode();
                 updateWeeklyCodeSummary();
@@ -8796,20 +8682,22 @@ Date: ${selectedGameDate}`);
         }
 
 
+        let adminDefaultSignupCode = ''; // loaded from saved portal settings
+
         let weeklyCodeState = {
-            sunday: '9855',
-            monday: '9855',
-            tuesday: '9855',
-            wednesday: '9855',
-            thursday: '9855',
-            friday: '9855',
-            saturday: '9855'
+            sunday: adminDefaultSignupCode,
+            monday: adminDefaultSignupCode,
+            tuesday: adminDefaultSignupCode,
+            wednesday: adminDefaultSignupCode,
+            thursday: adminDefaultSignupCode,
+            friday: adminDefaultSignupCode,
+            saturday: adminDefaultSignupCode
         };
 
         function loadSelectedDayCode() {
             const day = document.getElementById('weeklyDaySelect')?.value || 'sunday';
             const input = document.getElementById('selectedDayCodeInput');
-            if (input) input.value = weeklyCodeState[day] || '9855';
+            if (input) input.value = weeklyCodeState[day] || adminDefaultSignupCode;
         }
 
         function updateWeeklyCodeSummary() {
@@ -8827,7 +8715,7 @@ Date: ${selectedGameDate}`);
             };
 
             summary.innerText = Object.keys(labels)
-                .map(day => `${labels[day]}: ${weeklyCodeState[day] || '9855'}`)
+                .map(day => `${labels[day]}: ${weeklyCodeState[day] || adminDefaultSignupCode}`)
                 .join(' • ');
         }
 
@@ -8966,9 +8854,15 @@ Date: ${selectedGameDate}`);
         }
 
 
-        function isPhanLyOrProtectedPlayer(player) {
-            const name = `${String(player.firstName || '').trim()} ${String(player.lastName || '').trim()}`.trim().toLowerCase().replace(/\s+/g, ' ');
-            return !!(player.protected || player.adminOnlyRemove) || name === 'phan ly';
+        function isLegacyPhanLyPlayerAdmin(player) {
+            const first = String(player?.firstName || '').trim().toLowerCase();
+            const last = String(player?.lastName || '').trim().toLowerCase();
+            return first === 'phan' && last === 'ly';
+        }
+
+        function isProtectedOrAdminOnlyPlayer(player) {
+            if (isLegacyPhanLyPlayerAdmin(player)) return false;
+            return !!(player && (player.protected || player.adminOnlyRemove));
         }
 
         function buildSignupMassTextExport() {
@@ -8986,7 +8880,7 @@ Date: ${selectedGameDate}`);
                     if (!player.phoneDigits || player.phoneDigits.length !== 10) return false;
                     if (seenPhones.has(player.phoneDigits)) return false;
                     if (player.isGoalie) return false;
-                    if (isPhanLyOrProtectedPlayer(player)) return false;
+                    if (isProtectedOrAdminOnlyPlayer(player)) return false;
                     seenPhones.add(player.phoneDigits);
                     return true;
                 });
@@ -9007,7 +8901,7 @@ Date: ${selectedGameDate}`);
             const data = buildSignupMassTextExport();
             preview.value = data.total
                 ? `Signup Mass Text Contacts (${data.total})\n\n${data.namePhoneLines}`
-                : 'No eligible signup players found. Phan Ly and goalies are excluded automatically.';
+                : 'No eligible signup players found. Protected players and goalies are excluded automatically.';
         }
 
         async function copySignupPhonesOnly() {
@@ -9023,7 +8917,7 @@ Date: ${selectedGameDate}`);
         async function copySignupIphoneNumbers() {
             const data = buildSignupMassTextExport();
             if (!data.phoneOnly) {
-                alert('No eligible signup phone numbers available. Phan Ly and goalies are excluded automatically.');
+                alert('No eligible signup phone numbers available. Protected players and goalies are excluded automatically.');
                 return;
             }
             await copyTextToClipboard(data.phoneOnly, `Copied ${data.total || 0} numbers. On iPhone, open Messages, start a new message, tap To, then paste.`);
@@ -9032,7 +8926,7 @@ Date: ${selectedGameDate}`);
         async function openSignupSmsDraft() {
             const data = buildSignupMassTextExport();
             if (!data.phoneOnly) {
-                alert('No eligible signup phone numbers available. Phan Ly and goalies are excluded automatically.');
+                alert('No eligible signup phone numbers available. Protected players and goalies are excluded automatically.');
                 return;
             }
 
@@ -9303,7 +9197,7 @@ ${rosterLink}
         }
 
         async function manualReset() {
-            if (!confirm("⚠️ WARNING: This will reset ALL data for a new week. The code will remain as 9855. Continue?")) return;
+            if (!confirm("⚠️ WARNING: This will reset ALL data for a new week. The current signup code will remain unchanged. Continue?")) return;
             try {
                 const res = await fetch(`${API_URL}/api/admin/manual-reset`, {
                     method: 'POST',
@@ -9344,6 +9238,29 @@ ${rosterLink}
             } catch (err) {
                 console.error('Toggle regular error:', err);
                 alert(`❌ ${err.message || 'Failed to update regular player.'}`);
+            }
+        }
+
+
+        async function toggleGoalieRegular(playerId) {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/toggle-goalie-regular`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken, playerId })
+                });
+
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.success === false) {
+                    throw new Error(data.error || 'Failed to update regular goalie');
+                }
+
+                currentRegularGoaliesByDay = normalizeRegularDayBucketMap(data.regularGoaliesByDay || {});
+                renderAutoAddSettings();
+                await loadData();
+            } catch (err) {
+                console.error('Toggle goalie regular error:', err);
+                alert(`❌ ${err.message || 'Failed to update regular goalie.'}`);
             }
         }
 
@@ -9434,17 +9351,17 @@ ${rosterLink}
                     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#666; padding:30px;">No players registered</td></tr>';
                 } else {
                     const sortedPlayers = [...data.players].sort((a, b) => {
-                        const aIsPhan = String(a.firstName || '').trim().toLowerCase() === 'phan';
-                        const bIsPhan = String(b.firstName || '').trim().toLowerCase() === 'phan';
-                        if (aIsPhan && !bIsPhan) return -1;
-                        if (!aIsPhan && bIsPhan) return 1;
+                        const aProtected = isProtectedOrAdminOnlyPlayer(a);
+                        const bProtected = isProtectedOrAdminOnlyPlayer(b);
+                        if (aProtected && !bProtected) return -1;
+                        if (!aProtected && bProtected) return 1;
                         if (a.isGoalie && !b.isGoalie) return -1;
                         if (!a.isGoalie && b.isGoalie) return 1;
                         return 0;
                     });
 
                     const formatAdminRatingFootnote = (player) => {
-                        const raw = player.finalRating ?? player.rating ?? player.directRating ?? '';
+                        const raw = player.selfRatingRaw ?? player.finalRating ?? player.rating ?? player.directRating ?? '';
                         const rating = parseFloat(raw);
                         if (!Number.isFinite(rating)) return '';
                         return parseFloat(rating.toFixed(1)).toString();
@@ -9455,15 +9372,13 @@ ${rosterLink}
                         const adminRatingFootnote = formatAdminRatingFootnote(p);
                         const adminRatingHtml = adminRatingFootnote ? `<span class="admin-rating-footnote">${adminRatingFootnote}</span>` : '';
                         const goalieBadge = p.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
-                        const protectedBadge = (p.protected || p.adminOnlyRemove || (String(p.firstName || '').trim().toLowerCase() === 'phan' && String(p.lastName || '').trim().toLowerCase() === 'ly')) ? 
-                            '<span class="protected-badge">PROTECTED</span>' : '';
-                        const regularInfo = getPlayerRegularInfo(p);
+                        const protectedBadge = '';
+                        const regularInfo = p.isGoalie ? getGoalieRegularInfo(p) : getPlayerRegularInfo(p);
                         const regularLabel = 'Regular';
                         const regularClass = regularInfo.active ? 'regular-toggle-btn active' : 'regular-toggle-btn';
 
-                        const isPhan = String(p.firstName || '').trim().toLowerCase() === 'phan' && String(p.lastName || '').trim().toLowerCase() === 'ly';
-                        const isProtectedPlayer = !!(p.protected || p.adminOnlyRemove) || isPhan;
-                        const hideAdminPaymentUi = !!p.isGoalie || isProtectedPlayer;
+                        const isProtectedPlayer = isProtectedOrAdminOnlyPlayer(p);
+                        const hideAdminPaymentUi = !!p.isGoalie;
 
                         let paidInput = '';
                         if (!hideAdminPaymentUi) {
@@ -9492,16 +9407,16 @@ ${rosterLink}
                             `;
                         }
 
-                        const regularCell = hideAdminPaymentUi
-                            ? ''
+                        const regularCell = p.isGoalie
+                            ? `<button class="control-btn ${regularClass}" onclick="toggleGoalieRegular(${p.id})">${regularLabel}</button>`
                             : `<button class="control-btn ${regularClass}" onclick="togglePlayerRegular(${p.id})">${regularLabel}</button>`;
-                        const isPhanLyPlayer = isProtectedPlayer;
-                        const shouldShowNotifyPlayer = !hideAdminPaymentUi && !p.isGoalie && !isPhanLyPlayer;
+                        const shouldShowNotifyPlayer = !hideAdminPaymentUi && !p.isGoalie && !isProtectedPlayer && !isLegacyPhanLyPlayerAdmin(p);
                         const notifyPlayerBtn = shouldShowNotifyPlayer
                             ? `<button class="control-btn notify-player-btn" onclick="openPlayerInRosterSms(${p.id})">Text In</button>`
                             : '';
                         const actionCell = hideAdminPaymentUi
                             ? `<div class="action-stack registered-action-stack">
+                                    ${regularCell}
                                     <button class="remove-btn" onclick="removePlayer(${p.id})">Remove</button>
                                </div>`
                             : `<div class="action-stack registered-action-stack">
@@ -11137,7 +11052,7 @@ Continue?`;
             const date = new Date(value);
             if (Number.isNaN(date.getTime())) return String(value);
             return date.toLocaleString('en-US', {
-                timeZone: 'America/New_York',
+                timeZone: PORTAL_TIMEZONE,
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',
@@ -13228,7 +13143,7 @@ document.addEventListener('keydown', function(e){
         text-align: left !important;
         color: #b9c7d6 !important;
         font-size: 0.8rem !important;
-        font-weight: 600 !important;
+        font-weight: 400 !important;
         line-height: 1.22 !important;
         white-space: normal !important;
         overflow: visible !important;
@@ -13428,5 +13343,177 @@ document.addEventListener('keydown', function(e){
     document.addEventListener('click', openPiaDatePickerFromWrap, true);
 })();
 </script>
+
+
+
 </body>
 </html>
+
+<style id="mobile-registered-name-width-fix-v1">
+/* Mobile Registered Players table: give the Name column room and stop mid-word wrapping. */
+@media (max-width: 600px) {
+    #registeredPlayersSection table,
+    .registered-players-section table,
+    table:has(#playerList) {
+        table-layout: fixed !important;
+        width: 100% !important;
+    }
+
+    #playerList td,
+    #playerList th {
+        box-sizing: border-box !important;
+        vertical-align: middle !important;
+    }
+
+    /* Visible columns are: Name, Rating, Paid, Action. The hidden phone column stays collapsed. */
+    #playerList td:nth-child(1),
+    #playerList th:nth-child(1) {
+        width: 43% !important;
+        max-width: 43% !important;
+        white-space: normal !important;
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+    }
+
+    #playerList td:nth-child(2),
+    #playerList th:nth-child(2) {
+        display: none !important;
+        width: 0 !important;
+        max-width: 0 !important;
+        padding: 0 !important;
+    }
+
+    #playerList td:nth-child(3),
+    #playerList th:nth-child(3) {
+        width: 14% !important;
+        max-width: 14% !important;
+        text-align: center !important;
+    }
+
+    #playerList td:nth-child(4),
+    #playerList th:nth-child(4) {
+        width: 18% !important;
+        max-width: 18% !important;
+        text-align: center !important;
+        white-space: nowrap !important;
+    }
+
+    #playerList td:nth-child(5),
+    #playerList th:nth-child(5) {
+        width: 25% !important;
+        max-width: 25% !important;
+        text-align: center !important;
+    }
+
+    #playerList .player-name-cell,
+    #playerList .player-name-nickname-row,
+    #playerList .nickname-tap-target,
+    #playerList .player-phone-sub,
+    #playerList .player-time-sub {
+        white-space: normal !important;
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+    }
+
+    #playerList .player-name-main {
+        display: inline !important;
+        white-space: normal !important;
+        word-break: keep-all !important;
+        overflow-wrap: normal !important;
+        line-height: 1.08 !important;
+    }
+
+    /* Phone numbers and locked timestamps should stay compact and not force the name narrow. */
+    #playerList .player-phone-sub,
+    #playerList .player-time-sub,
+    #playerList .locked-time-chip {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 100% !important;
+    }
+
+    /* Rating box only needs a small fixed footprint. */
+    #playerList .rating-wrap {
+        display: flex !important;
+        justify-content: center !important;
+    }
+    #playerList .rating-pill-input {
+        width: 34px !important;
+        min-width: 34px !important;
+        max-width: 34px !important;
+    }
+
+    /* Keep action buttons stacked and centered, but do not let them steal more column width. */
+    #playerList .registered-action-stack {
+        width: 100% !important;
+        align-items: center !important;
+    }
+}
+</style>
+
+<style id="mobile-registered-name-cutoff-fix-v2">
+/* Fix mobile Registered Players cutoff: keep the wider name column, but never clip phone/time info. */
+@media (max-width: 600px) {
+    table:has(#playerList) {
+        table-layout: auto !important;
+        width: 100% !important;
+    }
+
+    #playerList td:nth-child(1),
+    #playerList th:nth-child(1) {
+        width: 42% !important;
+        max-width: none !important;
+        min-width: 95px !important;
+        overflow: visible !important;
+    }
+
+    #playerList td:nth-child(3),
+    #playerList th:nth-child(3) {
+        width: 14% !important;
+        max-width: none !important;
+    }
+
+    #playerList td:nth-child(4),
+    #playerList th:nth-child(4) {
+        width: 18% !important;
+        max-width: none !important;
+    }
+
+    #playerList td:nth-child(5),
+    #playerList th:nth-child(5) {
+        width: 26% !important;
+        max-width: none !important;
+    }
+
+    #playerList .player-name-cell,
+    #playerList .player-name-nickname-row,
+    #playerList .nickname-tap-target,
+    #playerList .player-name-main,
+    #playerList .player-phone-sub,
+    #playerList .player-time-sub,
+    #playerList .locked-time-chip {
+        max-width: none !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+    }
+
+    #playerList .player-name-nickname-row {
+        flex-wrap: wrap !important;
+    }
+
+    #playerList .player-name-main {
+        white-space: normal !important;
+        word-break: normal !important;
+        overflow-wrap: break-word !important;
+    }
+
+    #playerList .player-phone-sub,
+    #playerList .player-time-sub,
+    #playerList .locked-time-chip {
+        white-space: normal !important;
+        word-break: normal !important;
+        overflow-wrap: anywhere !important;
+    }
+}
+</style>
