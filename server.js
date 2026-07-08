@@ -629,9 +629,10 @@ let currentWeekData = {
 };
 
 const MAX_GOALIES = 2;
-const NO_SHOW_POLICY_TEXT = 'Cancellations are allowed until 3 hours before game time. After that cutoff, please contact the admin.';
+const DEFAULT_NO_SHOW_POLICY_TEXT = 'Cancel anytime. Last-minute cancellations must be made at least 3 hours before game time to give waitlisted players a chance to play. After the 3-hour deadline, the spot is your responsibility. No-show owes.';
+let NO_SHOW_POLICY_TEXT = DEFAULT_NO_SHOW_POLICY_TEXT;
 
-const GAME_RULES = [
+const DEFAULT_GAME_RULES = [
     "No contact. Board tie-ups only.",
     "No slashing. Lift sticks. Injury = done + possible ban.",
     "Move the puck. Don’t hog it.",
@@ -642,9 +643,34 @@ const GAME_RULES = [
     "No excessive aggression. It’s pickup.",
     "Don’t be “that guy.” You know who you are.",
     "Handshake/fist bump after the game. Have fun.",
-    "Last minute cancellations must be done 3 hours before game time. This gives waitlist players a chance for a spot. No-show owes.",
+    DEFAULT_NO_SHOW_POLICY_TEXT,
     "Respect the game and players — or you’re done."
 ];
+let GAME_RULES = [...DEFAULT_GAME_RULES];
+
+function normalizeGameRules(value) {
+    const source = Array.isArray(value) ? value : DEFAULT_GAME_RULES;
+    const cleaned = source
+        .map(rule => String(rule || '').trim())
+        .filter(Boolean);
+    return cleaned.length ? cleaned : [...DEFAULT_GAME_RULES];
+}
+
+function extractNoShowPolicyFromRules(rules) {
+    const list = normalizeGameRules(rules);
+    return list.find(rule => /no[- ]?show owes/i.test(rule) || /last[- ]?minute cancellations/i.test(rule)) || '';
+}
+
+function syncNoShowPolicyWithRules() {
+    NO_SHOW_POLICY_TEXT = String(NO_SHOW_POLICY_TEXT || DEFAULT_NO_SHOW_POLICY_TEXT).trim() || DEFAULT_NO_SHOW_POLICY_TEXT;
+    GAME_RULES = normalizeGameRules(GAME_RULES);
+    const idx = GAME_RULES.findIndex(rule => /no[- ]?show owes/i.test(rule) || /last[- ]?minute cancellations/i.test(rule));
+    if (idx >= 0) {
+        GAME_RULES[idx] = NO_SHOW_POLICY_TEXT;
+    } else {
+        GAME_RULES.splice(Math.min(10, GAME_RULES.length), 0, NO_SHOW_POLICY_TEXT);
+    }
+}
 
 // ============================================
 // NEW CONFIGURATION SECTION - ADD THESE HERE
@@ -2231,6 +2257,13 @@ async function loadDataFromDB() {
         if (settings.signupLockSchedule) signupLockSchedule = settings.signupLockSchedule;
         if (settings.rosterReleaseSchedule) rosterReleaseSchedule = settings.rosterReleaseSchedule;
         if (settings.resetWeekSchedule) resetWeekSchedule = settings.resetWeekSchedule;
+        if (settings.gameRules !== undefined) GAME_RULES = normalizeGameRules(settings.gameRules);
+        if (settings.noShowPolicyText !== undefined) {
+            NO_SHOW_POLICY_TEXT = String(settings.noShowPolicyText || DEFAULT_NO_SHOW_POLICY_TEXT).trim() || DEFAULT_NO_SHOW_POLICY_TEXT;
+        } else if (settings.gameRules !== undefined) {
+            NO_SHOW_POLICY_TEXT = extractNoShowPolicyFromRules(GAME_RULES) || NO_SHOW_POLICY_TEXT;
+        }
+        syncNoShowPolicyWithRules();
         if (!isManualScheduleMode() && shouldAutoBuildMissingSchedules(settings)) {
             buildAutoSchedulesFromGameTime(gameTime, gameDate);
         }
@@ -2328,6 +2361,13 @@ async function loadDataFromDB() {
         if (appSettings.announcementEnabled !== undefined) announcementEnabled = appSettings.announcementEnabled === 'true';
         if (appSettings.announcementText !== undefined) announcementText = appSettings.announcementText || '';
         if (appSettings.paymentEmail !== undefined) paymentEmail = String(appSettings.paymentEmail || '').trim() || paymentEmail;
+        if (appSettings.gameRules !== undefined) GAME_RULES = normalizeGameRules(parsePersistedSettingValue(appSettings.gameRules));
+        if (appSettings.noShowPolicyText !== undefined) {
+            NO_SHOW_POLICY_TEXT = String(appSettings.noShowPolicyText || DEFAULT_NO_SHOW_POLICY_TEXT).trim() || DEFAULT_NO_SHOW_POLICY_TEXT;
+        } else if (appSettings.gameRules !== undefined) {
+            NO_SHOW_POLICY_TEXT = extractNoShowPolicyFromRules(GAME_RULES) || NO_SHOW_POLICY_TEXT;
+        }
+        syncNoShowPolicyWithRules();
         if (appSettings.rosterReleaseAnnouncementText !== undefined) rosterReleaseAnnouncementText = String(appSettings.rosterReleaseAnnouncementText || '').trim() || buildRosterReleasePaymentAnnouncement();
         if (appSettings.collectorPageEnabled !== undefined) collectorPageEnabled = appSettings.collectorPageEnabled !== 'false';
         if (appSettings.announcementImages !== undefined) {
@@ -2914,6 +2954,9 @@ function applySnapshotToMemory(snapshot) {
     announcementText = snapshot.announcementText ?? announcementText;
     announcementImages = Array.isArray(snapshot.announcementImages) ? snapshot.announcementImages : [];
     paymentEmail = typeof snapshot.paymentEmail === 'string' ? snapshot.paymentEmail : paymentEmail;
+    if (typeof snapshot.noShowPolicyText === 'string') NO_SHOW_POLICY_TEXT = snapshot.noShowPolicyText.trim() || DEFAULT_NO_SHOW_POLICY_TEXT;
+    if (Array.isArray(snapshot.gameRules)) GAME_RULES = normalizeGameRules(snapshot.gameRules);
+    syncNoShowPolicyWithRules();
     refreshDynamicSignupCode();
 }
 
@@ -2997,6 +3040,9 @@ async function restoreSnapshotItem(item, req, auditAction = 'restore-snapshot-re
         if (typeof s.requirePlayerCode === 'boolean') requirePlayerCode = s.requirePlayerCode;
         if (typeof s.playerSignupCode === 'string' && s.playerSignupCode.trim()) playerSignupCode = s.playerSignupCode.trim();
         if (Array.isArray(s.arenaOptions)) arenaOptions = normalizeArenaOptions(s.arenaOptions);
+        if (typeof s.noShowPolicyText === 'string') NO_SHOW_POLICY_TEXT = s.noShowPolicyText.trim() || DEFAULT_NO_SHOW_POLICY_TEXT;
+        if (Array.isArray(s.gameRules)) GAME_RULES = normalizeGameRules(s.gameRules);
+        syncNoShowPolicyWithRules();
     }
 
     remainingSkaterSpots = Math.max(0, skaterCapacity - players.filter(p => !(p && p.isGoalie)).length);
@@ -3312,7 +3358,9 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
             ['lastExactRosterReleaseMinuteKey', lastExactRosterReleaseMinuteKey],
             ['signupLockSchedule', signupLockSchedule],
             ['rosterReleaseSchedule', rosterReleaseSchedule],
-            ['resetWeekSchedule', resetWeekSchedule]
+            ['resetWeekSchedule', resetWeekSchedule],
+            ['noShowPolicyText', NO_SHOW_POLICY_TEXT],
+            ['gameRules', GAME_RULES]
         ];
         for (const [key, value] of settingsEntries) {
             await client.query(
@@ -3338,7 +3386,9 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
             ['selectedDayTime', gameTime],
             ['selectedArena', gameLocation],
             ['arenaOptions', JSON.stringify(arenaOptions)],
-            ['gameDate', gameDate]
+            ['gameDate', gameDate],
+            ['noShowPolicyText', NO_SHOW_POLICY_TEXT],
+            ['gameRules', JSON.stringify(GAME_RULES)]
         ];
         for (const [key, value] of appSettingsEntries) {
             await client.query(
@@ -3576,6 +3626,8 @@ function buildFullDataSnapshot() {
         paymentEmail,
         rosterReleaseAnnouncementText,
         collectorPageEnabled,
+        noShowPolicyText: NO_SHOW_POLICY_TEXT,
+        gameRules: GAME_RULES,
         summary: {
             gameLocation,
             gameTime,
@@ -3591,8 +3643,10 @@ function buildFullDataSnapshot() {
             announcementText,
             announcementImages,
             paymentEmail,
-        rosterReleaseAnnouncementText,
-        collectorPageEnabled,
+            noShowPolicyText: NO_SHOW_POLICY_TEXT,
+            gameRules: GAME_RULES,
+            rosterReleaseAnnouncementText,
+            collectorPageEnabled,
             selectedDayTime: gameTime,
             selectedArena: gameLocation,
             arenaOptions,
@@ -3656,6 +3710,8 @@ function getSettingsSnapshot() {
         paymentEmail,
         rosterReleaseAnnouncementText,
         collectorPageEnabled,
+        noShowPolicyText: NO_SHOW_POLICY_TEXT,
+        gameRules: GAME_RULES,
         gameTime,
         gameLocation,
         gameDate,
@@ -5251,6 +5307,16 @@ app.get('/history', (req, res) => {
     return sendPublic(res, 'history.html');
 });
 
+app.get('/api/rules', (req, res) => {
+    syncNoShowPolicyWithRules();
+    res.json({
+        rules: GAME_RULES,
+        noShowPolicy: NO_SHOW_POLICY_TEXT,
+        customTitle,
+        gameDayName: getGameDayName()
+    });
+});
+
 app.get('/rules', (req, res) => {
     return sendPublic(res, 'rules.html');
 });
@@ -5517,7 +5583,6 @@ app.get('/api/status', (req, res) => {
         rosterReleaseAtLocal: dynamicScheduleDates.rosterReleaseAt,
         resetWeekAt: dynamicScheduleDates.resetWeekAt,
         scheduleMode,
-        noShowPolicy: NO_SHOW_POLICY_TEXT,
         cancellationDeadlineLine: NO_SHOW_POLICY_TEXT,
         cancellationAllowedNow,
         hoursUntilGame: cancellationTiming.hoursUntilGame
@@ -6205,6 +6270,8 @@ app.post('/api/admin/app-settings', (req, res) => {
         paymentEmail,
         rosterReleaseAnnouncementText,
         collectorPageEnabled,
+        noShowPolicyText: NO_SHOW_POLICY_TEXT,
+        gameRules: GAME_RULES,
         selectedDayTime: gameTime,
         selectedArena: gameLocation,
         gameDate,
@@ -6212,8 +6279,7 @@ app.post('/api/admin/app-settings', (req, res) => {
         dayTimeOptions: DAY_TIME_OPTIONS,
         backupGoalies: BACKUP_GOALIES,
         extraGoalieContacts,
-        regularSkatersByDay,
-        collectorPageEnabled
+        regularSkatersByDay
     });
 });
 
@@ -6222,7 +6288,8 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
     const { sessionToken, maintenanceMode: newMaintenance, customTitle: newTitle,
             announcementEnabled: newAnnouncementEnabled, announcementText: newAnnouncementText, announcementImages: newAnnouncementImages,
             rosterReleaseAnnouncementText: newRosterReleaseAnnouncementText, paymentEmail: newPaymentEmail, selectedDayTime, selectedArena, arenaOptions: newArenaOptions, gameDate: newGameDate,
-            regularSkatersByDay: newRegularSkatersByDay, collectorPageEnabled: newCollectorPageEnabled } = req.body;
+            regularSkatersByDay: newRegularSkatersByDay, collectorPageEnabled: newCollectorPageEnabled,
+            noShowPolicyText: newNoShowPolicyText, gameRules: newGameRules } = req.body;
 
     if (!isAuthorizedAdminRequest(req)) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -6236,6 +6303,12 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
             if (newAnnouncementText !== undefined) announcementText = String(newAnnouncementText || '').trim();
             if (newRosterReleaseAnnouncementText !== undefined) rosterReleaseAnnouncementText = String(newRosterReleaseAnnouncementText || '').trim() || buildRosterReleasePaymentAnnouncement();
             if (newPaymentEmail !== undefined) paymentEmail = String(newPaymentEmail || '').trim();
+            if (newGameRules !== undefined) {
+                GAME_RULES = normalizeGameRules(newGameRules);
+                NO_SHOW_POLICY_TEXT = extractNoShowPolicyFromRules(GAME_RULES) || NO_SHOW_POLICY_TEXT;
+            }
+            if (newNoShowPolicyText !== undefined) NO_SHOW_POLICY_TEXT = String(newNoShowPolicyText || DEFAULT_NO_SHOW_POLICY_TEXT).trim() || DEFAULT_NO_SHOW_POLICY_TEXT;
+            syncNoShowPolicyWithRules();
             if (newCollectorPageEnabled !== undefined) collectorPageEnabled = !!newCollectorPageEnabled;
             if (newAnnouncementImages !== undefined) {
                 announcementImages = normalizeAnnouncementImages(newAnnouncementImages);
@@ -6283,6 +6356,8 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
             announcementText,
             rosterReleaseAnnouncementText,
             announcementImages,
+            noShowPolicyText: NO_SHOW_POLICY_TEXT,
+            gameRules: GAME_RULES,
             regularSkatersByDay,
             collectorPageEnabled,
             gameTime,

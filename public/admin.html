@@ -989,6 +989,77 @@
             margin-top: 6px;
             line-height: 1.35;
         }
+        .game-rules-editor-section {
+            background: rgba(0,0,0,0.18);
+            border: 1px solid rgba(255,255,255,0.10);
+            border-radius: 12px;
+            padding: 0;
+            overflow: hidden;
+        }
+        .game-rules-editor-title {
+            margin: 0;
+            padding: 12px 14px;
+            color: #ff9a3c;
+            font-size: 1.05rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .game-rules-editor-subtitle {
+            color: #bdbdbd;
+            font-size: 0.88rem;
+            font-weight: 500;
+        }
+        .game-rules-editor-arrow {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            min-width: 34px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.10);
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 900;
+            transition: transform 0.18s ease, background 0.18s ease;
+        }
+        .game-rules-editor-section:not(.admin-game-rules-collapsed) .game-rules-editor-arrow {
+            background: rgba(74,144,226,0.35);
+        }
+        .admin-game-rules-collapsed .game-rules-editor-arrow {
+            transform: rotate(-90deg);
+        }
+        .admin-game-rules-collapsed .game-rules-editor-body {
+            display: none !important;
+        }
+        .game-rules-editor-body {
+            padding: 0 14px 14px 14px;
+        }
+        .game-setup-section #gameRulesInput.game-rules-input {
+            min-height: 160px;
+            padding: 10px 12px !important;
+            font-size: 0.95rem !important;
+            font-weight: 600 !important;
+            line-height: 1.4 !important;
+            resize: vertical;
+            overflow: auto;
+        }
+        .sr-only {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+        }
         .game-setup-section #titlePreview {
             display: none !important;
         }
@@ -6067,6 +6138,17 @@ input[type="date"]::-webkit-calendar-picker-indicator{
 <span class="preview-sep">•</span>
 <span id="currentArenaDisplay">--</span>
 </div>
+<div class="title-control-group game-rules-editor-section admin-game-rules-collapsed" style="margin-top:14px;">
+<h4 class="game-rules-editor-title" id="gameRulesEditorToggle" role="button" tabindex="0" aria-expanded="false">
+<span>📋 Game Rules <span class="game-rules-editor-subtitle">(one rule per line)</span></span>
+<span class="game-rules-editor-arrow">&#9662;</span>
+</h4>
+<div class="game-rules-editor-body" id="gameRulesEditorBody">
+<label class="sr-only" for="gameRulesInput">Game Rules</label>
+<textarea class="custom-title-input game-rules-input" id="gameRulesInput" rows="8" placeholder="Enter one rule per line"></textarea>
+<div class="custom-title-note">Rules shown on the public Rules page. The no-show policy stays synchronized from this list.</div>
+</div>
+</div>
 <div class="game-setup-savebar">
 <button class="update-title-btn" id="updateGameSetupBtn" onclick="updateGameSetup()">Save Game Setup</button>
 </div>
@@ -7643,6 +7725,10 @@ input[type="date"]::-webkit-calendar-picker-indicator{
                     document.getElementById('currentArenaDisplay').innerText = data.selectedArena;
                     updateGameSetupPreview();
                 }
+                const gameRulesInput = document.getElementById('gameRulesInput');
+                if (gameRulesInput && Array.isArray(data.gameRules)) {
+                    gameRulesInput.value = data.gameRules.join('\n');
+                }
                 
                 // Store backup goalies data
                 if (data.backupGoalies) {
@@ -7886,6 +7972,12 @@ input[type="date"]::-webkit-calendar-picker-indicator{
             return `${titleText} • ${arenaText}`;
         }
 
+        function getRulesFromGameSetupInput() {
+            const el = document.getElementById('gameRulesInput');
+            if (!el) return undefined;
+            return el.value.split(/\r?\n/).map(rule => rule.trim()).filter(Boolean);
+        }
+
         async function updateGameSetup() {
             const button = document.getElementById('updateGameSetupBtn');
             return withBusyButton(button, 'Saving...', async () => {
@@ -7916,7 +8008,8 @@ input[type="date"]::-webkit-calendar-picker-indicator{
                             selectedDayTime: dayTime,
                             gameDate: selectedGameDate,
                             selectedArena: arena,
-                            arenaOptions: getArenaOptionsFromSelect()
+                            arenaOptions: getArenaOptionsFromSelect(),
+                            gameRules: getRulesFromGameSetupInput()
                         })
                     });
 
@@ -12169,6 +12262,54 @@ document.addEventListener('keydown', function(e){
 }
 
 </style>
+<script id="gameRulesEditorCollapsibleScript">
+(function () {
+    function initGameRulesEditorCollapsible() {
+        const section = document.querySelector('.game-rules-editor-section');
+        const toggle = document.getElementById('gameRulesEditorToggle');
+        if (!section || !toggle || section.dataset.gameRulesCollapseReady === '1') return;
+
+        const storageKey = 'adminCollapse:game-rules-editor';
+        let collapsed = true;
+        try {
+            const stored = localStorage.getItem(storageKey);
+            if (stored === 'open') collapsed = false;
+            if (stored === 'closed') collapsed = true;
+        } catch (e) {}
+
+        function applyState(isCollapsed) {
+            section.classList.toggle('admin-game-rules-collapsed', !!isCollapsed);
+            toggle.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+            try { localStorage.setItem(storageKey, isCollapsed ? 'closed' : 'open'); } catch (e) {}
+        }
+
+        function toggleState() {
+            applyState(!section.classList.contains('admin-game-rules-collapsed'));
+        }
+
+        toggle.addEventListener('click', function (event) {
+            const tag = event.target && event.target.tagName ? event.target.tagName.toLowerCase() : '';
+            if (['button','input','select','textarea','a','label'].includes(tag)) return;
+            toggleState();
+        });
+        toggle.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggleState();
+            }
+        });
+
+        section.dataset.gameRulesCollapseReady = '1';
+        applyState(collapsed);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initGameRulesEditorCollapsible);
+    } else {
+        initGameRulesEditorCollapsible();
+    }
+})();
+</script>
 <div class="copyright-footer">© 2026 Phan Anthony Ly. All Rights Reserved.</div>
 <style id="adminCollapsibleTablesStyle">
 /* Collapsible admin tables - mobile friendly */

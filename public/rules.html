@@ -253,22 +253,8 @@
         </div>
 
         <ul class="rules-list" id="rulesList">
-    <li><span class="rule-number">1</span><span class="rule-text">No contact. Board tie-ups only.</span></li>
-    <li><span class="rule-number">2</span><span class="rule-text">No slashing.</span></li>
-    <li><span class="rule-number">3</span><span class="rule-text">Don't hog the puck, pass it often. It's a TEAM Sport.</span></li>
-    <li><span class="rule-number">4</span><span class="rule-text">Your slapshots = injury = no more slapshots for you.</span></li>
-    <li><span class="rule-number">5</span><span class="rule-text">Quick short shifts. Be considerate of your teammates.</span></li>
-    <li><span class="rule-number">6</span><span class="rule-text">No negativity. Keep it positive.</span></li>
-    <li><span class="rule-number">7</span><span class="rule-text">No excessive aggression. You will feel like <span class="poop-emoji">💩</span> if someone ends up getting injured.</span></li>
-    <li><span class="rule-number">8</span><span class="rule-text">Respect the game and players.</span></li>
-    <li><span class="rule-number">9</span><span class="rule-text">Don't forget handshake/fist bump after the game.</span></li>
-    <li>
-        <span class="rule-number">10</span>
-        <span class="rule-text" style="color:#ff4444; font-weight:bold;">
-            ⚠️ Cancellation must be done prior to Roster Release. This allows waitlist players a spot. No show owes.
-        </span>
-    </li>
-</ul>
+            <li><span class="rule-number">1</span><span class="rule-text">Loading rules...</span></li>
+        </ul>
 
         <div class="error-message" id="errorMessage">
             You must agree to the rules to complete registration.
@@ -298,6 +284,42 @@
         const QUICK_RETURN_MAX = 8;
         
         
+        function renderRulesList(rules, noShowPolicy) {
+            const list = document.getElementById('rulesList');
+            if (!list) return;
+            const cleaned = Array.isArray(rules) ? rules.map(rule => String(rule || '').trim()).filter(Boolean) : [];
+            list.innerHTML = '';
+            if (!cleaned.length) {
+                const li = document.createElement('li');
+                const number = document.createElement('span');
+                number.className = 'rule-number';
+                number.textContent = '1';
+                const text = document.createElement('span');
+                text.className = 'rule-text';
+                text.textContent = 'Rules are currently unavailable.';
+                li.append(number, text);
+                list.appendChild(li);
+                return;
+            }
+            cleaned.forEach((rule, index) => {
+                const li = document.createElement('li');
+                const number = document.createElement('span');
+                number.className = 'rule-number';
+                number.textContent = String(index + 1);
+                const text = document.createElement('span');
+                text.className = 'rule-text';
+                if (noShowPolicy && rule === noShowPolicy) {
+                    text.style.color = '#ff4444';
+                    text.style.fontWeight = 'bold';
+                    text.textContent = `⚠️ ${rule}`;
+                } else {
+                    text.textContent = rule;
+                }
+                li.append(number, text);
+                list.appendChild(li);
+            });
+        }
+
         // Schedule info (dynamic by selected game day/time)
         let rosterReleaseLine = "Teams are released at the scheduled time";
         let rosterReleaseAtIso = null;
@@ -316,6 +338,16 @@
         }
 
         (async function loadScheduleInfo() {
+            try {
+                const rulesRes = await fetch(`${API_URL}/api/rules`);
+                if (rulesRes.ok) {
+                    const rulesData = await rulesRes.json();
+                    renderRulesList(rulesData.rules, rulesData.noShowPolicy);
+                    applyGameDayBranding(rulesData.gameDayName || gameDayName, rulesData.customTitle);
+                }
+            } catch (e) {
+                renderRulesList([], '');
+            }
             try {
                 const res = await fetch(`${API_URL}/api/status`);
                 const status = await res.json();

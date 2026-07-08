@@ -1992,10 +1992,7 @@
             <h3 style="text-align: center; color: var(--accent); margin: 20px 0 15px 0; text-transform: uppercase; letter-spacing: 1px;">
                 🏒 Registered Players (<span id="registeredCount">0</span>)
             </h3>
-            <div style="text-align:center; color:#ffb366; margin: 0 0 14px 0; font-size: 0.95rem; font-weight: 700;">
-                Cancel anytime. Last minute cancellations must be done 3 hours before game time. No show owes!
-            </div>
-            <div class="players-grid" id="playersGrid">
+<div class="players-grid" id="playersGrid">
                 <!-- Players will be loaded here -->
             </div>
         </div>
@@ -2281,7 +2278,7 @@
             <h2 style="color: #ff6b00;">You're on the Waitlist!</h2>
             <p style="font-size: 1.2rem;">Position: <strong id="waitlistPosition">#</strong></p>
             <p style="color: #aaa; margin-top: 20px;">
-                Position 1 on waitlist will automatically be assigned a spot if there's a cancellation<br>
+                Position #1 on the waitlist is automatically promoted when a spot becomes available. If a Regular player is waiting, they take priority over non-Regular players.<br>
                 <a href="/waitlist" style="color:#ff6b00;">View Waitlist</a>
             </p>
         </div>
@@ -2292,7 +2289,7 @@
         <div class="modal-content">
             <h3>⚠️ Cancel Registration</h3>
             <p>Enter the phone number you used to register to confirm cancellation.</p>
-            <p style="color:#ffb3b3; font-weight:bold; margin-top:-6px;">Last minute cancellation must be done 3 hours before game time. No show owes!</p>
+            <p id="cancelPolicyModalText" style="color:#ffb3b3; font-weight:bold; margin-top:-6px;">Cancel anytime. Last-minute cancellations must be made at least 3 hours before game time to give waitlisted players a chance to play. No-show owes.</p>
             <input type="tel" id="cancelPhoneInput" placeholder="Phone Number" inputmode="numeric" autocomplete="tel" maxlength="14" style="margin-bottom: 15px;">
             <div class="cancel-error" id="cancelError"></div>
             <div class="cancel-success" id="cancelSuccess"></div>
@@ -3184,10 +3181,11 @@ function updateCalculatedRating() {
                 ? "'Join Game', recheck roster, see you at the rink."
                 : "'Join Waitlist', 1st on waitlist is guaranteed a spot if a player cancels.";
 
-            if (isRosterAnnouncement) {
-                if (text.includes('{joinMessage}')) {
-                    text = text.split('{joinMessage}').join(joinMessage);
-                } else if (/You\s+can\s+still\s+['’‘"]?Join Game['’‘"]?/i.test(text)) {
+            const hadJoinMessagePlaceholder = text.includes('{joinMessage}');
+            text = text.split('{joinMessage}').join(joinMessage);
+
+            if (isRosterAnnouncement && !hadJoinMessagePlaceholder) {
+                if (/You\s+can\s+still\s+['’‘"]?Join Game['’‘"]?/i.test(text)) {
                     text = text
                         .split('\n')
                         .map(line => /You\s+can\s+still\s+['’‘"]?Join Game['’‘"]?/i.test(line) ? joinMessage : line)
@@ -3508,6 +3506,14 @@ function updateCalculatedRating() {
                 }
 
                 renderAnnouncement(data);
+
+                const policyText = data.noShowPolicy || data.cancellationDeadlineLine || '';
+                if (policyText) {
+                    const policyBanner = document.getElementById('noShowPolicyBanner');
+                    const policyModal = document.getElementById('cancelPolicyModalText');
+                    if (policyBanner) policyBanner.textContent = policyText;
+                    if (policyModal) policyModal.textContent = policyText;
+                }
 
                 const paymentEmailDisplay = document.getElementById('paymentEmailDisplay');
                 if (paymentEmailDisplay) {
