@@ -6005,27 +6005,17 @@ th, td{padding:2px 3px !important;}
 }
 </style>
 
-<style id="admin-global-white-date-picker-icons-v2">
-/* Force every Admin date input to use a visible white calendar icon.
-   Chromium's native date icon can stay black on dark inputs, so we hide
-   the native glyph but keep its clickable picker area, then draw a white SVG. */
-input[type="date"]{
+<style id="admin-global-white-date-picker-icons-v3">
+/* Keep all Admin date/datetime pickers native and clickable; only brighten the browser icon. */
+input[type="date"],
+input[type="datetime-local"]{
     color-scheme: dark !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3Ccircle cx='8' cy='14' r='0.8' fill='white' stroke='white'/%3E%3Ccircle cx='12' cy='14' r='0.8' fill='white' stroke='white'/%3E%3Ccircle cx='16' cy='14' r='0.8' fill='white' stroke='white'/%3E%3Ccircle cx='8' cy='18' r='0.8' fill='white' stroke='white'/%3E%3Ccircle cx='12' cy='18' r='0.8' fill='white' stroke='white'/%3E%3C/svg%3E") !important;
-    background-repeat: no-repeat !important;
-    background-position: right 12px center !important;
-    background-size: 18px 18px !important;
-    padding-right: 42px !important;
 }
-input[type="date"]::-webkit-calendar-picker-indicator{
-    opacity: 0 !important;
-    width: 42px !important;
-    height: 100% !important;
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator{
+    filter: invert(1) brightness(2) !important;
+    opacity: 1 !important;
     cursor: pointer !important;
-}
-/* PIA date picker already has its own working white overlay icon. */
-.payment-slider-pia-date-wrap input[type="date"]{
-    background-image: none !important;
 }
 </style>
 </head>
@@ -6444,6 +6434,18 @@ input[type="date"]::-webkit-calendar-picker-indicator{
 <h3>⭐ Regular Players</h3>
 <p class="regular-summary-note">Use the one-click Regular button in the player list above. Active regulars are highlighted green.</p>
 <div class="regular-summary-list" id="regularSkatersList"></div>
+</div>
+
+<div class="regular-summary-section">
+<h3>🛡️ Protected Auto-Add Players</h3>
+<p class="regular-summary-note">These players return every weekly reset, are marked protected, and can only be removed by admin.</p>
+<div class="regular-summary-list" id="protectedPlayersList"></div>
+</div>
+
+<div class="regular-summary-section">
+<h3>🥅 Regular Goalies</h3>
+<p class="regular-summary-note">These goalies return every weekly reset from saved admin settings instead of hard-coded weekly state.</p>
+<div class="regular-summary-list" id="regularGoaliesList"></div>
 </div>
 
 <div class="goalies-section">
@@ -7275,6 +7277,8 @@ input[type="date"]::-webkit-calendar-picker-indicator{
         let selectedSnapshotFingerprint = "";
         let latestSnapshotKey = null;
         let currentRegularSkatersByDay = normalizeRegularDayBucketMap({});
+        let currentProtectedPlayersByDay = normalizeRegularDayBucketMap({});
+        let currentRegularGoaliesByDay = normalizeRegularDayBucketMap({});
         let adminPlayersById = {};
         let adminWaitlist = [];
         let latestRosterContactExport = null;
@@ -7460,6 +7464,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{
                     showDashboard();
                     loadData();
                     loadSettings();
+                    loadAutoAddSettings();
                     loadAppSettings();
                     loadPaymentReportSnapshots();
                     loadSessionInfo();
@@ -7509,6 +7514,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{
                     showDashboard();
                     loadData();
                     loadSettings();
+                    loadAutoAddSettings();
                     loadAppSettings();
                     loadPaymentReportSnapshots();
                     loadSessionInfo();
@@ -8404,6 +8410,109 @@ Date: ${selectedGameDate}`);
             }).join('');
         }
 
+        function getAutoAddEntriesFlat(map = {}) {
+            const entries = [];
+            Object.entries(normalizeRegularDayBucketMap(map)).forEach(([bucket, list]) => {
+                (Array.isArray(list) ? list : []).forEach(player => entries.push({ ...player, bucket }));
+            });
+            return entries;
+        }
+
+        function renderAutoAddList(elementId, map, emptyText, removeFnName) {
+            const wrap = document.getElementById(elementId);
+            if (!wrap) return;
+
+            const entries = getAutoAddEntriesFlat(map);
+            if (!entries.length) {
+                wrap.innerHTML = `<div class="regular-skater-empty">${emptyText}</div>`;
+                return;
+            }
+
+            wrap.innerHTML = entries.map(player => {
+                const tags = [
+                    player.bucket || 'everyday',
+                    `Rating ${player.rating ?? '--'}`,
+                    player.isGoalie ? 'Goalie' : 'Skater',
+                    player.protected ? 'Protected' : 'Not protected'
+                ].join(' • ');
+                const phoneKey = String(player.phone || '').replace(/'/g, "\'");
+                return `
+                    <div class="regular-skater-card">
+                        <div>
+                            <strong>${player.firstName} ${player.lastName}</strong>
+                            <div class="regular-skater-meta">${player.phone || ''}<br>${tags}</div>
+                        </div>
+                        <button type="button" class="remove-btn" onclick="${removeFnName}('${phoneKey}')">Remove</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderAutoAddSettings() {
+            renderAutoAddList('protectedPlayersList', currentProtectedPlayersByDay, 'No protected auto-add players set.', 'removeProtectedPlayer');
+            renderAutoAddList('regularGoaliesList', currentRegularGoaliesByDay, 'No regular goalies set.', 'removeRegularGoalie');
+        }
+
+        async function loadAutoAddSettings() {
+            try {
+                const res = await fetch(`${API_URL}/api/admin/auto-add-settings`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken })
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                currentProtectedPlayersByDay = normalizeRegularDayBucketMap(data.protectedPlayersByDay || {});
+                currentRegularGoaliesByDay = normalizeRegularDayBucketMap(data.regularGoaliesByDay || {});
+                if (data.regularSkatersByDay) {
+                    currentRegularSkatersByDay = normalizeRegularDayBucketMap(data.regularSkatersByDay);
+                    saveLocalRegularSkaters(currentRegularSkatersByDay);
+                    renderRegularSkatersList();
+                }
+                renderAutoAddSettings();
+            } catch (err) {
+                console.error('Error loading auto-add settings:', err);
+            }
+        }
+
+        async function removeProtectedPlayer(phone) {
+            if (!confirm('Remove this protected player from weekly auto-add?')) return;
+            try {
+                const res = await fetch(`${API_URL}/api/admin/remove-protected-player`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken, phone })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) throw new Error(data.error || 'Failed to remove protected player');
+                currentProtectedPlayersByDay = normalizeRegularDayBucketMap(data.protectedPlayersByDay || {});
+                renderAutoAddSettings();
+                await loadData();
+            } catch (err) {
+                console.error('Error removing protected player:', err);
+                alert(`❌ ${err.message || 'Failed to remove protected player.'}`);
+            }
+        }
+
+        async function removeRegularGoalie(phone) {
+            if (!confirm('Remove this goalie from weekly auto-add?')) return;
+            try {
+                const res = await fetch(`${API_URL}/api/admin/remove-regular-goalie`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken, phone })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.success) throw new Error(data.error || 'Failed to remove regular goalie');
+                currentRegularGoaliesByDay = normalizeRegularDayBucketMap(data.regularGoaliesByDay || {});
+                renderAutoAddSettings();
+                await loadData();
+            } catch (err) {
+                console.error('Error removing regular goalie:', err);
+                alert(`❌ ${err.message || 'Failed to remove regular goalie.'}`);
+            }
+        }
+
         async function removeRegularPlayer(phone) {
             if (!confirm('Remove this player from the regular list?')) return;
             try {
@@ -8859,7 +8968,7 @@ Date: ${selectedGameDate}`);
 
         function isPhanLyOrProtectedPlayer(player) {
             const name = `${String(player.firstName || '').trim()} ${String(player.lastName || '').trim()}`.trim().toLowerCase().replace(/\s+/g, ' ');
-            return !!player.protected || name === 'phan ly';
+            return !!(player.protected || player.adminOnlyRemove) || name === 'phan ly';
         }
 
         function buildSignupMassTextExport() {
@@ -9346,14 +9455,15 @@ ${rosterLink}
                         const adminRatingFootnote = formatAdminRatingFootnote(p);
                         const adminRatingHtml = adminRatingFootnote ? `<span class="admin-rating-footnote">${adminRatingFootnote}</span>` : '';
                         const goalieBadge = p.isGoalie ? '<span class="goalie-badge">GOALIE</span>' : '';
-                        const protectedBadge = (p.firstName.toLowerCase() === 'phan' && p.lastName.toLowerCase() === 'ly') ? 
+                        const protectedBadge = (p.protected || p.adminOnlyRemove || (String(p.firstName || '').trim().toLowerCase() === 'phan' && String(p.lastName || '').trim().toLowerCase() === 'ly')) ? 
                             '<span class="protected-badge">PROTECTED</span>' : '';
                         const regularInfo = getPlayerRegularInfo(p);
                         const regularLabel = 'Regular';
                         const regularClass = regularInfo.active ? 'regular-toggle-btn active' : 'regular-toggle-btn';
 
                         const isPhan = String(p.firstName || '').trim().toLowerCase() === 'phan' && String(p.lastName || '').trim().toLowerCase() === 'ly';
-                        const hideAdminPaymentUi = !!p.isGoalie || isPhan;
+                        const isProtectedPlayer = !!(p.protected || p.adminOnlyRemove) || isPhan;
+                        const hideAdminPaymentUi = !!p.isGoalie || isProtectedPlayer;
 
                         let paidInput = '';
                         if (!hideAdminPaymentUi) {
@@ -9385,7 +9495,7 @@ ${rosterLink}
                         const regularCell = hideAdminPaymentUi
                             ? ''
                             : `<button class="control-btn ${regularClass}" onclick="togglePlayerRegular(${p.id})">${regularLabel}</button>`;
-                        const isPhanLyPlayer = String(p.firstName || '').trim().toLowerCase() === 'phan' && String(p.lastName || '').trim().toLowerCase() === 'ly';
+                        const isPhanLyPlayer = isProtectedPlayer;
                         const shouldShowNotifyPlayer = !hideAdminPaymentUi && !p.isGoalie && !isPhanLyPlayer;
                         const notifyPlayerBtn = shouldShowNotifyPlayer
                             ? `<button class="control-btn notify-player-btn" onclick="openPlayerInRosterSms(${p.id})">Text In</button>`
