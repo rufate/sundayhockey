@@ -8567,6 +8567,9 @@ function buildAdminRosterContactExport() {
         if (!player || player.cancelled) return false;
         if (player.phoneDigits.length !== 10) return false;
         if (player.isGoalie) return false;
+        const first = String(player.firstName || '').trim().toLowerCase();
+        const last = String(player.lastName || '').trim().toLowerCase();
+        if (first === 'phan' && last === 'ly') return false;
 
         const normalizedName = String(player.name || '')
             .trim()
