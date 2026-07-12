@@ -5980,7 +5980,7 @@ app.get('/api/waitlist', (req, res) => {
         lastName: p.lastName,
         fullName: `${p.firstName} ${p.lastName}`,
         isGoalie: p.isGoalie,
-        canCancel: cancellationAllowedNow && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p) && !isPublicCancelLockedPlayer(p)
+        canCancel: !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p) && !isPublicCancelLockedPlayer(p)
         // EXCLUDED: rating, phone, paymentMethod
     }));
     
@@ -8396,6 +8396,81 @@ app.post('/api/admin/update-phone', async (req, res) => {
     } catch (err) {
         console.error('Error updating phone:', err);
         res.status(500).json({ error: "Failed to update phone safely" });
+    }
+});
+
+// Admin override for a registered goalie's legal/display name.
+// Keeps the active roster, weekly auto-add goalie record, and saved spare contact in sync.
+app.post('/api/admin/update-goalie-name', async (req, res) => {
+    const { playerId, firstName, lastName } = req.body || {};
+    if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
+
+    const normalizedPlayerId = parseInt(playerId, 10);
+    if (!Number.isFinite(normalizedPlayerId)) return res.status(400).json({ error: "Invalid player id" });
+
+    const cleanFirstName = String(firstName || '').trim().replace(/\s+/g, ' ');
+    const cleanLastName = String(lastName || '').trim().replace(/\s+/g, ' ');
+    if (!cleanFirstName || !cleanLastName) {
+        return res.status(400).json({ error: "Goalie first and last name are required." });
+    }
+    if (cleanFirstName.length > 60 || cleanLastName.length > 60) {
+        return res.status(400).json({ error: "Goalie name is too long." });
+    }
+
+    const player = players.find(p => parseInt(p.id, 10) === normalizedPlayerId);
+    if (!player) return res.status(404).json({ error: "Registered goalie not found" });
+    if (!player.isGoalie) return res.status(400).json({ error: "Only registered goalies can be renamed here." });
+
+    const oldFirstName = String(player.firstName || '').trim();
+    const oldLastName = String(player.lastName || '').trim();
+    const phoneDigits = normalizePhoneDigits(player.phone || '');
+
+    try {
+        await runProtectedMutation('update-goalie-name', req, async () => {
+            player.firstName = cleanFirstName;
+            player.lastName = cleanLastName;
+
+            for (const teamKey of ['whiteTeam', 'darkTeam']) {
+                if (!Array.isArray(currentWeekData?.[teamKey])) continue;
+                const currentPlayer = currentWeekData[teamKey].find(p => parseInt(p.id, 10) === normalizedPlayerId);
+                if (currentPlayer) {
+                    currentPlayer.firstName = cleanFirstName;
+                    currentPlayer.lastName = cleanLastName;
+                }
+            }
+
+            for (const day of Object.keys(regularGoaliesByDay || {})) {
+                regularGoaliesByDay[day] = (Array.isArray(regularGoaliesByDay[day]) ? regularGoaliesByDay[day] : []).map(goalie => {
+                    const samePhone = phoneDigits && normalizePhoneDigits(goalie.phone || '') === phoneDigits;
+                    const sameOldName = String(goalie.firstName || '').trim().toLowerCase() === oldFirstName.toLowerCase()
+                        && String(goalie.lastName || '').trim().toLowerCase() === oldLastName.toLowerCase();
+                    return (samePhone || sameOldName) ? { ...goalie, firstName: cleanFirstName, lastName: cleanLastName } : goalie;
+                });
+            }
+
+            extraGoalieContacts = (Array.isArray(extraGoalieContacts) ? extraGoalieContacts : []).map(goalie => {
+                const samePhone = phoneDigits && normalizePhoneDigits(goalie.phone || '') === phoneDigits;
+                const sameOldName = String(goalie.firstName || '').trim().toLowerCase() === oldFirstName.toLowerCase()
+                    && String(goalie.lastName || '').trim().toLowerCase() === oldLastName.toLowerCase();
+                return (samePhone || sameOldName) ? normalizeGoalieContact({ ...goalie, firstName: cleanFirstName, lastName: cleanLastName }) : goalie;
+            });
+
+            if (pool) {
+                await pool.query('UPDATE players SET first_name = $1, last_name = $2 WHERE id = $3', [cleanFirstName, cleanLastName, normalizedPlayerId]);
+            }
+
+            if (rosterReleased) {
+                const etNow = getCurrentETTime();
+                const { week, year } = getWeekNumber(etNow);
+                await saveWeekHistory(year, week, currentWeekData.whiteTeam || [], currentWeekData.darkTeam || []);
+            }
+        }, { playerId: normalizedPlayerId, oldFirstName, oldLastName, firstName: cleanFirstName, lastName: cleanLastName });
+
+        await saveData();
+        res.json({ success: true, player, regularGoaliesByDay, extraGoalieContacts });
+    } catch (err) {
+        console.error('Error updating goalie name:', err);
+        res.status(500).json({ error: "Failed to update goalie name safely" });
     }
 });
 

@@ -1514,6 +1514,13 @@
             font-size: 0.95rem;
             line-height: 1.2;
             word-break: break-word;
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .venue-waitlist-cancel {
+            margin-left: auto;
+            flex: 0 0 auto;
         }
 
         .venue-waitlist-empty {
@@ -3459,13 +3466,35 @@ function updateCalculatedRating() {
             safeEntries.forEach((player, index) => {
                 const li = document.createElement('li');
                 li.className = 'venue-waitlist-item';
-                const goalieBadge = player.isGoalie ? ' <span class="goalie-badge">GOALIE</span>' : '';
-                const displayName = player.fullName || [player.firstName || '', player.lastName || ''].join(' ').trim() || 'Waitlist Player';
-                const position = player.position || (index + 1);
-                li.innerHTML = `
-                    <span class="venue-waitlist-pos">${position}</span>
-                    <div class="venue-waitlist-name">${displayName}${goalieBadge}</div>
-                `;
+
+                const position = document.createElement('span');
+                position.className = 'venue-waitlist-pos';
+                position.textContent = player.position || (index + 1);
+
+                const name = document.createElement('div');
+                name.className = 'venue-waitlist-name';
+                name.textContent = player.fullName || [player.firstName || '', player.lastName || ''].join(' ').trim() || 'Waitlist Player';
+
+                if (player.isGoalie) {
+                    const goalieBadge = document.createElement('span');
+                    goalieBadge.className = 'goalie-badge';
+                    goalieBadge.textContent = 'GOALIE';
+                    name.append(' ', goalieBadge);
+                }
+
+                li.append(position, name);
+
+                if (player.canCancel !== false && player.id != null) {
+                    const cancelButton = document.createElement('button');
+                    cancelButton.type = 'button';
+                    cancelButton.className = 'cancel-btn venue-waitlist-cancel';
+                    cancelButton.textContent = 'Cancel';
+                    cancelButton.addEventListener('click', () => {
+                        openCancelModal(player.id, player.firstName || '', player.lastName || '');
+                    });
+                    li.appendChild(cancelButton);
+                }
+
                 listEl.appendChild(li);
             });
 

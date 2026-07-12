@@ -9417,9 +9417,13 @@ ${rosterLink}
                         const notifyPlayerBtn = shouldShowNotifyPlayer
                             ? `<button class="control-btn notify-player-btn" onclick="openPlayerInRosterSms(${p.id})">Text In</button>`
                             : '';
+                        const goalieEditNameBtn = p.isGoalie
+                            ? `<button class="control-btn" onclick="openGoalieNamePrompt(${p.id})">Edit Name</button>`
+                            : '';
                         const actionCell = hideAdminPaymentUi
                             ? `<div class="action-stack registered-action-stack">
                                     ${regularCell}
+                                    ${goalieEditNameBtn}
                                     <button class="remove-btn" onclick="removePlayer(${p.id})">Remove</button>
                                </div>`
                             : `<div class="action-stack registered-action-stack">
@@ -10070,6 +10074,54 @@ function todayDateInputValue(){
             }
         }
 
+
+        function openGoalieNamePrompt(id) {
+            const player = adminPlayersById[String(id)];
+            if (!player || !player.isGoalie) return;
+
+            const firstName = prompt('Goalie first name:', String(player.firstName || '').trim());
+            if (firstName === null) return;
+            const lastName = prompt('Goalie last name:', String(player.lastName || '').trim());
+            if (lastName === null) return;
+
+            updateGoalieName(id, firstName, lastName);
+        }
+
+        async function updateGoalieName(id, firstName, lastName) {
+            const cleanFirstName = String(firstName || '').trim();
+            const cleanLastName = String(lastName || '').trim();
+            if (!cleanFirstName || !cleanLastName) {
+                alert('Goalie first and last name are required.');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/api/admin/update-goalie-name`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken, playerId: id, firstName: cleanFirstName, lastName: cleanLastName })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.success !== false) {
+                    showNotification('✅ Goalie name saved', 'success');
+                    if (data.player && adminPlayersById[String(id)]) {
+                        adminPlayersById[String(id)].firstName = data.player.firstName || cleanFirstName;
+                        adminPlayersById[String(id)].lastName = data.player.lastName || cleanLastName;
+                    }
+                    loadData();
+                    loadAppSettings();
+                } else if (res.status === 401) {
+                    logout();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to update goalie name'));
+                    loadData();
+                }
+            } catch (err) {
+                console.error('Update goalie name error:', err);
+                alert('Error updating goalie name');
+                loadData();
+            }
+        }
 
         const phoneTapTracker = {};
 
