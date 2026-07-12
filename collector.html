@@ -169,7 +169,13 @@ async function customAmount(playerId){
   await setPaid(playerId, amount, cash ? 'Cash' : 'E-Transfer');
 }
 if(sessionToken){document.getElementById('loginBox').classList.add('hidden');document.getElementById('collectorPanel').classList.remove('hidden');document.getElementById('logoutBtn').classList.remove('hidden');loadData();}
-setInterval(()=>{if(sessionToken) loadData();},30000);
+let collectorPollInFlight=false;
+setInterval(async()=>{
+  if(!sessionToken || document.hidden || collectorPollInFlight) return;
+  collectorPollInFlight=true;
+  try{await loadData();}finally{collectorPollInFlight=false;}
+},60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden && sessionToken) loadData();});
 document.getElementById('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
 </script>
 </body>

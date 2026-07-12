@@ -573,7 +573,16 @@
 
         // Load waitlist on page load
         loadWaitlist();
-        setInterval(loadWaitlist, 30000);
+        let waitlistPollInFlight = false;
+        async function pollWaitlistWhenVisible() {
+            if (document.hidden || waitlistPollInFlight) return;
+            waitlistPollInFlight = true;
+            try { await loadWaitlist(); } finally { waitlistPollInFlight = false; }
+        }
+        setInterval(pollWaitlistWhenVisible, 60000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) pollWaitlistWhenVisible();
+        });
     </script>
 
 

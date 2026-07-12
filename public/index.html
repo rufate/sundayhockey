@@ -3609,7 +3609,9 @@ function updateCalculatedRating() {
                     document.getElementById('registeredPlayersSection').style.display = 'none';
                 } else {
                     document.getElementById('registeredPlayersSection').style.display = 'block';
-                    await loadRegisteredPlayers();
+                    // /api/status already includes the sanitized public player list.
+                    // Reuse it instead of making a second request every poll cycle.
+                    renderPlayers(Array.isArray(data.players) ? data.players : []);
                 }
 
                 const codeTitle = document.getElementById('codeTitle');
@@ -3635,9 +3637,25 @@ function updateCalculatedRating() {
             }
         }
 
-        setInterval(() => {
-            checkStatus().catch(err => console.error("Status check failed:", err));
-        }, 10000);
+        let statusPollInFlight = false;
+        async function pollStatusWhenVisible() {
+            if (document.hidden || statusPollInFlight) return;
+            statusPollInFlight = true;
+            try {
+                await checkStatus();
+            } catch (err) {
+                console.error("Status check failed:", err);
+            } finally {
+                statusPollInFlight = false;
+            }
+        }
+
+        // Thirty seconds is responsive enough for signup changes while cutting
+        // background traffic by roughly two-thirds. Hidden tabs do not poll.
+        setInterval(pollStatusWhenVisible, 30000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) pollStatusWhenVisible();
+        });
         
         
         async function loadRegisteredPlayers() {

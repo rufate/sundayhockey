@@ -11043,9 +11043,16 @@ Continue?`;
         initializeEnhancedDateTimeControls();
         checkSession();
         setTimeout(() => { if (sessionToken) loadSnapshotCatalog(); }, 1200);
-        setInterval(() => {
-            if (sessionToken) loadSystemStatus();
-        }, 60000);
+        let systemStatusPollInFlight = false;
+        async function pollSystemStatusWhenVisible() {
+            if (!sessionToken || document.hidden || systemStatusPollInFlight) return;
+            systemStatusPollInFlight = true;
+            try { await loadSystemStatus(); } finally { systemStatusPollInFlight = false; }
+        }
+        setInterval(pollSystemStatusWhenVisible, 180000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) pollSystemStatusWhenVisible();
+        });
     
 
 

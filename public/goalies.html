@@ -350,7 +350,13 @@ function showResult(data){
   box.scrollIntoView({behavior:'smooth',block:'start'});
 }
 if(sessionToken){showPanel();loadData();}
-setInterval(()=>{if(sessionToken) loadData();},30000);
+let goaliePollInFlight=false;
+setInterval(async()=>{
+  if(!sessionToken || document.hidden || goaliePollInFlight) return;
+  goaliePollInFlight=true;
+  try{await loadData();}finally{goaliePollInFlight=false;}
+},60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden && sessionToken) loadData();});
 document.getElementById('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
 </script>
 </body>

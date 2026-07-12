@@ -778,7 +778,16 @@
         if (confirmCancelBtn) confirmCancelBtn.addEventListener('click', confirmCancel);
 
         loadRoster();
-        setInterval(loadRoster, 60000);
+        let rosterPollInFlight = false;
+        async function pollRosterWhenVisible() {
+            if (document.hidden || rosterPollInFlight) return;
+            rosterPollInFlight = true;
+            try { await loadRoster(); } finally { rosterPollInFlight = false; }
+        }
+        setInterval(pollRosterWhenVisible, 120000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) pollRosterWhenVisible();
+        });
     </script>
 
 
