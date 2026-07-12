@@ -6069,16 +6069,10 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 <div class="title-control-group">
 <label for="arenaSelect">Arena</label>
 <div class="arena-select-group">
-<select id="arenaSelect" onchange="updateGameSetupPreview()">
-<option value="WFCU Bowl">WFCU Bowl</option>
-<option value="WFCU Greenshield">WFCU Greenshield</option>
-<option value="WFCU Grenon">WFCU Grenon</option>
-<option value="WFCU AM800">WFCU AM800</option>
-<option value="Capri Recreation Complex">Capri Recreation Complex</option>
-<option value="Vollmer Lasalle Arena">Vollmer Lasalle Arena</option>
-<option value="Atlas Tube Lakeshore">Atlas Tube Lakeshore</option>
-</select>
+<select id="arenaSelect" onchange="updateGameSetupPreview()"></select>
 <button class="arena-add-btn" type="button" onclick="addArenaOption()" title="Add arena">+</button>
+<button class="arena-add-btn" type="button" onclick="renameArenaOption()" title="Rename selected arena">✎</button>
+<button class="arena-add-btn" type="button" onclick="deleteArenaOption()" title="Delete selected arena">−</button>
 </div>
 </div>
 <div class="title-control-group">
@@ -7897,6 +7891,66 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
             } catch (err) {
                 console.error('Error adding arena:', err);
                 alert('Error adding arena');
+                await loadAppSettings();
+            }
+        }
+
+        async function saveArenaOptions(updatedOptions, selectedArena) {
+            const res = await fetch(`${API_URL}/api/admin/update-app-settings`, {
+                method: 'POST',
+                headers: getAdminHeaders(),
+                body: JSON.stringify({
+                    sessionToken: sessionToken,
+                    arenaOptions: updatedOptions,
+                    selectedArena: selectedArena
+                })
+            });
+            const result = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(result.error || 'Failed to save arenas');
+            setArenaOptions(result.arenaOptions || updatedOptions, result.gameLocation || selectedArena);
+            document.getElementById('currentArenaDisplay').innerText = result.gameLocation || selectedArena;
+            const locationInput = document.getElementById('locationInput');
+            if (locationInput) locationInput.value = result.gameLocation || selectedArena;
+            return result;
+        }
+
+        async function renameArenaOption() {
+            const select = document.getElementById('arenaSelect');
+            const current = String(select?.value || '').trim();
+            if (!current) return alert('Select an arena first.');
+            const entered = prompt('Rename Arena', current);
+            const renamed = String(entered || '').trim();
+            if (!renamed || renamed === current) return;
+            const existing = getArenaOptionsFromSelect();
+            if (existing.some(name => name.toLowerCase() === renamed.toLowerCase() && name.toLowerCase() !== current.toLowerCase())) {
+                return alert('An arena with that name already exists.');
+            }
+            const updated = existing.map(name => name === current ? renamed : name);
+            try {
+                await saveArenaOptions(updated, renamed);
+                alert(`✅ Arena renamed to: ${renamed}`);
+            } catch (err) {
+                console.error('Error renaming arena:', err);
+                alert(err.message || 'Error renaming arena');
+                await loadAppSettings();
+            }
+        }
+
+        async function deleteArenaOption() {
+            const select = document.getElementById('arenaSelect');
+            const current = String(select?.value || '').trim();
+            if (!current) return alert('Select an arena first.');
+            const existing = getArenaOptionsFromSelect();
+            if (existing.length <= 1) return alert('At least one arena must remain. Add another arena before deleting this one.');
+            if (!confirm(`Delete arena "${current}"?`)) return;
+            const updated = existing.filter(name => name !== current);
+            const replacement = updated[0];
+            try {
+                await saveArenaOptions(updated, replacement);
+                alert(`✅ Arena deleted: ${current}`);
+            } catch (err) {
+                console.error('Error deleting arena:', err);
+                alert(err.message || 'Error deleting arena');
                 await loadAppSettings();
             }
         }

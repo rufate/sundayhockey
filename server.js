@@ -1136,17 +1136,9 @@ function clearAnnouncementState() {
 const BACKUP_GOALIES = [];
 
 // --- ARENA OPTIONS ---
-const DEFAULT_ARENA_OPTIONS = [
-    "WFCU Bowl",
-    "WFCU Greenshield",
-    "WFCU Grenon",
-    "WFCU AM800",
-    "Capri Recreation Complex",
-    "Vollmer Lasalle Arena",
-    "Atlas Tube Lakeshore"
-];
-
-let arenaOptions = normalizeArenaOptionSeed([...DEFAULT_ARENA_OPTIONS, PORTAL_DEFAULTS.gameLocation]);
+// Admin-managed only. Keep no hard-coded arena catalogue in source.
+// A new portal starts with its configured current location as the sole option.
+let arenaOptions = normalizeArenaOptionSeed([PORTAL_DEFAULTS.gameLocation]);
 
 function normalizeArenaOptionSeed(value) {
     const seen = new Set();
@@ -1159,7 +1151,7 @@ function normalizeArenaOptionSeed(value) {
 }
 
 function normalizeArenaOptions(value) {
-    const source = Array.isArray(value) ? value : DEFAULT_ARENA_OPTIONS;
+    const source = Array.isArray(value) ? value : arenaOptions;
     const seen = new Set();
     const cleaned = [];
     for (const item of source) {
@@ -1170,7 +1162,7 @@ function normalizeArenaOptions(value) {
         seen.add(key);
         cleaned.push(name);
     }
-    return cleaned.length ? cleaned : [...DEFAULT_ARENA_OPTIONS];
+    return cleaned.length ? cleaned : normalizeArenaOptionSeed([gameLocation || PORTAL_DEFAULTS.gameLocation]);
 }
 
 // --- DAY/TIME OPTIONS FOR TITLE ---
