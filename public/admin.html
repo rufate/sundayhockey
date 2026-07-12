@@ -9417,9 +9417,7 @@ ${rosterLink}
                         const notifyPlayerBtn = shouldShowNotifyPlayer
                             ? `<button class="control-btn notify-player-btn" onclick="openPlayerInRosterSms(${p.id})">Text In</button>`
                             : '';
-                        const goalieEditNameBtn = p.isGoalie
-                            ? `<button class="control-btn" onclick="openGoalieNamePrompt(${p.id})">Edit Name</button>`
-                            : '';
+                        const goalieEditNameBtn = '';
                         const actionCell = hideAdminPaymentUi
                             ? `<div class="action-stack registered-action-stack">
                                     ${regularCell}
