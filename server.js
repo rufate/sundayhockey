@@ -170,6 +170,47 @@ app.use(express.json({ limit: '12mb' }));
 app.use(express.urlencoded({ extended: true, limit: '12mb' }));
 app.use(express.static('public'));
 
+// Short-lived public API response cache.
+// Keeps frequent browser polling from rebuilding and retransmitting identical payloads.
+// This cache is per running app instance and never stores admin/private responses.
+const PUBLIC_API_CACHE_TTL_MS = Math.max(1000, Number(process.env.PUBLIC_API_CACHE_TTL_MS || 15000));
+const publicApiResponseCache = new Map();
+
+function getCachedPublicApiResponse(cacheKey) {
+    const cached = publicApiResponseCache.get(cacheKey);
+    if (!cached) return null;
+    if (Date.now() >= cached.expiresAt) {
+        publicApiResponseCache.delete(cacheKey);
+        return null;
+    }
+    return cached;
+}
+
+function sendCachedPublicJson(req, res, cacheKey, payload, ttlMs = PUBLIC_API_CACHE_TTL_MS) {
+    let cached = getCachedPublicApiResponse(cacheKey);
+    if (!cached) {
+        const body = JSON.stringify(payload);
+        const etag = `W/\"${crypto.createHash('sha1').update(body).digest('hex')}\"`;
+        cached = {
+            body,
+            etag,
+            expiresAt: Date.now() + Math.max(1000, Number(ttlMs) || PUBLIC_API_CACHE_TTL_MS)
+        };
+        publicApiResponseCache.set(cacheKey, cached);
+    }
+
+    res.set('Cache-Control', 'private, max-age=0, must-revalidate');
+    res.set('ETag', cached.etag);
+    res.type('application/json');
+
+    if (req.headers['if-none-match'] === cached.etag) {
+        return res.status(304).end();
+    }
+
+    return res.send(cached.body);
+}
+
+
 function shouldTriggerSchedulerOnRequest(req) {
     const method = String(req.method || '').toUpperCase();
     if (!['GET', 'HEAD', 'POST'].includes(method)) return false;
@@ -5850,6 +5891,11 @@ function buildPublicRosterPayload() {
 }
 
 app.get('/api/status', (req, res) => {
+    const cachedResponse = getCachedPublicApiResponse('status');
+    if (cachedResponse) {
+        return sendCachedPublicJson(req, res, 'status', null);
+    }
+
     const lockStatus = checkAutoLock();
     const etTime = getCurrentETTime();
     const { week, year } = getWeekNumber(etTime);
@@ -5895,7 +5941,7 @@ app.get('/api/status', (req, res) => {
         isGoalie: p.isGoalie
     }));
     
-    res.json({
+    const statusPayload = {
         playerSpotsRemaining: remainingSkaterSpots > 0 ? remainingSkaterSpots : 0,
         goalieCount: goalieCount,
         goalieSpotsAvailable: maxGoalies - goalieCount,
@@ -5958,10 +6004,17 @@ app.get('/api/status', (req, res) => {
         cancellationDeadlineLine: NO_SHOW_POLICY_TEXT,
         cancellationAllowedNow,
         hoursUntilGame: cancellationTiming.hoursUntilGame
-    });
+    };
+
+    return sendCachedPublicJson(req, res, 'status', statusPayload);
 });
 
 app.get('/api/waitlist', (req, res) => {
+    const cachedResponse = getCachedPublicApiResponse('waitlist');
+    if (cachedResponse) {
+        return sendCachedPublicJson(req, res, 'waitlist', null);
+    }
+
     // Waitlist view supports self-cancel, so include the id but keep private data hidden.
     const cancellationTiming = getCancellationTimingStatus();
     const cancellationAllowedNow = !cancellationTiming.isLateCancelWindow;
@@ -5976,7 +6029,7 @@ app.get('/api/waitlist', (req, res) => {
         // EXCLUDED: rating, phone, paymentMethod
     }));
     
-    res.json({
+    const waitlistPayload = {
         waitlist: waitlistNames,
         totalWaitlist: waitlist.length,
         location: gameLocation,
@@ -5984,21 +6037,28 @@ app.get('/api/waitlist', (req, res) => {
         date: gameDate,
         formattedDate: formatGameDate(gameDate),
         rosterReleased
-    });
+    };
+
+    return sendCachedPublicJson(req, res, 'waitlist', waitlistPayload);
 });
 
 app.get('/api/roster', (req, res) => {
+    const cachedResponse = getCachedPublicApiResponse('roster');
+    if (cachedResponse) {
+        return sendCachedPublicJson(req, res, 'roster', null);
+    }
+
     const rosterPayload = buildPublicRosterPayload();
     if (!rosterPayload.released) {
         const signupMessageData = getSignupOpenMessageData();
-        return res.json({
+        return sendCachedPublicJson(req, res, 'roster', {
             released: false,
             message: 'Roster has not been released yet',
             releaseTime: signupMessageData.rosterReleaseLine || 'Teams will be released at the scheduled time'
         });
     }
 
-    res.json({
+    return sendCachedPublicJson(req, res, 'roster', {
         released: true,
         whiteTeam: rosterPayload.whiteTeam,
         darkTeam: rosterPayload.darkTeam,
@@ -7146,6 +7206,7 @@ app.post('/api/admin/players-full', (req, res) => {
         currentWeekData, 
         playerSignupCode, 
         requirePlayerCode,
+        regularGoaliesByDay,
         regularSkatersByDay,
         extraGoalieContacts 
     });

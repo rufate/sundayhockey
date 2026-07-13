@@ -9347,6 +9347,8 @@ ${rosterLink}
                 renderTeamRebalanceControls();
                 renderWaitlistRosterPicker();
 
+                currentRegularGoaliesByDay = normalizeRegularDayBucketMap(data.regularGoaliesByDay || {});
+
                 const serverRegularMap = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
                 currentRegularSkatersByDay = serverRegularMap;
                 saveLocalRegularSkaters(currentRegularSkatersByDay);
