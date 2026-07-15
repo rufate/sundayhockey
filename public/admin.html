@@ -2305,6 +2305,10 @@ button {
 .compact-pay.is-unpaid{
     background:#c62828;
 }
+.compact-pay.is-no-show{
+    background:#8b0000;
+    border:1px solid #ff6b6b;
+}
 .compact-pay.is-paid{
     background:#1565c0;
 }
@@ -2451,6 +2455,10 @@ button {
 }
 .payment-slider-clear{
     background:#b71c1c !important;
+}
+.payment-slider-no-show{
+    background:#8b0000 !important;
+    border:1px solid #ff6b6b !important;
 }
 .payment-slider-cancel{
     background:#666 !important;
@@ -6563,6 +6571,10 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 <div class="payment-stat-value unpaid" id="unpaidCountDisplay">0</div>
 <div class="payment-stat-label">Unpaid Players</div>
 </div>
+<div class="payment-stat">
+<div class="payment-stat-value unpaid" id="noShowCountDisplay">0</div>
+<div class="payment-stat-label">No Shows</div>
+</div>
 </div>
 <button class="export-btn" onclick="exportToExcel()">
                 📥 Download Full Payment Report (CSV)
@@ -9382,6 +9394,8 @@ ${rosterLink}
                 if (etransferCollectedEl) etransferCollectedEl.innerText = '$' + paymentEtTotal.toFixed(2);
                 document.getElementById('paidCountDisplay').innerText = data.paidCount || 0;
                 document.getElementById('unpaidCountDisplay').innerText = data.unpaidCount || 0;
+                const noShowCountEl = document.getElementById('noShowCountDisplay');
+                if (noShowCountEl) noShowCountEl.innerText = data.noShowCount || 0;
                 
                 // Update counts
                 document.getElementById('currentPlayerSpotsDisplay').innerText = window.currentMaxSkaters;
@@ -9441,11 +9455,15 @@ ${rosterLink}
 
                         let paidInput = '';
                         if (!hideAdminPaymentUi) {
-                            const paymentStatus = String(p.paymentStatus || '').toLowerCase() === 'pia'
+                            const rawPaymentStatus = String(p.paymentStatus || '').toLowerCase();
+                            const paymentStatus = rawPaymentStatus === 'pia'
                                 ? 'pia'
-                                : (p.paidAmount && parseFloat(p.paidAmount) > 0 ? 'paid' : 'owes');
+                                : (rawPaymentStatus === 'no_show' || rawPaymentStatus === 'noshow' || rawPaymentStatus === 'no-show')
+                                    ? 'no_show'
+                                    : (p.paidAmount && parseFloat(p.paidAmount) > 0 ? 'paid' : 'owes');
                             const isPaid = paymentStatus === 'paid';
                             const isPia = paymentStatus === 'pia';
+                            const isNoShow = paymentStatus === 'no_show';
                             const rawMethod = String(p.paymentMethod || '').toLowerCase();
                             const isCashPaid = isPaid && rawMethod.includes('cash');
                             const compactAmount = isPia
@@ -9454,8 +9472,8 @@ ${rosterLink}
                             const amountText = Number.isInteger(compactAmount) ? String(compactAmount) : compactAmount.toFixed(2).replace(/\.00$/, '').replace(/0$/, '');
                             const piaDateText = isPia ? formatPiaDateShort(p.piaDate) : '';
                             const piaAmountText = compactAmount > 0 ? ` $${amountText}` : '';
-                            const compactLabel = isPia ? `PIA${piaAmountText}${piaDateText ? ' ' + piaDateText : ''}` : (isPaid ? `${isCashPaid ? '' : 'E'}$${amountText}` : 'OWES');
-                            const compactClass = isPia ? 'is-pia' : (isPaid ? (isCashPaid ? 'is-paid-cash' : 'is-paid-etransfer') : 'is-unpaid');
+                            const compactLabel = isNoShow ? 'NO SHOW' : (isPia ? `PIA${piaAmountText}${piaDateText ? ' ' + piaDateText : ''}` : (isPaid ? `${isCashPaid ? '' : 'E'}$${amountText}` : 'OWES'));
+                            const compactClass = isNoShow ? 'is-no-show' : (isPia ? 'is-pia' : (isPaid ? (isCashPaid ? 'is-paid-cash' : 'is-paid-etransfer') : 'is-unpaid'));
                             const compactMethod = isCashPaid ? 'Cash' : 'E-Transfer';
                             paidInput = `
                                 <div class="compact-pay ${compactClass}" data-player-id="${p.id}" data-payment-status="${paymentStatus}" data-payment-method="${compactMethod}" data-pia-date="${escapeHtml(p.piaDate || '')}">
@@ -11874,7 +11892,7 @@ async function compactPayToggle(playerId, event){
     const wrap = compactPayFind(playerId);
     if(!main || !wrap || wrap.dataset.busy === '1') return;
 
-    if(wrap.classList.contains('is-paid-cash') || wrap.classList.contains('is-paid-etransfer') || wrap.classList.contains('is-paid') || wrap.classList.contains('is-pia')){
+    if(wrap.classList.contains('is-paid-cash') || wrap.classList.contains('is-paid-etransfer') || wrap.classList.contains('is-paid') || wrap.classList.contains('is-pia') || wrap.classList.contains('is-no-show')){
         openPaymentSlider(playerId);
         return;
     }
@@ -11924,6 +11942,23 @@ async function markPaymentPia(){
     }
 }
 
+
+async function markPaymentNoShow(){
+    if(activePaymentSliderPlayerId == null) return;
+    const playerId = activePaymentSliderPlayerId;
+    const wrap = compactPayFind(playerId);
+    if(wrap && wrap.dataset.busy === '1') return;
+    if(!confirm('Mark this player as a no show?')) return;
+    if(wrap){ wrap.dataset.busy = '1'; wrap.style.opacity = '0.7'; }
+    try {
+        await updatePaymentStatus(playerId, 'no_show');
+        closePaymentSlider();
+        await loadData();
+    } finally {
+        if(wrap){ delete wrap.dataset.busy; wrap.style.opacity = ''; }
+    }
+}
+
 async function markPaymentOwes(){
     if(activePaymentSliderPlayerId == null) return;
     const playerId = activePaymentSliderPlayerId;
@@ -11965,6 +12000,7 @@ document.addEventListener('keydown', function(e){
 <div class="payment-slider-actions">
 <button class="payment-slider-cancel" onclick="closePaymentSlider()" type="button">Cancel</button>
 <button class="payment-slider-clear" onclick="markPaymentOwes()" type="button">OWES</button>
+<button class="payment-slider-no-show" onclick="markPaymentNoShow()" type="button">NO SHOW</button>
 <button class="payment-slider-pia" onclick="markPaymentPia()" type="button">PIA</button>
 <button class="payment-slider-save" onclick="savePaymentSlider()" type="button">Save</button>
 </div>
@@ -13078,6 +13114,7 @@ white-space:pre-wrap !important;
         const waitlistCount = getNumText('waitlistCount');
         const paidCount = getNumText('paidCountDisplay');
         const owingCount = getNumText('unpaidCountDisplay');
+        const noShowCount = getNumText('noShowCountDisplay');
         const piaCount = String(getPiaCount());
         const totalCollected = safeText(byId('totalCollected')) || '$0.00';
         const cashCollected = safeText(byId('cashCollected')) || '$0.00';
@@ -13095,14 +13132,14 @@ white-space:pre-wrap !important;
         set('weeklyStatusGoalies', goalieMax ? `${goalieCount}/${goalieMax}` : goalieCount);
         set('weeklyStatusRoster', roster);
         const paymentsEl = byId('weeklyStatusPayments');
-        if (paymentsEl) paymentsEl.innerHTML = `Paid: ${escapeWeeklyStatusHtml(paidCount)}<br>Owing: ${escapeWeeklyStatusHtml(owingCount)}`;
+        if (paymentsEl) paymentsEl.innerHTML = `Paid: ${escapeWeeklyStatusHtml(paidCount)}<br>Owing: ${escapeWeeklyStatusHtml(owingCount)}<br>No Show: ${escapeWeeklyStatusHtml(noShowCount)}`;
         set('weeklyStatusPia', piaCount);
         set('weeklyStatusWaitlist', waitlistCount);
         set('weeklyStatusNow', etNow);
 
         setSummaryForSection('.game-setup-section', `${details.date} · ${details.time} · ${details.loc}${code ? ' · Code ' + code : ''}`);
         setSummaryForSection('.waitlist-section', `${waitlistCount} waitlist`);
-        setSummaryForSection('.payment-summary-box', `${paidCount} paid · ${owingCount} owing · ${piaCount} PIA · ${totalCollected} · Cash ${cashCollected} · ET$ ${etransferCollected}`);
+        setSummaryForSection('.payment-summary-box', `${paidCount} paid · ${owingCount} owing · ${noShowCount} no show · ${piaCount} PIA · ${totalCollected} · Cash ${cashCollected} · ET$ ${etransferCollected}`);
         setSummaryForSection('.roster-status', roster);
         setSummaryForSection('.snapshot-pro-section', `${safeText(byId('snapshotStatCount')) || '--'} snapshots`);
         setSummaryForSection('.history-delete-box', 'History / delete old history');

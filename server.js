@@ -3615,6 +3615,7 @@ function normalizePaymentStatus(status, player = {}) {
     const raw = String(status || player.paymentStatus || '').trim().toLowerCase();
     if (raw === 'pia' || raw === 'paid_in_advance') return 'pia';
     if (raw === 'paid') return 'paid';
+    if (raw === 'no_show' || raw === 'noshow' || raw === 'no-show') return 'no_show';
     if (raw === 'owes' || raw === 'unpaid') return 'owes';
 
     const amount = Number(player.paidAmount);
@@ -3671,6 +3672,11 @@ function applyPaymentStatusToPlayer(player, status, options = {}) {
         if (options.ensureAmount && (!Number.isFinite(amount) || amount <= 0)) {
             player.paidAmount = Number(options.defaultAmount || 15);
         }
+        player.piaDate = '';
+    } else if (normalized === 'no_show') {
+        player.paid = false;
+        player.paidAmount = null;
+        player.paymentMethod = 'No Show';
         player.piaDate = '';
     } else {
         player.paid = false;
@@ -5371,8 +5377,9 @@ function buildPaymentReportCsv() {
     });
 
     const totalCollected = players.reduce((sum, p) => sum + (parseFloat(p.paidAmount) || 0), 0);
-    const paidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) !== 'owes' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
+    const paidCount = players.filter(p => ['paid', 'pia'].includes(normalizePaymentStatus(p.paymentStatus, p)) && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
     const unpaidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'owes' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
+    const noShowCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'no_show' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
 
     csvRows.push('');
     csvRows.push([escapeCsvValue('SUMMARY'), '', '', '', '', '', '', '', '', ''].join(','));
@@ -7177,8 +7184,9 @@ app.post('/api/admin/players-full', (req, res) => {
         return sum;
     }, 0);
     
-    const paidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) !== 'owes' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
+    const paidCount = players.filter(p => ['paid', 'pia'].includes(normalizePaymentStatus(p.paymentStatus, p)) && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
     const unpaidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'owes' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
+    const noShowCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'no_show' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
     
     // Return FULL data including payment info AND ratings (admin only)
     res.json({ 
@@ -7194,6 +7202,7 @@ app.post('/api/admin/players-full', (req, res) => {
         totalPaid: totalPaid.toFixed(2),
         paidCount: paidCount,
         unpaidCount: unpaidCount,
+        noShowCount: noShowCount,
         players: players,  // Full data with payment AND rating
         waitlist: waitlist, // Full waitlist data
         cancellations: cancelledRegistrations,
@@ -8302,7 +8311,7 @@ app.post('/api/admin/update-paid-amount', async (req, res) => {
     }
 });
 
-// Update payment status endpoint: paid / pia / owes without adding another admin-table column
+// Update payment status endpoint: paid / pia / owes / no_show without adding another admin-table column
 app.post('/api/admin/update-payment-status', async (req, res) => {
     const { password, sessionToken, playerId, status, piaDate, amount, paymentMethod } = req.body;
     if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
@@ -8323,6 +8332,8 @@ app.post('/api/admin/update-payment-status', async (req, res) => {
                 paidAmount: amount,
                 paymentMethod: normalizeCollectionPaymentMethod(paymentMethod, player.paymentMethod || 'E-Transfer')
             });
+        } else if (paymentStatus === 'no_show') {
+            applyPaymentStatusToPlayer(player, 'no_show');
         } else {
             applyPaymentStatusToPlayer(player, 'owes');
         }
@@ -9707,8 +9718,9 @@ app.post('/api/collector/players', (req, res) => {
         const amount = Number(p.paidAmount);
         return Number.isFinite(amount) && amount > 0 ? sum + amount : sum;
     }, 0);
-    const paidCount = paymentPlayers.filter(p => normalizePaymentStatus(p.paymentStatus, p) !== 'owes').length;
+    const paidCount = paymentPlayers.filter(p => ['paid', 'pia'].includes(normalizePaymentStatus(p.paymentStatus, p))).length;
     const unpaidCount = paymentPlayers.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'owes').length;
+    const noShowCount = paymentPlayers.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'no_show').length;
     res.json({
         success: true,
         rosterReleased,
@@ -9718,6 +9730,7 @@ app.post('/api/collector/players', (req, res) => {
         totalPaid: totalPaid.toFixed(2),
         paidCount,
         unpaidCount,
+        noShowCount,
         playerCount: paymentPlayers.length,
         goalieCount: 0,
         players: rosterReleased ? paymentPlayers : []
@@ -9752,6 +9765,29 @@ app.post('/api/collector/update-paid-amount', async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err && err.message ? err.message : 'Payment update failed.' });
+    }
+});
+
+
+app.post('/api/collector/update-payment-status', async (req, res) => {
+    if (!requirePaymentPageEnabled(req, res)) return;
+    if (!requirePaymentAuth(req, res)) return;
+    if (!rosterReleased) return res.status(403).json({ error: 'Payment page opens after roster release.' });
+    const playerId = String(req.body?.playerId || '').trim();
+    const player = (Array.isArray(players) ? players : []).find(p => String(p.id) === playerId);
+    if (!player || isPaymentExcludedPlayer(player)) return res.status(404).json({ error: 'Player not found on payment list.' });
+    const status = normalizePaymentStatus(req.body?.status, player);
+    if (!['owes', 'no_show'].includes(status)) return res.status(400).json({ error: 'Unsupported payment status.' });
+    try {
+        await runProtectedMutation('payment-page-update-payment-status', req, async () => {
+            applyPaymentStatusToPlayer(player, status);
+            if (pool) {
+                await pool.query('UPDATE players SET paid = $1, paid_amount = $2, payment_status = $3, payment_method = $4 WHERE id = $5', [!!player.paid, player.paidAmount == null ? null : Number(player.paidAmount), normalizePaymentStatus(player.paymentStatus, player), player.paymentMethod || null, player.id]);
+            }
+        });
+        res.json({ success: true, paymentStatus: normalizePaymentStatus(player.paymentStatus, player) });
+    } catch (err) {
+        res.status(500).json({ error: err && err.message ? err.message : 'Payment status update failed.' });
     }
 });
 

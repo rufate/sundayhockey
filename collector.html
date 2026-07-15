@@ -12,7 +12,7 @@ body{background:var(--bg);color:var(--text);margin:0;padding:20px;min-height:100
 h1{color:var(--accent);text-align:center;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 8px}
 .sub{text-align:center;color:#bbb;margin-bottom:18px}.login-box,.registered-players-box,.pending-box,.summary-box{border-radius:12px;padding:18px;margin:16px 0}.login-box{background:linear-gradient(135deg,#2a1a3a,#3d2d4d);border:2px solid var(--accent)}.pending-box{background:linear-gradient(135deg,#3a2a1a,#4d3d2d);border:2px solid var(--warning);text-align:center;color:#ffd18a}.registered-players-box{background:linear-gradient(135deg,#2a1a1a,#332222);border:2px solid var(--accent)}.summary-box{background:linear-gradient(135deg,#1a3a1a,#2d4d2d);border:2px solid var(--success);display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center}.stat{background:rgba(0,0,0,.2);border-radius:10px;padding:12px}.stat strong{display:block;font-size:1.45rem;color:var(--success)}.stat span{font-size:.8rem;color:#bbb}
 input{width:100%;padding:12px;margin:8px 0;background:#3d3d3d;border:1px solid #555;color:#fff;border-radius:8px;font-size:1rem}button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer}button:hover{background:#ff8533}.logout{background:#666;float:right}.refresh{background:#4a90e2}.error{display:none;background:var(--danger);padding:10px;border-radius:8px;text-align:center;margin-top:10px}.top-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:10px}
-table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px solid #444;padding:7px 6px;text-align:center;vertical-align:middle}th{color:var(--accent)}td:first-child{text-align:left}.name-main{font-weight:800}.phone,.time{display:block;color:#aaa;font-size:.76rem;margin-top:2px}.rating-pill{display:inline-block;background:#4a4a4a;border:1px solid #777;border-radius:8px;padding:4px 9px;font-weight:800}.pay-pill{display:inline-flex;align-items:center;justify-content:center;min-width:78px;min-height:30px;border-radius:9px;font-weight:900}.paid{background:#2e7d32}.paid-cash{background:#2e7d32}.paid-etransfer{background:#1565c0}.owes{background:#c62828}.pia{background:#fff;color:#111}.action-stack{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}.paid-btn{background:#2e7d32}.cash-btn{background:#795548}.owes-btn{background:#b71c1c}.amount-btn{background:#1565c0}.goalie-note{color:#ffb366;font-size:.78rem;font-weight:800}.hidden{display:none!important}
+table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px solid #444;padding:7px 6px;text-align:center;vertical-align:middle}th{color:var(--accent)}td:first-child{text-align:left}.name-main{font-weight:800}.phone,.time{display:block;color:#aaa;font-size:.76rem;margin-top:2px}.rating-pill{display:inline-block;background:#4a4a4a;border:1px solid #777;border-radius:8px;padding:4px 9px;font-weight:800}.pay-pill{display:inline-flex;align-items:center;justify-content:center;min-width:78px;min-height:30px;border-radius:9px;font-weight:900}.paid{background:#2e7d32}.paid-cash{background:#2e7d32}.paid-etransfer{background:#1565c0}.owes{background:#c62828}.no-show{background:#7f0000;border:1px solid #ff6b6b}.pia{background:#fff;color:#111}.action-stack{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}.paid-btn{background:#2e7d32}.cash-btn{background:#795548}.owes-btn{background:#b71c1c}.no-show-btn{background:#7f0000}.amount-btn{background:#1565c0}.goalie-note{color:#ffb366;font-size:.78rem;font-weight:800}.hidden{display:none!important}
 @media(max-width:700px){body{padding:10px}.container{padding:16px}.summary-box{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.stat{padding:9px}.stat strong{font-size:1.05rem}th,td{font-size:.78rem;padding:6px 3px}.phone{font-size:.66rem}.action-stack button{font-size:.7rem;padding:7px 8px}.hide-mobile{display:none}}
 </style>
 </head>
@@ -36,6 +36,7 @@ table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px
     <div class="stat"><strong id="totalCollected">$0</strong><span>Total Collected</span></div>
     <div class="stat"><strong id="paidCount">0</strong><span>Paid</span></div>
     <div class="stat"><strong id="unpaidCount">0</strong><span>Owes</span></div>
+    <div class="stat"><strong id="noShowCount">0</strong><span>No Show</span></div>
   </div>
   <div class="registered-players-box hidden" id="playersBox">
     <h3 id="playersTitle">🏒 Registered Players</h3>
@@ -90,6 +91,7 @@ async function loadData(){
   document.getElementById('totalCollected').textContent = '$' + Number(data.totalPaid || 0).toFixed(2);
   document.getElementById('paidCount').textContent = data.paidCount || 0;
   document.getElementById('unpaidCount').textContent = data.unpaidCount || 0;
+  document.getElementById('noShowCount').textContent = data.noShowCount || 0;
   document.getElementById('playersTitle').textContent = `🏒 Registered Players (${data.playerCount || 0} Players, ${data.goalieCount || 0} Goalies)`;
   renderPlayers(data.players || []);
 }
@@ -107,6 +109,7 @@ function formatPiaDateShort(value){
 function paymentState(p){
   const st = String(p.paymentStatus || '').toLowerCase();
   if(st === 'pia') { const pd = formatPiaDateShort(p.piaDate); return {label:'PIA' + (pd ? ' ' + pd : ''), cls:'pia', method:'E-Transfer'}; }
+  if(st === 'no_show' || st === 'noshow' || st === 'no-show') return {label:'NO SHOW', cls:'no-show', method:''};
   const amt = Number(p.paidAmount);
   if(Number.isFinite(amt) && amt > 0){
     const isCash = String(p.paymentMethod || '').toLowerCase().includes('cash');
@@ -132,7 +135,7 @@ function renderPlayers(players){
   for(const p of sorted){
     const isProtectedPlayer = !!(p.protected || p.adminOnlyRemove);
     const state = paymentState(p);
-    const actions = (p.isGoalie || isProtectedPlayer) ? '<span class="goalie-note">No collection</span>' : `<div class="action-stack"><button class="paid-btn" onclick="setPaid(${p.id},15,'Cash')">$15</button><button class="amount-btn" onclick="customAmount(${p.id})">Other</button><button class="owes-btn" onclick="setPaid(${p.id},null)">Owes</button></div>`;
+    const actions = (p.isGoalie || isProtectedPlayer) ? '<span class="goalie-note">No collection</span>' : `<div class="action-stack"><button class="paid-btn" onclick="setPaid(${p.id},15,'Cash')">$15</button><button class="amount-btn" onclick="customAmount(${p.id})">Other</button><button class="owes-btn" onclick="setPaid(${p.id},null)">Owes</button><button class="no-show-btn" onclick="setPaymentStatus(${p.id},'no_show')">No Show</button></div>`;
     const tr = document.createElement('tr');
     const pillAction = (p.isGoalie || isProtectedPlayer) ? '' : `onclick="payPillTap(${p.id}, '${state.cls}', '${state.method || 'E-Transfer'}')" style="cursor:pointer" title="Tap OWES for E$15. Tap paid to switch cash/e-transfer."`;
     tr.innerHTML = `<td><span class="name-main">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}${p.isGoalie?' <span class="goalie-note">GOALIE</span>':''}</span><span class="phone">${escapeHtml(p.phone||'')}</span>${p.registeredAt?`<span class="time">🔒 ${fmtTime(p.registeredAt)}</span>`:''}</td><td><span class="pay-pill ${state.cls}" ${pillAction}>${state.label}</span></td><td>${actions}</td>`;
@@ -149,6 +152,10 @@ async function setPaid(playerId, amount, paymentMethod){
   await loadData();
 }
 function payPillTap(playerId, cls, currentMethod){
+  if(String(cls || '').includes('no-show')){
+    if(confirm('Change NO SHOW back to OWES?')) setPaymentStatus(playerId, 'owes');
+    return;
+  }
   if(String(cls || '').includes('owes')){
     setPaid(playerId, 15, 'E-Transfer');
     return;
@@ -160,6 +167,16 @@ function payPillTap(playerId, cls, currentMethod){
     if(confirm('Mark this payment as CASH?')) setPaid(playerId, 15, 'Cash');
   }
 }
+
+async function setPaymentStatus(playerId, status){
+  const label = status === 'no_show' ? 'NO SHOW' : 'OWES';
+  if(!confirm(`Mark this player as ${label}?`)) return;
+  const res = await fetch(`${API_URL}/api/collector/update-payment-status`,{method:'POST',headers:headers(),body:JSON.stringify({sessionToken,playerId,status})});
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok){alert(data.error || 'Payment status update failed'); return;}
+  await loadData();
+}
+
 async function customAmount(playerId){
   const raw = prompt('Enter amount collected:', '15');
   if(raw === null) return;
