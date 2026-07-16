@@ -74,7 +74,7 @@ input,select{width:100%;padding:12px;margin:8px 0;background:#3d3d3d;border:1px 
     <div class="grid" id="currentGoalies"></div>
   </div>
 
-  <div class="section" style="display:none;" aria-hidden="true">
+  <div class="section" id="regularGoaliesSection">
     <h3>📅 Regular Goalies by Game Day</h3>
     <div class="grid" id="regularGoalies"></div>
   </div>
@@ -246,7 +246,11 @@ async function loadData(){
   currentData = data;
   document.getElementById('gameInfo').innerHTML = `${escapeHtml(data.date || '')} ${escapeHtml(data.time || '')}<br><strong>${escapeHtml(data.location || '')}</strong>${data.rosterReleased?'<br><span style="color:#8fd18f;font-weight:900">Roster is released — substitutions update roster immediately.</span>':''}`;
   renderList('currentGoalies', data.currentGoalies || [], 'current');
-  renderList('regularGoalies', data.regularGoalies || [], 'regular');
+
+  const regularGoalies = Array.isArray(data.regularGoalies) ? data.regularGoalies : [];
+  const regularSection = document.getElementById('regularGoaliesSection');
+  if(regularSection) regularSection.style.display = regularGoalies.length ? '' : 'none';
+  if(regularGoalies.length) renderList('regularGoalies', regularGoalies, 'regular');
 
   const regularPhones = new Set(
     (data.regularGoalies || [])
