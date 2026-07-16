@@ -74,7 +74,7 @@ input,select{width:100%;padding:12px;margin:8px 0;background:#3d3d3d;border:1px 
     <div class="grid" id="currentGoalies"></div>
   </div>
 
-  <div class="section">
+  <div class="section" style="display:none;" aria-hidden="true">
     <h3>📅 Regular Goalies by Game Day</h3>
     <div class="grid" id="regularGoalies"></div>
   </div>
@@ -125,22 +125,27 @@ function fmtTime(v){try{return v ? new Date(v).toLocaleString('en-US',{month:'sh
 function getGameDateTimeForSms(){
   const rawDate = String(currentData.date || '').trim();
   const rawTime = String(currentData.time || '').trim();
+  const arena = String(currentData.location || currentData.arena || '').trim();
   const timeOnly = rawTime.replace(/^(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\s+/i,'').trim();
   let dateText = '';
+
   if(/^\d{4}-\d{2}-\d{2}$/.test(rawDate)){
     const d = new Date(rawDate + 'T00:00:00');
     if(!Number.isNaN(d.getTime())){
       dateText = d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
     }
   }
-  if(dateText && timeOnly) return `${dateText} at ${timeOnly}`;
-  if(dateText && rawTime) return `${dateText} at ${rawTime}`;
-  return rawTime || rawDate || 'the next game';
+
+  let gameText = '';
+  if(dateText && timeOnly) gameText = `${dateText} at ${timeOnly}`;
+  else if(dateText && rawTime) gameText = `${dateText} at ${rawTime}`;
+  else gameText = rawTime || rawDate || 'the next game';
+
+  return arena ? `${gameText} at ${arena}` : gameText;
 }
 function buildAvailabilitySms(goalie){
   const name = String(goalie?.firstName || '').trim() || 'Goalie';
-
-  return `Hi ${name}, are you available to sub in net for Phan's Hockey this ${getGameDateTimeForSms()}?`;
+  return `Hi ${name}, are you available to play goal for Phan's Hockey on ${getGameDateTimeForSms()}?`;
 }
 
 function goalieExportFilename(){
@@ -223,7 +228,7 @@ function renderCard(g, kind){
   const notes = [priorityLine, g.dayLabel, g.team ? `Team: ${g.team}` : '', g.note, g.registeredAt ? `Registered: ${fmtTime(g.registeredAt)}` : ''].filter(Boolean).join('<br>');
   const safeGoaliePayload = JSON.stringify(g).replace(/'/g,"&#39;");
   const textAvailabilityBtn = kind !== 'current' ? `<button class="refresh flashing-notify" onclick='textAvailability(${safeGoaliePayload})'>Text Availability</button>` : '';
-  const subBtn = kind !== 'current' ? `<button class="success" onclick='chooseSub(${safeGoaliePayload})'>Use as Sub</button>` : '';
+  const subBtn = '';
   const cancelBtn = kind === 'current' ? `<button class="danger" onclick='chooseCancel(${safeGoaliePayload})'>Self Cancel / Replace</button>` : '';
   return `<div class="${classes}"><div class="name">${escapeHtml(goalieName(g))} <span class="pill ${kind}">${label}</span>${wait}</div><div class="meta"><a class="phone-link" href="${phoneHref(g.phone)}">${escapeHtml(g.phone || 'No phone listed')}</a>${notes?`<div class="note">${notes}</div>`:''}</div><div class="card-actions">${textAvailabilityBtn}${subBtn}${cancelBtn}</div></div>`;
 }
