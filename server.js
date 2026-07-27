@@ -170,47 +170,6 @@ app.use(express.json({ limit: '12mb' }));
 app.use(express.urlencoded({ extended: true, limit: '12mb' }));
 app.use(express.static('public'));
 
-// Short-lived public API response cache.
-// Keeps frequent browser polling from rebuilding and retransmitting identical payloads.
-// This cache is per running app instance and never stores admin/private responses.
-const PUBLIC_API_CACHE_TTL_MS = Math.max(1000, Number(process.env.PUBLIC_API_CACHE_TTL_MS || 15000));
-const publicApiResponseCache = new Map();
-
-function getCachedPublicApiResponse(cacheKey) {
-    const cached = publicApiResponseCache.get(cacheKey);
-    if (!cached) return null;
-    if (Date.now() >= cached.expiresAt) {
-        publicApiResponseCache.delete(cacheKey);
-        return null;
-    }
-    return cached;
-}
-
-function sendCachedPublicJson(req, res, cacheKey, payload, ttlMs = PUBLIC_API_CACHE_TTL_MS) {
-    let cached = getCachedPublicApiResponse(cacheKey);
-    if (!cached) {
-        const body = JSON.stringify(payload);
-        const etag = `W/\"${crypto.createHash('sha1').update(body).digest('hex')}\"`;
-        cached = {
-            body,
-            etag,
-            expiresAt: Date.now() + Math.max(1000, Number(ttlMs) || PUBLIC_API_CACHE_TTL_MS)
-        };
-        publicApiResponseCache.set(cacheKey, cached);
-    }
-
-    res.set('Cache-Control', 'private, max-age=0, must-revalidate');
-    res.set('ETag', cached.etag);
-    res.type('application/json');
-
-    if (req.headers['if-none-match'] === cached.etag) {
-        return res.status(304).end();
-    }
-
-    return res.send(cached.body);
-}
-
-
 function shouldTriggerSchedulerOnRequest(req) {
     const method = String(req.method || '').toUpperCase();
     if (!['GET', 'HEAD', 'POST'].includes(method)) return false;
@@ -842,6 +801,10 @@ let persistentAdminRatings = {};
 // Admin-set player nicknames that must survive weekly reset / auto re-add.
 // Keyed primarily by normalized 10-digit phone number, with a name fallback.
 let persistentPlayerNicknames = {};
+
+// Admin-corrected player phone numbers that must override future signup input.
+// Keyed by normalized player name so a mistyped/re-entered phone can still resolve to the admin correction.
+let persistentPhoneOverrides = {};
 
 // Persistent paid-in-advance records that survive weekly reset until their expiry date.
 // Keyed the same way as ratings/nicknames, preferring phone number.
@@ -1971,6 +1934,15 @@ async function autoReleaseRoster() {
     if (!rosterReleaseSchedule.at) return false;
     if (rosterReleased || players.length === 0) return false;
 
+    // Do not let the recurring catch-up window release a newly reset week before
+    // the first roster-release date/time associated with its next game. This is
+    // especially important for Sunday games reset shortly after the prior
+    // Sunday's release, when that old occurrence is still inside catch-up.
+    const configuredReleaseParts = parseDatetimeLocalToETDate(rosterReleaseAt);
+    if (configuredReleaseParts && !isEtTimeOnOrAfterParts(etTime, configuredReleaseParts)) {
+        return false;
+    }
+
     const releaseCheck = shouldRunScheduledAction(
         rosterReleaseSchedule.at,
         lastExactRosterReleaseRunAt,
@@ -2169,6 +2141,9 @@ async function checkWeeklyReset() {
     resetArmed = false;
     lastResetWeek = currentWeek;
     gameDate = calculateNextGameDate();
+    if (canAutoRebuildSchedules()) {
+        buildAutoSchedulesFromGameTime(gameTime, gameDate);
+    }
 
     currentWeekData = {
         weekNumber: currentWeek,
@@ -2227,6 +2202,7 @@ function buildPersistedStateFingerprint(snapshot = null) {
         regularSkatersByDay: payload.regularSkatersByDay,
         extraGoalieContacts: payload.extraGoalieContacts,
         persistentAdminRatings: payload.persistentAdminRatings,
+        persistentPhoneOverrides: payload.persistentPhoneOverrides,
         customSignupCode: payload.customSignupCode,
         scheduleMode: payload.scheduleMode,
         gameLocation: payload.gameLocation,
@@ -2593,6 +2569,7 @@ async function loadDataFromDB() {
         if (!autoAddMapHasEntries(protectedPlayersByDay)) protectedPlayersByDay = normalizeProtectedPlayersByDayMap(undefined);
         if (settings.persistentAdminRatings) persistentAdminRatings = normalizePersistentAdminRatings(settings.persistentAdminRatings);
         if (settings.persistentPlayerNicknames) persistentPlayerNicknames = normalizePersistentPlayerNicknames(settings.persistentPlayerNicknames);
+        if (settings.persistentPhoneOverrides) persistentPhoneOverrides = normalizePersistentPhoneOverrides(settings.persistentPhoneOverrides);
         if (settings.persistentPiaPayments) persistentPiaPayments = normalizePersistentPiaPayments(settings.persistentPiaPayments);
         if (settings.extraGoalieContacts !== undefined) {
             extraGoalieContacts = normalizePersistedGoalieContacts(settings.extraGoalieContacts, extraGoalieContacts);
@@ -2764,6 +2741,13 @@ async function loadDataFromDB() {
                 persistentPlayerNicknames = normalizePersistentPlayerNicknames(JSON.parse(appSettings.persistentPlayerNicknames || '{}'));
             } catch {
                 persistentPlayerNicknames = normalizePersistentPlayerNicknames(persistentPlayerNicknames);
+            }
+        }
+        if (appSettings.persistentPhoneOverrides !== undefined) {
+            try {
+                persistentPhoneOverrides = normalizePersistentPhoneOverrides(JSON.parse(appSettings.persistentPhoneOverrides || '{}'));
+            } catch (_) {
+                persistentPhoneOverrides = normalizePersistentPhoneOverrides(persistentPhoneOverrides);
             }
         }
         if (appSettings.persistentPiaPayments !== undefined) {
@@ -3615,7 +3599,6 @@ function normalizePaymentStatus(status, player = {}) {
     const raw = String(status || player.paymentStatus || '').trim().toLowerCase();
     if (raw === 'pia' || raw === 'paid_in_advance') return 'pia';
     if (raw === 'paid') return 'paid';
-    if (raw === 'no_show' || raw === 'noshow' || raw === 'no-show') return 'no_show';
     if (raw === 'owes' || raw === 'unpaid') return 'owes';
 
     const amount = Number(player.paidAmount);
@@ -3673,11 +3656,6 @@ function applyPaymentStatusToPlayer(player, status, options = {}) {
             player.paidAmount = Number(options.defaultAmount || 15);
         }
         player.piaDate = '';
-    } else if (normalized === 'no_show') {
-        player.paid = false;
-        player.paidAmount = null;
-        player.paymentMethod = 'No Show';
-        player.piaDate = '';
     } else {
         player.paid = false;
         if (options.clearAmount !== false) player.paidAmount = null;
@@ -3718,6 +3696,7 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
             ['extraGoalieContacts', extraGoalieContacts],
             ['persistentAdminRatings', persistentAdminRatings],
             ['persistentPlayerNicknames', persistentPlayerNicknames],
+            ['persistentPhoneOverrides', persistentPhoneOverrides],
             ['persistentPiaPayments', persistentPiaPayments],
             ['customSignupCode', customSignupCode],
             ['editableDefaultSignupCode', editableDefaultSignupCode],
@@ -3758,6 +3737,7 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
             ['extraGoalieContacts', JSON.stringify(extraGoalieContacts)],
             ['persistentAdminRatings', JSON.stringify(persistentAdminRatings)],
             ['persistentPlayerNicknames', JSON.stringify(persistentPlayerNicknames)],
+            ['persistentPhoneOverrides', JSON.stringify(persistentPhoneOverrides)],
             ['persistentPiaPayments', JSON.stringify(persistentPiaPayments)],
             ['regularSkatersByDay', JSON.stringify(regularSkatersByDay)],
             ['selectedDayTime', gameTime],
@@ -3979,6 +3959,7 @@ function buildFullDataSnapshot() {
         extraGoalieContacts,
         persistentAdminRatings,
         persistentPlayerNicknames,
+        persistentPhoneOverrides,
         persistentPiaPayments,
         customSignupCode,
         editableDefaultSignupCode,
@@ -4133,6 +4114,7 @@ function getSettingsSnapshot() {
         extraGoalieContacts,
         persistentAdminRatings,
         persistentPlayerNicknames,
+        persistentPhoneOverrides,
         persistentPiaPayments,
         customSignupCode,
         editableDefaultSignupCode,
@@ -4258,6 +4240,7 @@ function loadDataFromFile() {
             regularSkatersByDay = normalizeRegularSkatersByDayMap(data.regularSkatersByDay || {});
             persistentAdminRatings = normalizePersistentAdminRatings(data.persistentAdminRatings || data.appSettings?.persistentAdminRatings || {});
             persistentPlayerNicknames = normalizePersistentPlayerNicknames(data.persistentPlayerNicknames || data.appSettings?.persistentPlayerNicknames || {});
+            persistentPhoneOverrides = normalizePersistentPhoneOverrides(data.persistentPhoneOverrides || data.appSettings?.persistentPhoneOverrides || {});
             persistentPiaPayments = normalizePersistentPiaPayments(data.persistentPiaPayments || data.appSettings?.persistentPiaPayments || {});
             customSignupCode = String(data.customSignupCode || '').trim();
             editableDefaultSignupCode = /^\d{4}$/.test(String(data.editableDefaultSignupCode || data.appSettings?.editableDefaultSignupCode || '').trim()) ? String(data.editableDefaultSignupCode || data.appSettings?.editableDefaultSignupCode).trim() : requiredPortalSettings.signupCode;
@@ -4458,6 +4441,50 @@ function rememberPersistentPlayerNickname(player = {}, nicknameValue = player?.n
         delete persistentPlayerNicknames[key];
     }
     return true;
+}
+
+
+function getPersistentPhoneOverrideKey(player = {}) {
+    const first = String(player.firstName || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const last = String(player.lastName || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!first && !last) return '';
+    return `name:${first}|${last}`;
+}
+
+function normalizePersistentPhoneOverrides(input = {}) {
+    const output = {};
+    if (!input || typeof input !== 'object') return output;
+    for (const [rawKey, rawValue] of Object.entries(input)) {
+        const key = String(rawKey || '').trim();
+        const phone = formatPhoneNumber(rawValue);
+        if (!key.startsWith('name:') || !validatePhoneNumber(phone)) continue;
+        output[key] = phone;
+    }
+    return output;
+}
+
+function rememberPersistentPhoneOverride(player = {}, phoneValue = player?.phone) {
+    const key = getPersistentPhoneOverrideKey(player);
+    const phone = formatPhoneNumber(phoneValue);
+    if (!key || !validatePhoneNumber(phone)) return false;
+    persistentPhoneOverrides = normalizePersistentPhoneOverrides(persistentPhoneOverrides);
+    persistentPhoneOverrides[key] = phone;
+    return true;
+}
+
+function getPersistentPhoneOverride(player = {}) {
+    persistentPhoneOverrides = normalizePersistentPhoneOverrides(persistentPhoneOverrides);
+    const key = getPersistentPhoneOverrideKey(player);
+    if (!key) return '';
+    const savedPhone = persistentPhoneOverrides[key];
+    return savedPhone && validatePhoneNumber(savedPhone) ? formatPhoneNumber(savedPhone) : '';
+}
+
+function applyPersistentPhoneOverride(player = {}) {
+    if (!player || typeof player !== 'object') return player;
+    const savedPhone = getPersistentPhoneOverride(player);
+    if (savedPhone) player.phone = savedPhone;
+    return player;
 }
 
 
@@ -5377,9 +5404,8 @@ function buildPaymentReportCsv() {
     });
 
     const totalCollected = players.reduce((sum, p) => sum + (parseFloat(p.paidAmount) || 0), 0);
-    const paidCount = players.filter(p => ['paid', 'pia'].includes(normalizePaymentStatus(p.paymentStatus, p)) && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
+    const paidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) !== 'owes' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
     const unpaidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'owes' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
-    const noShowCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'no_show' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
 
     csvRows.push('');
     csvRows.push([escapeCsvValue('SUMMARY'), '', '', '', '', '', '', '', '', ''].join(','));
@@ -5898,11 +5924,6 @@ function buildPublicRosterPayload() {
 }
 
 app.get('/api/status', (req, res) => {
-    const cachedResponse = getCachedPublicApiResponse('status');
-    if (cachedResponse) {
-        return sendCachedPublicJson(req, res, 'status', null);
-    }
-
     const lockStatus = checkAutoLock();
     const etTime = getCurrentETTime();
     const { week, year } = getWeekNumber(etTime);
@@ -5948,7 +5969,7 @@ app.get('/api/status', (req, res) => {
         isGoalie: p.isGoalie
     }));
     
-    const statusPayload = {
+    res.json({
         playerSpotsRemaining: remainingSkaterSpots > 0 ? remainingSkaterSpots : 0,
         goalieCount: goalieCount,
         goalieSpotsAvailable: maxGoalies - goalieCount,
@@ -6011,17 +6032,10 @@ app.get('/api/status', (req, res) => {
         cancellationDeadlineLine: NO_SHOW_POLICY_TEXT,
         cancellationAllowedNow,
         hoursUntilGame: cancellationTiming.hoursUntilGame
-    };
-
-    return sendCachedPublicJson(req, res, 'status', statusPayload);
+    });
 });
 
 app.get('/api/waitlist', (req, res) => {
-    const cachedResponse = getCachedPublicApiResponse('waitlist');
-    if (cachedResponse) {
-        return sendCachedPublicJson(req, res, 'waitlist', null);
-    }
-
     // Waitlist view supports self-cancel, so include the id but keep private data hidden.
     const cancellationTiming = getCancellationTimingStatus();
     const cancellationAllowedNow = !cancellationTiming.isLateCancelWindow;
@@ -6036,7 +6050,7 @@ app.get('/api/waitlist', (req, res) => {
         // EXCLUDED: rating, phone, paymentMethod
     }));
     
-    const waitlistPayload = {
+    res.json({
         waitlist: waitlistNames,
         totalWaitlist: waitlist.length,
         location: gameLocation,
@@ -6044,28 +6058,21 @@ app.get('/api/waitlist', (req, res) => {
         date: gameDate,
         formattedDate: formatGameDate(gameDate),
         rosterReleased
-    };
-
-    return sendCachedPublicJson(req, res, 'waitlist', waitlistPayload);
+    });
 });
 
 app.get('/api/roster', (req, res) => {
-    const cachedResponse = getCachedPublicApiResponse('roster');
-    if (cachedResponse) {
-        return sendCachedPublicJson(req, res, 'roster', null);
-    }
-
     const rosterPayload = buildPublicRosterPayload();
     if (!rosterPayload.released) {
         const signupMessageData = getSignupOpenMessageData();
-        return sendCachedPublicJson(req, res, 'roster', {
+        return res.json({
             released: false,
             message: 'Roster has not been released yet',
             releaseTime: signupMessageData.rosterReleaseLine || 'Teams will be released at the scheduled time'
         });
     }
 
-    return sendCachedPublicJson(req, res, 'roster', {
+    res.json({
         released: true,
         whiteTeam: rosterPayload.whiteTeam,
         darkTeam: rosterPayload.darkTeam,
@@ -6202,14 +6209,16 @@ app.post('/api/register-init', registrationLimiter, async (req, res) => {
     const cleanFirstName = capitalizeFullName(firstName);
     const cleanLastName = capitalizeFullName(lastName);
     const cleanNickname = normalizeNickname(nickname);
-    const cleanPhone = formatPhoneNumber(phone);
-
-    if (isDuplicatePlayer(cleanFirstName, cleanLastName, cleanPhone)) {
-        return res.status(400).json({ error: "A player with this name or phone number is already registered." });
-    }
+    const submittedPhone = formatPhoneNumber(phone);
+    const savedPhoneOverride = getPersistentPhoneOverride({ firstName: cleanFirstName, lastName: cleanLastName });
+    const cleanPhone = savedPhoneOverride || submittedPhone;
 
     if (!validatePhoneNumber(cleanPhone)) {
         return res.status(400).json({ error: "Please enter a valid 10-digit phone number." });
+    }
+
+    if (isDuplicatePlayer(cleanFirstName, cleanLastName, cleanPhone)) {
+        return res.status(400).json({ error: "A player with this name or phone number is already registered." });
     }
 
     const skillProfile = normalizeSkillProfile({
@@ -6360,6 +6369,10 @@ app.post('/api/register-final', async (req, res) => {
     if (!tempData || !tempData.firstName) {
         return res.status(400).json({ error: "Registration data missing." });
     }
+
+    // Server-side defense: never trust the browser's tempData to bypass an admin phone correction.
+    const finalPhoneOverride = getPersistentPhoneOverride(tempData);
+    if (finalPhoneOverride) tempData.phone = finalPhoneOverride;
     
     if (isDuplicatePlayer(tempData.firstName, tempData.lastName, tempData.phone)) {
         return res.status(400).json({ error: "A player with this name or phone number is already registered." });
@@ -6398,7 +6411,8 @@ app.post('/api/register-final', async (req, res) => {
         rulesAgreed: true
     });
 
-    // Returning players keep the admin-adjusted rating saved from prior weeks.
+    // Returning players keep admin-managed profile corrections saved from prior weeks.
+    applyPersistentPhoneOverride(newPlayer);
     applyPersistentPlayerNickname(newPlayer);
         applyPersistentAdminRating(newPlayer);
         applyPersistentPiaPayment(newPlayer);
@@ -7184,9 +7198,8 @@ app.post('/api/admin/players-full', (req, res) => {
         return sum;
     }, 0);
     
-    const paidCount = players.filter(p => ['paid', 'pia'].includes(normalizePaymentStatus(p.paymentStatus, p)) && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
+    const paidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) !== 'owes' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
     const unpaidCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'owes' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
-    const noShowCount = players.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'no_show' && !p.isGoalie && !isProtectedOrAdminOnlyPlayer(p)).length;
     
     // Return FULL data including payment info AND ratings (admin only)
     res.json({ 
@@ -7202,7 +7215,6 @@ app.post('/api/admin/players-full', (req, res) => {
         totalPaid: totalPaid.toFixed(2),
         paidCount: paidCount,
         unpaidCount: unpaidCount,
-        noShowCount: noShowCount,
         players: players,  // Full data with payment AND rating
         waitlist: waitlist, // Full waitlist data
         cancellations: cancelledRegistrations,
@@ -7215,7 +7227,6 @@ app.post('/api/admin/players-full', (req, res) => {
         currentWeekData, 
         playerSignupCode, 
         requirePlayerCode,
-        regularGoaliesByDay,
         regularSkatersByDay,
         extraGoalieContacts 
     });
@@ -8311,7 +8322,7 @@ app.post('/api/admin/update-paid-amount', async (req, res) => {
     }
 });
 
-// Update payment status endpoint: paid / pia / owes / no_show without adding another admin-table column
+// Update payment status endpoint: paid / pia / owes without adding another admin-table column
 app.post('/api/admin/update-payment-status', async (req, res) => {
     const { password, sessionToken, playerId, status, piaDate, amount, paymentMethod } = req.body;
     if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
@@ -8332,8 +8343,6 @@ app.post('/api/admin/update-payment-status', async (req, res) => {
                 paidAmount: amount,
                 paymentMethod: normalizeCollectionPaymentMethod(paymentMethod, player.paymentMethod || 'E-Transfer')
             });
-        } else if (paymentStatus === 'no_show') {
-            applyPaymentStatusToPlayer(player, 'no_show');
         } else {
             applyPaymentStatusToPlayer(player, 'owes');
         }
@@ -8434,6 +8443,7 @@ app.post('/api/admin/update-phone', async (req, res) => {
     try {
         await runProtectedMutation('update-phone', req, async () => {
             player.phone = cleanPhone;
+            rememberPersistentPhoneOverride(player, cleanPhone);
             rememberPersistentPlayerNickname(player, player.nickname);
             rememberPersistentAdminRating(player, player.adminRating ?? player.finalRating ?? player.rating);
 
@@ -8905,6 +8915,9 @@ app.post('/api/admin/manual-reset', async (req, res) => {
             rememberCurrentPiaPaymentsAndExpire(etTime);
             const weeklyAutoAdds = mergeAutoAddPlayers(getWeeklyAutoAddPlayers(), getWeeklyCarryoverPlayersFromRoster());
             remainingSkaterSpots = skaterCapacity; players = []; waitlist = []; rosterReleased = false; resetArmed = false; lastResetWeek = week; gameDate = calculateNextGameDate();
+            if (canAutoRebuildSchedules()) {
+                buildAutoSchedulesFromGameTime(gameTime, gameDate);
+            }
             currentWeekData = { weekNumber: week, year, releaseDate: null, whiteTeam: [], darkTeam: [] };
             manualOverride = true; manualOverrideState = `reset-lock:${nowETMinuteKey(etTime)}`; requirePlayerCode = true; clearAnnouncementState();
             syncScheduledActionRunMarker(resetWeekSchedule.at, 'reset', etTime);
@@ -9718,9 +9731,8 @@ app.post('/api/collector/players', (req, res) => {
         const amount = Number(p.paidAmount);
         return Number.isFinite(amount) && amount > 0 ? sum + amount : sum;
     }, 0);
-    const paidCount = paymentPlayers.filter(p => ['paid', 'pia'].includes(normalizePaymentStatus(p.paymentStatus, p))).length;
+    const paidCount = paymentPlayers.filter(p => normalizePaymentStatus(p.paymentStatus, p) !== 'owes').length;
     const unpaidCount = paymentPlayers.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'owes').length;
-    const noShowCount = paymentPlayers.filter(p => normalizePaymentStatus(p.paymentStatus, p) === 'no_show').length;
     res.json({
         success: true,
         rosterReleased,
@@ -9730,7 +9742,6 @@ app.post('/api/collector/players', (req, res) => {
         totalPaid: totalPaid.toFixed(2),
         paidCount,
         unpaidCount,
-        noShowCount,
         playerCount: paymentPlayers.length,
         goalieCount: 0,
         players: rosterReleased ? paymentPlayers : []
@@ -9765,29 +9776,6 @@ app.post('/api/collector/update-paid-amount', async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err && err.message ? err.message : 'Payment update failed.' });
-    }
-});
-
-
-app.post('/api/collector/update-payment-status', async (req, res) => {
-    if (!requirePaymentPageEnabled(req, res)) return;
-    if (!requirePaymentAuth(req, res)) return;
-    if (!rosterReleased) return res.status(403).json({ error: 'Payment page opens after roster release.' });
-    const playerId = String(req.body?.playerId || '').trim();
-    const player = (Array.isArray(players) ? players : []).find(p => String(p.id) === playerId);
-    if (!player || isPaymentExcludedPlayer(player)) return res.status(404).json({ error: 'Player not found on payment list.' });
-    const status = normalizePaymentStatus(req.body?.status, player);
-    if (!['owes', 'no_show'].includes(status)) return res.status(400).json({ error: 'Unsupported payment status.' });
-    try {
-        await runProtectedMutation('payment-page-update-payment-status', req, async () => {
-            applyPaymentStatusToPlayer(player, status);
-            if (pool) {
-                await pool.query('UPDATE players SET paid = $1, paid_amount = $2, payment_status = $3, payment_method = $4 WHERE id = $5', [!!player.paid, player.paidAmount == null ? null : Number(player.paidAmount), normalizePaymentStatus(player.paymentStatus, player), player.paymentMethod || null, player.id]);
-            }
-        });
-        res.json({ success: true, paymentStatus: normalizePaymentStatus(player.paymentStatus, player) });
-    } catch (err) {
-        res.status(500).json({ error: err && err.message ? err.message : 'Payment status update failed.' });
     }
 });
 
