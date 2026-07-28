@@ -140,7 +140,10 @@ function getGameDateTimeForSms(){
 function buildAvailabilitySms(goalie){
   const name = String(goalie?.firstName || '').trim() || 'Goalie';
 
-  return `Hi ${name}, are you available to sub in net for Phan's Hockey this ${getGameDateTimeForSms()}?`;
+  const dateTime = getGameDateTimeForSms();
+  const rink = String(currentData.location || '').trim();
+
+  return `Hi ${name}, are you available to play goal for Phan's Hockey on ${dateTime}${rink ? ` at ${rink}` : ''}?`;
 }
 
 function goalieExportFilename(){
