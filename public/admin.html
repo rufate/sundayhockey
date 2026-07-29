@@ -9539,9 +9539,9 @@ ${rosterLink}
                                 <div class="waitlist-action-wrap">
                                     <div class="action-stack">
                                         <button class="promote-btn" data-player-id="${p.id}">Promote</button>
+                                        <button class="bypass-btn ${p.bypassAutoPromote ? 'active' : ''}" data-bypass-id="${p.id}" data-bypass-state="${p.bypassAutoPromote ? '1' : '0'}">Bypass</button>
                                         <button class="remove-btn" onclick="removeWaitlist(${p.id})">Remove</button>
                                     </div>
-                                    <button class="bypass-btn ${p.bypassAutoPromote ? 'active' : ''}" data-bypass-id="${p.id}" data-bypass-state="${p.bypassAutoPromote ? '1' : '0'}">Bypass</button>
                                 </div>
                             </td>
                         `;
