@@ -3187,7 +3187,7 @@ function updateCalculatedRating() {
             // - Show the join instruction conditionally based on available spots.
             const joinMessage = hasSpots
                 ? "'Join Game', recheck roster, see you at the rink."
-                : "'Join Waitlist', 1st on waitlist is guaranteed a spot if a player cancels.";
+                : "'Join Waitlist', 1st on waitlist is guaranteed a spot if a player(s) cancels. Regular player(s) takes precedence over non-Regular player(s).";
 
             const hadJoinMessagePlaceholder = text.includes('{joinMessage}');
             text = text.split('{joinMessage}').join(joinMessage);
