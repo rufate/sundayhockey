@@ -9239,7 +9239,6 @@ process.on('unhandledRejection', (err) => {
 });
 
 // Initialize and start
-// PAYMENT PAGE: limited collector access for Kyle/Brad
 const PAYMENT_PASSWORD = String(process.env.PAYMENT_PASSWORD || process.env.COLLECTOR_PASSWORD || '').trim();
 function isPaymentExcludedPlayer(player = {}) {
     const first = String(player.firstName || '').trim().toLowerCase();

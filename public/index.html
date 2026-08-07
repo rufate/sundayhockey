@@ -3095,12 +3095,22 @@ function updateCalculatedRating() {
                         const subNote = (isLateAddition || isSubbedIn) && player.subbedInForName
                             ? `<span class="subbed-in-note">for ${player.subbedInForName}</span>`
                             : '';
-                        const safeFirstName = String(player.firstName || '').replace(/'/g, "\'");
-                        const safeLastName = String(player.lastName || '').replace(/'/g, "\'");
-                        const buttonHtml = (!player.isGoalie && !player.cancelled && player.canCancel !== false && player.id != null)
-                            ? `<button class="cancel-btn" onclick="openCancelModal(${JSON.stringify(player.id)}, '${safeFirstName}', '${safeLastName}')">Cancel</button>`
-                            : '';
-                        li.innerHTML = `<span class="player-name">${player.firstName || ''} ${player.lastName || ''} ${goalieBadge} ${cancelBadge} ${subBadge}${subNote}</span>${buttonHtml}`;
+                        li.innerHTML = `<span class="player-name">${player.firstName || ''} ${player.lastName || ''} ${goalieBadge} ${cancelBadge} ${subBadge}${subNote}</span>`;
+
+                        // Do not put player names inside an inline onclick attribute. Names with
+                        // apostrophes (for example, nicknames such as 'Coach') can break the
+                        // generated JavaScript and make the Cancel button appear to do nothing.
+                        if (!player.isGoalie && !player.cancelled && player.canCancel !== false && player.id != null) {
+                            const cancelButton = document.createElement('button');
+                            cancelButton.type = 'button';
+                            cancelButton.className = 'cancel-btn';
+                            cancelButton.textContent = 'Cancel';
+                            cancelButton.addEventListener('click', () => {
+                                openCancelModal(player.id, String(player.firstName || ''), String(player.lastName || ''));
+                            });
+                            li.appendChild(cancelButton);
+                        }
+
                         listEl.appendChild(li);
                         markPromotedRosterEntry(li, player);
                     });
@@ -3766,11 +3776,6 @@ function updateCalculatedRating() {
                 const subbedInLabel = isSubbedIn ? '<div class="subbed-in-label">SUBBED IN</div>' : '';
                 const subbedInNote = isSubbedIn ? `<div style="font-size:0.78rem;color:#a8d3ff;margin-top:4px;">for ${player.subbedInForName}</div>` : '';
 
-                let cancelButton = '';
-                if (!isGoalie && !isProtected && player.canCancel !== false) {
-                    cancelButton = `<button class="cancel-btn" onclick="openCancelModal(${player.id}, '${firstName}', '${lastName}')">Cancel</button>`;
-                }
-
                 card.innerHTML = `
                     <div class="player-avatar">${initials}</div>
                     <div class="player-info-simple">
@@ -3780,8 +3785,20 @@ function updateCalculatedRating() {
                         ${subbedInLabel}
                         ${subbedInNote}
                     </div>
-                    ${cancelButton}
                 `;
+
+                // Use a real event listener instead of embedding names in JavaScript text.
+                // This keeps cancellation working for names containing apostrophes/quotes.
+                if (!isGoalie && !isProtected && player.canCancel !== false && player.id != null) {
+                    const cancelButton = document.createElement('button');
+                    cancelButton.type = 'button';
+                    cancelButton.className = 'cancel-btn';
+                    cancelButton.textContent = 'Cancel';
+                    cancelButton.addEventListener('click', () => {
+                        openCancelModal(player.id, firstName, lastName);
+                    });
+                    card.appendChild(cancelButton);
+                }
 
                 grid.appendChild(card);
             });
