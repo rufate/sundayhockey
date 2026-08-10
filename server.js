@@ -1514,31 +1514,20 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime(), resetAt = resetWee
         };
     }
 
-    if (!resetArmed) {
-        return {
-            ok: false,
-            reason: 'Blocked weekly reset because reset arm is OFF.'
-        };
-    }
-
-    if (!rosterReleased) {
-        return {
-            ok: false,
-            reason: `Blocked weekly reset because roster has not been released yet. Players: ${registeredPlayerCount}, waitlist: ${waitlistCount}.`
-        };
-    }
-
+    // The weekly reset schedule is authoritative once its configured date/time has
+    // arrived and it is safely after the game.  Do NOT make the reset depend on
+    // rosterReleased/resetArmed/release timestamp: those are release-workflow state
+    // and can be stale after a restart or persistence hiccup.  Requiring them here
+    // caused Sunday to miss an otherwise valid scheduled reset.
     const releaseTimeMs = Number(currentWeekData && currentWeekData.rosterReleaseTime) || Date.parse(currentWeekData && currentWeekData.releaseDate);
-    if (!Number.isFinite(releaseTimeMs) || releaseTimeMs <= 0) {
-        return {
-            ok: false,
-            reason: 'Blocked weekly reset because there is no recorded roster release timestamp for this week.'
-        };
-    }
+    const releaseStateNotes = [];
+    if (!resetArmed) releaseStateNotes.push('reset arm OFF');
+    if (!rosterReleased) releaseStateNotes.push('roster not marked released');
+    if (!Number.isFinite(releaseTimeMs) || releaseTimeMs <= 0) releaseStateNotes.push('release timestamp missing');
 
     return {
         ok: true,
-        reason: `Reset allowed: scheduled ET reset window, roster released, reset arm ON, ${registeredPlayerCount} player(s) and ${waitlistCount} waitlist record(s) ready to clear.`
+        reason: `Reset allowed by scheduled ET reset window after game time; ${registeredPlayerCount} player(s) and ${waitlistCount} waitlist record(s) ready to clear${releaseStateNotes.length ? ` (release-state warning: ${releaseStateNotes.join(', ')})` : ''}.`
     };
 }
 
@@ -2121,8 +2110,10 @@ async function checkWeeklyReset() {
 
     if (
         rosterReleased &&
+        currentWeekData &&
         currentWeekData.weekNumber &&
-        (currentWeekData.whiteTeam.length > 0 || currentWeekData.darkTeam.length > 0) &&
+        ((Array.isArray(currentWeekData.whiteTeam) && currentWeekData.whiteTeam.length > 0) ||
+         (Array.isArray(currentWeekData.darkTeam) && currentWeekData.darkTeam.length > 0)) &&
         pool
     ) {
         await saveWeekHistory(
