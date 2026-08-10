@@ -7219,6 +7219,7 @@ app.post('/api/admin/players-full', (req, res) => {
         playerSignupCode, 
         requirePlayerCode,
         regularSkatersByDay,
+        regularGoaliesByDay,
         extraGoalieContacts 
     });
 });

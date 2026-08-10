@@ -9349,8 +9349,12 @@ ${rosterLink}
 
                 const serverRegularMap = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
                 currentRegularSkatersByDay = serverRegularMap;
+                // Goalies use their own saved regular-goalie map. Load it with the player data
+                // before the table renders so a page refresh cannot briefly/default back to gray.
+                currentRegularGoaliesByDay = normalizeRegularDayBucketMap(data.regularGoaliesByDay || {});
                 saveLocalRegularSkaters(currentRegularSkatersByDay);
                 renderRegularSkatersList();
+                renderAutoAddSettings();
 
                 playersCount = data.players.length;
                 maxGoalies = data.maxGoalies || 2;
