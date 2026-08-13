@@ -6445,6 +6445,21 @@ app.post('/api/register-final', async (req, res) => {
 });
 
 // CANCEL REGISTRATION / WAITLIST ENDPOINT
+// Serialize cancellation mutations so two near-simultaneous requests can never
+// operate on stale array indexes and remove the wrong player.
+let cancellationMutationQueue = Promise.resolve();
+async function withCancellationMutationLock(fn) {
+    let releaseLock;
+    const previous = cancellationMutationQueue;
+    cancellationMutationQueue = new Promise(resolve => { releaseLock = resolve; });
+    await previous;
+    try {
+        return await fn();
+    } finally {
+        releaseLock();
+    }
+}
+
 app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res) => {
     const { playerId, phone } = req.body;
 
@@ -6462,152 +6477,211 @@ app.post('/api/cancel-registration', cancelRegistrationLimiter, async (req, res)
         return res.status(400).json({ error: "Phone number is required." });
     }
 
-    const findById = (arr) => arr.findIndex(p => String(p.id).trim() === idToRemove);
+    // IMPORTANT: all roster/waitlist lookup and mutation happens while holding
+    // this lock. This prevents duplicate clicks (or two different cancellations)
+    // from using an index that became stale after another cancellation.
+    return withCancellationMutationLock(async () => {
+        const findById = (arr) => arr.findIndex(p => String(p.id).trim() === idToRemove);
 
-    const playerIndex = findById(players);
-    const waitlistIndex = findById(waitlist);
-    const foundPlayer = playerIndex !== -1 ? players[playerIndex] : (waitlistIndex !== -1 ? waitlist[waitlistIndex] : null);
-    const foundSource = playerIndex !== -1 ? 'players' : (waitlistIndex !== -1 ? 'waitlist' : '');
+        let playerIndex = findById(players);
+        let waitlistIndex = findById(waitlist);
+        let foundPlayer = playerIndex !== -1 ? players[playerIndex] : (waitlistIndex !== -1 ? waitlist[waitlistIndex] : null);
+        const foundSource = playerIndex !== -1 ? 'players' : (waitlistIndex !== -1 ? 'waitlist' : '');
 
-    if (!foundPlayer) {
-        return res.status(404).json({ error: "Player not found." });
-    }
+        // A duplicate cancellation request that arrives after the first one has
+        // completed is harmless: the target is gone, so nothing else is touched.
+        if (!foundPlayer) {
+            return res.status(409).json({
+                error: "This registration has already been cancelled or is no longer on the roster.",
+                alreadyCancelled: true
+            });
+        }
 
-    if (isProtectedOrAdminOnlyPlayer(foundPlayer) || isPublicCancelLockedPlayer(foundPlayer)) {
-        return res.status(403).json({ error: "This player cannot be cancelled online. Please contact admin." });
-    }
+        if (isProtectedOrAdminOnlyPlayer(foundPlayer) || isPublicCancelLockedPlayer(foundPlayer)) {
+            return res.status(403).json({ error: "This player cannot be cancelled online. Please contact admin." });
+        }
 
-    if (foundPlayer.isGoalie) {
-        return res.status(403).json({ error: "Goalies cannot cancel from the public roster. Please manage goalie changes through the Goalies portal." });
-    }
+        if (foundPlayer.isGoalie) {
+            return res.status(403).json({ error: "Goalies cannot cancel from the public roster. Please manage goalie changes through the Goalies portal." });
+        }
 
-    const storedPhone = normalizePhoneDigits(foundPlayer.phone);
-    if (submittedPhone !== storedPhone) {
-        return res.status(401).json({ error: "Phone number does not match registration." });
-    }
+        const storedPhone = normalizePhoneDigits(foundPlayer.phone);
+        if (submittedPhone !== storedPhone) {
+            return res.status(401).json({ error: "Phone number does not match registration." });
+        }
 
-    const cancellationTiming = getCancellationTimingStatus();
-    const isLateCancelWindow = foundSource === 'players' && !!cancellationTiming.isLateCancelWindow;
+        const cancellationTiming = getCancellationTimingStatus();
+        const isLateCancelWindow = foundSource === 'players' && !!cancellationTiming.isLateCancelWindow;
 
-    if (isLateCancelWindow) {
-        return res.status(403).json({
-            error: `Cancellation cutoff has passed. Players can cancel only until ${formatCancellationCutoffHours()} ${Number(formatCancellationCutoffHours()) === 1 ? 'hour' : 'hours'} before game time. Please contact the admin.`,
-            lateCancel: false,
-            cancellationAllowedNow: false,
-            policy: NO_SHOW_POLICY_TEXT,
-            hoursUntilGame: cancellationTiming.hoursUntilGame,
-            spotsAvailable: remainingSkaterSpots
-        });
-    }
+        if (isLateCancelWindow) {
+            return res.status(403).json({
+                error: `Cancellation cutoff has passed. Players can cancel only until ${formatCancellationCutoffHours()} ${Number(formatCancellationCutoffHours()) === 1 ? 'hour' : 'hours'} before game time. Please contact the admin.`,
+                lateCancel: false,
+                cancellationAllowedNow: false,
+                policy: NO_SHOW_POLICY_TEXT,
+                hoursUntilGame: cancellationTiming.hoursUntilGame,
+                spotsAvailable: remainingSkaterSpots
+            });
+        }
 
-    if (playerIndex !== -1) {
-        const player = players[playerIndex];
-        let promotedPlayer = null;
+        if (playerIndex !== -1) {
+            // Capture identity, but NEVER trust the old array index at mutation time.
+            const player = { ...players[playerIndex] };
+            let promotedPlayer = null;
 
-        try {
-            await runProtectedMutation('player-cancel', req, async () => {
-                appendCancellationLog({
-                    id: player.id,
-                    firstName: player.firstName,
-                    lastName: player.lastName,
-                    phone: player.phone,
-                    rating: player.rating,
-                    isGoalie: player.isGoalie,
-                    paymentMethod: player.paymentMethod,
-                    source: 'players',
-                    action: 'cancelled',
-                    cancelledBy: 'player',
-                    cancelledAt: new Date().toISOString()
-                });
+            try {
+                await runProtectedMutation('player-cancel', req, async () => {
+                    // Defensive re-check immediately before mutation. Even if this
+                    // endpoint changes later, we will only remove the requested ID.
+                    const livePlayerIndex = findById(players);
+                    if (livePlayerIndex === -1) {
+                        const duplicateErr = new Error('Cancellation target is no longer on the roster.');
+                        duplicateErr.code = 'ALREADY_CANCELLED';
+                        throw duplicateErr;
+                    }
 
-                players.splice(playerIndex, 1);
-                if (!player.isGoalie) remainingSkaterSpots = Math.min(skaterCapacity, remainingSkaterSpots + 1);
+                    const livePlayer = players[livePlayerIndex];
+                    if (normalizePhoneDigits(livePlayer.phone) !== submittedPhone) {
+                        const phoneErr = new Error('Phone number no longer matches registration.');
+                        phoneErr.code = 'PHONE_MISMATCH';
+                        throw phoneErr;
+                    }
 
-                const removedPlayerTeam = player.team === 'White' || player.team === 'Dark' ? player.team : null;
-                const rosterWasReleased = getEffectiveRosterReleasedState();
-                const waitlistPlayer = extractWaitlistPlayerToPromote({ preferGoalie: !!player.isGoalie });
-                if (waitlistPlayer) {
-                    const assignedTeam = rosterWasReleased && removedPlayerTeam ? removedPlayerTeam : null;
-
-                    promotedPlayer = buildPromotedRosterPlayer(waitlistPlayer, assignedTeam, {
-                        promotedFromWaitlist: true,
-                        lateAddedAfterRelease: rosterWasReleased,
-                        subbedInForPlayerId: player.id,
-                        subbedInForName: `${player.firstName || ''} ${player.lastName || ''}`.trim(),
-                        subbedInAt: new Date().toISOString()
+                    appendCancellationLog({
+                        id: livePlayer.id,
+                        firstName: livePlayer.firstName,
+                        lastName: livePlayer.lastName,
+                        phone: livePlayer.phone,
+                        rating: livePlayer.rating,
+                        isGoalie: livePlayer.isGoalie,
+                        paymentMethod: livePlayer.paymentMethod,
+                        source: 'players',
+                        action: 'cancelled',
+                        cancelledBy: 'player',
+                        cancelledAt: new Date().toISOString()
                     });
 
-                    players.push(promotedPlayer);
-                    if (!promotedPlayer.isGoalie) remainingSkaterSpots = Math.max(0, remainingSkaterSpots - 1);
+                    const removedPlayer = players.splice(livePlayerIndex, 1)[0];
+                    if (!removedPlayer.isGoalie) remainingSkaterSpots = Math.min(skaterCapacity, remainingSkaterSpots + 1);
 
-                    if (rosterWasReleased) {
-                        rebalanceReleasedRoster('player-cancel-waitlist-auto-promotion');
+                    const removedPlayerTeam = removedPlayer.team === 'White' || removedPlayer.team === 'Dark' ? removedPlayer.team : null;
+                    const rosterWasReleased = getEffectiveRosterReleasedState();
+                    const waitlistPlayer = extractWaitlistPlayerToPromote({ preferGoalie: !!removedPlayer.isGoalie });
+                    if (waitlistPlayer) {
+                        const assignedTeam = rosterWasReleased && removedPlayerTeam ? removedPlayerTeam : null;
+
+                        promotedPlayer = buildPromotedRosterPlayer(waitlistPlayer, assignedTeam, {
+                            promotedFromWaitlist: true,
+                            lateAddedAfterRelease: rosterWasReleased,
+                            subbedInForPlayerId: removedPlayer.id,
+                            subbedInForName: `${removedPlayer.firstName || ''} ${removedPlayer.lastName || ''}`.trim(),
+                            subbedInAt: new Date().toISOString()
+                        });
+
+                        players.push(promotedPlayer);
+                        if (!promotedPlayer.isGoalie) remainingSkaterSpots = Math.max(0, remainingSkaterSpots - 1);
+
+                        if (rosterWasReleased) {
+                            rebalanceReleasedRoster('player-cancel-waitlist-auto-promotion');
+                        }
+                    } else if (rosterWasReleased && removedPlayerTeam) {
+                        rebalanceReleasedRoster('player-cancel-open-spot');
                     }
-                } else if (rosterWasReleased && removedPlayerTeam) {
-                    rebalanceReleasedRoster('player-cancel-open-spot');
-                }
-            }, {
-                playerId: player.id,
-                waitlistPromotion: !!promotedPlayer
-            });
-        } catch (err) {
-            console.error('Error cancelling registration:', err.message);
-            return res.status(500).json({ error: "Cancellation could not be saved safely. Please try again." });
-        }
-
-        return res.json({
-            success: true,
-            lateCancel: false,
-            message: "Registration cancelled successfully.",
-            promotedPlayer: promotedPlayer ? {
-                firstName: promotedPlayer.firstName,
-                lastName: promotedPlayer.lastName,
-                subbedInForName: promotedPlayer.subbedInForName || null,
-                lateAddedAfterRelease: !!promotedPlayer.lateAddedAfterRelease,
-                promotedFromWaitlist: !!promotedPlayer.promotedFromWaitlist
-            } : null,
-            spotsAvailable: remainingSkaterSpots
-        });
-    }
-
-    if (waitlistIndex !== -1) {
-        const waitlistPlayer = waitlist[waitlistIndex];
-
-        try {
-            await runProtectedMutation('waitlist-cancel', req, async () => {
-                appendCancellationLog({
-                    id: waitlistPlayer.id,
-                    firstName: waitlistPlayer.firstName,
-                    lastName: waitlistPlayer.lastName,
-                    phone: waitlistPlayer.phone,
-                    rating: waitlistPlayer.rating,
-                    isGoalie: waitlistPlayer.isGoalie,
-                    paymentMethod: waitlistPlayer.paymentMethod,
-                    source: 'waitlist',
-                    action: 'cancelled',
-                    cancelledBy: 'player',
-                    cancelledAt: new Date().toISOString()
+                }, {
+                    playerId: player.id,
+                    waitlistPromotion: !!promotedPlayer
                 });
+            } catch (err) {
+                if (err.code === 'ALREADY_CANCELLED') {
+                    return res.status(409).json({
+                        error: "This registration has already been cancelled or is no longer on the roster.",
+                        alreadyCancelled: true
+                    });
+                }
+                if (err.code === 'PHONE_MISMATCH') {
+                    return res.status(401).json({ error: "Phone number does not match registration." });
+                }
+                console.error('Error cancelling registration:', err.message);
+                return res.status(500).json({ error: "Cancellation could not be saved safely. Please try again." });
+            }
 
-                waitlist.splice(waitlistIndex, 1);
-            }, {
-                playerId: waitlistPlayer.id,
-                source: 'waitlist'
+            return res.json({
+                success: true,
+                lateCancel: false,
+                message: "Registration cancelled successfully.",
+                promotedPlayer: promotedPlayer ? {
+                    firstName: promotedPlayer.firstName,
+                    lastName: promotedPlayer.lastName,
+                    subbedInForName: promotedPlayer.subbedInForName || null,
+                    lateAddedAfterRelease: !!promotedPlayer.lateAddedAfterRelease,
+                    promotedFromWaitlist: !!promotedPlayer.promotedFromWaitlist
+                } : null,
+                spotsAvailable: remainingSkaterSpots
             });
-        } catch (err) {
-            console.error('Error cancelling waitlist registration:', err.message);
-            return res.status(500).json({ error: "Cancellation could not be saved safely. Please try again." });
         }
 
-        return res.json({
-            success: true,
-            lateCancel: false,
-            message: "Waitlist registration cancelled successfully.",
-            fromWaitlist: true
-        });
-    }
+        if (waitlistIndex !== -1) {
+            const waitlistPlayer = { ...waitlist[waitlistIndex] };
 
-    return res.status(404).json({ error: "Player not found." });
+            try {
+                await runProtectedMutation('waitlist-cancel', req, async () => {
+                    const liveWaitlistIndex = findById(waitlist);
+                    if (liveWaitlistIndex === -1) {
+                        const duplicateErr = new Error('Cancellation target is no longer on the waitlist.');
+                        duplicateErr.code = 'ALREADY_CANCELLED';
+                        throw duplicateErr;
+                    }
+
+                    const liveWaitlistPlayer = waitlist[liveWaitlistIndex];
+                    if (normalizePhoneDigits(liveWaitlistPlayer.phone) !== submittedPhone) {
+                        const phoneErr = new Error('Phone number no longer matches registration.');
+                        phoneErr.code = 'PHONE_MISMATCH';
+                        throw phoneErr;
+                    }
+
+                    appendCancellationLog({
+                        id: liveWaitlistPlayer.id,
+                        firstName: liveWaitlistPlayer.firstName,
+                        lastName: liveWaitlistPlayer.lastName,
+                        phone: liveWaitlistPlayer.phone,
+                        rating: liveWaitlistPlayer.rating,
+                        isGoalie: liveWaitlistPlayer.isGoalie,
+                        paymentMethod: liveWaitlistPlayer.paymentMethod,
+                        source: 'waitlist',
+                        action: 'cancelled',
+                        cancelledBy: 'player',
+                        cancelledAt: new Date().toISOString()
+                    });
+
+                    waitlist.splice(liveWaitlistIndex, 1);
+                }, {
+                    playerId: waitlistPlayer.id,
+                    source: 'waitlist'
+                });
+            } catch (err) {
+                if (err.code === 'ALREADY_CANCELLED') {
+                    return res.status(409).json({
+                        error: "This waitlist registration has already been cancelled or is no longer on the waitlist.",
+                        alreadyCancelled: true
+                    });
+                }
+                if (err.code === 'PHONE_MISMATCH') {
+                    return res.status(401).json({ error: "Phone number does not match registration." });
+                }
+                console.error('Error cancelling waitlist registration:', err.message);
+                return res.status(500).json({ error: "Cancellation could not be saved safely. Please try again." });
+            }
+
+            return res.json({
+                success: true,
+                lateCancel: false,
+                message: "Waitlist registration cancelled successfully.",
+                fromWaitlist: true
+            });
+        }
+
+        return res.status(404).json({ error: "Player not found." });
+    });
 });
 
 // --- ADMIN API - FULL ACCESS TO ALL DATA ---

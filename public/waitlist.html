@@ -449,6 +449,11 @@
                 return;
             }
 
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = 'Cancelling...';
+            }
+
             try {
                 const res = await fetch(`${API_URL}/api/cancel-registration`, {
                     method: 'POST',
@@ -466,7 +471,10 @@
                     successDiv.style.display = 'block';
                     document.getElementById('cancelPhoneInput').disabled = true;
                     if (abortBtn) abortBtn.style.display = 'none';
-                    if (confirmBtn) confirmBtn.textContent = 'Continue';
+                    if (confirmBtn) {
+                        confirmBtn.disabled = false;
+                        confirmBtn.textContent = 'Continue';
+                    }
                     cancelModalAwaitingContinue = true;
                     cancelModalAfterCloseAction = async () => {
                         await loadWaitlist();
@@ -474,11 +482,19 @@
                 } else {
                     errorDiv.innerText = data.error || 'Failed to cancel waitlist registration.';
                     errorDiv.style.display = 'block';
+                                    if (confirmBtn) {
+                        confirmBtn.disabled = false;
+                        confirmBtn.textContent = 'Confirm Cancel';
+                    }
                 }
             } catch (err) {
                 console.error('Waitlist cancel error:', err);
                 errorDiv.innerText = 'Network error. Please try again.';
                 errorDiv.style.display = 'block';
+                            if (confirmBtn) {
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = 'Confirm Cancel';
+                }
             }
         }
 

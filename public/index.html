@@ -3865,6 +3865,11 @@ function updateCalculatedRating() {
                 return;
             }
 
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = 'Cancelling...';
+            }
+
             try {
                 const res = await fetch(`${API_URL}/api/cancel-registration`, {
                     method: 'POST',
@@ -3891,7 +3896,10 @@ function updateCalculatedRating() {
                     successDiv.style.display = 'block';
                     document.getElementById('cancelPhoneInput').disabled = true;
                     if (abortBtn) abortBtn.style.display = 'none';
-                    if (confirmBtn) confirmBtn.textContent = 'Continue';
+                    if (confirmBtn) {
+                        confirmBtn.disabled = false;
+                        confirmBtn.textContent = 'Continue';
+                    }
                     cancelModalAwaitingContinue = true;
                     cancelModalAfterCloseAction = () => {
                         checkStatus();
@@ -3899,11 +3907,19 @@ function updateCalculatedRating() {
                 } else {
                     errorDiv.innerText = data.error || 'Failed to cancel registration.';
                     errorDiv.style.display = 'block';
+                                    if (confirmBtn) {
+                        confirmBtn.disabled = false;
+                        confirmBtn.textContent = 'Confirm Cancel';
+                    }
                 }
             } catch (err) {
                 console.error('Cancel error:', err);
                 errorDiv.innerText = 'Network error. Please try again.';
                 errorDiv.style.display = 'block';
+                            if (confirmBtn) {
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = 'Confirm Cancel';
+                }
             }
         }
 
