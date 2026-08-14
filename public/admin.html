@@ -8988,7 +8988,7 @@ Cancellation cutoff: ${cancellationCutoffHours} hour${cancellationCutoffHours ==
             }
 
             const portalLink = window.location.origin;
-            const smsBody = `Game day roster released. Roster updates in real time for last-minute changes. Check again at rink.\n${portalLink}`;
+            const smsBody = `You're on game day roster. If you need to bail please do so before cancel window closes. Roster updates in real time for last-minute changes. Check again at rink.\n${portalLink}`;
             window.location.href = `sms:${data.phoneOnly}?body=${encodeURIComponent(smsBody)}`;
         }
 
