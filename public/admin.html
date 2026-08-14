@@ -8982,14 +8982,22 @@ Cancellation cutoff: ${cancellationCutoffHours} hour${cancellationCutoffHours ==
 
         async function openSignupSmsDraft() {
             const data = buildSignupMassTextExport();
-            if (!data.phoneOnly) {
-                alert('No eligible signup phone numbers available. Protected players and goalies are excluded automatically.');
+
+            // Android game-day roster text must go only to registered players.
+            // adminPlayersById also contains waitlist players, so explicitly remove
+            // anyone whose ID is currently present in adminWaitlist.
+            const waitlistIds = new Set((adminWaitlist || []).map(player => String(player.id)));
+            const registeredContacts = (data.contacts || []).filter(player => !waitlistIds.has(String(player.id)));
+            const registeredPhonesOnly = registeredContacts.map(player => player.phoneDigits).join(',');
+
+            if (!registeredPhonesOnly) {
+                alert('No eligible registered player phone numbers available. Waitlist players, protected players, and goalies are excluded automatically.');
                 return;
             }
 
             const portalLink = window.location.origin;
             const smsBody = `You're on game day roster. If you need to bail please do so before cancel window closes. Roster updates in real time for last-minute changes. Check again at rink.\n${portalLink}`;
-            window.location.href = `sms:${data.phoneOnly}?body=${encodeURIComponent(smsBody)}`;
+            window.location.href = `sms:${registeredPhonesOnly}?body=${encodeURIComponent(smsBody)}`;
         }
 
         function downloadSignupContactsCsv() {
