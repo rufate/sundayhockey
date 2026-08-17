@@ -8585,7 +8585,9 @@ Cancellation cutoff: ${cancellationCutoffHours} hour${cancellationCutoffHours ==
                 }
                 if (data.resetWeekSchedule) {
                     document.getElementById('resetWeekEnabled').checked = !!data.resetWeekSchedule.enabled;
-                    document.getElementById('resetWeekAt').value = data.resetWeekAt || '';
+                    // Use the persisted reset target, not a computed next-week
+                    // display date. The server advances this only after a successful reset.
+                    document.getElementById('resetWeekAt').value = data.storedResetWeekAt || data.resetWeekAt || '';
                     syncEnhancedControl('resetWeekAt');
                 }
                 document.getElementById('scheduleInfo').innerHTML = formatScheduleInfo(data);

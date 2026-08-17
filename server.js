@@ -1623,7 +1623,11 @@ function getDynamicScheduleDatetimeLocalValues(etDate = getCurrentETTime()) {
     }
 
     if (resetWeekSchedule && resetWeekSchedule.enabled && resetWeekSchedule.at) {
-        values.resetWeekAt = etPartsToDatetimeLocal(getCurrentOrNextOccurrenceEtParts(resetWeekSchedule.at, etDate));
+        // Keep showing the exact persisted reset target until a reset actually
+        // completes. Previously the admin UI immediately rolled the displayed
+        // date to the following week as soon as the scheduled minute passed,
+        // even if the reset never ran.
+        values.resetWeekAt = resetWeekAt || etPartsToDatetimeLocal(getCurrentOrNextOccurrenceEtParts(resetWeekSchedule.at, etDate));
     }
 
     return values;
@@ -2096,11 +2100,14 @@ async function checkWeeklyReset() {
     }
     console.log(`[ET SCHEDULER] Weekly reset approved at ${resetCheck.minuteKey}: ${resetSafety.reason}`);
 
-    lastExactResetRunAt = resetCheck.occurrenceKey;
-    lastExactResetMinuteKey = resetCheck.minuteKey;
-    await saveData();
-
-    await savePaymentReportSnapshot('scheduled_reset');
+    // Do not mark this occurrence as completed until the weekly reset has
+    // actually finished. Marking it here used to permanently suppress retries
+    // if a later snapshot/history/reset step failed.
+    try {
+        await savePaymentReportSnapshot('scheduled_reset');
+    } catch (err) {
+        console.error('[ET SCHEDULER] Payment snapshot failed before weekly reset; continuing reset:', err);
+    }
 
     // Preserve persistent player profile fields before clearing the weekly roster.
     rememberCurrentAdminRatings();
@@ -2164,7 +2171,24 @@ async function checkWeeklyReset() {
     }
 
     await addAutoPlayers(weeklyAutoAdds);
+
+    // A successful reset is the only event allowed to advance the persisted
+    // reset target. Manual Friday/Sunday schedules therefore keep the same
+    // exact date on screen until the reset really happens.
+    if (isManualScheduleMode()) {
+        const completedResetParts = parseDatetimeLocalToETDate(resetWeekAt);
+        if (completedResetParts) {
+            resetWeekAt = etPartsToDatetimeLocal(addMinutesToEtParts(completedResetParts, 7 * 24 * 60));
+        } else {
+            const nextResetParts = getNextOccurrenceEtParts(resetWeekSchedule.at, etTime);
+            resetWeekAt = etPartsToDatetimeLocal(nextResetParts);
+        }
+    }
+
+    lastExactResetRunAt = resetCheck.occurrenceKey;
+    lastExactResetMinuteKey = resetCheck.minuteKey;
     await saveData();
+    console.log(`[ET SCHEDULER] Weekly reset completed successfully; next stored reset target: ${resetWeekAt || 'auto schedule'}`);
     return true;
 }
 
