@@ -1924,7 +1924,7 @@
     <div class="announcement-bulletin" id="announcementBulletin">
         <img id="announcementThumb" class="announcement-thumb" alt="Announcement">
         <div class="announcement-copy">
-            <strong>Attention: Last-minute cancellations must be made within 3 hours prior to game time. 'Cancel' button will not be available thereafter. Please do not message me to cancel. No show owes.</strong>
+            <strong id="rosterCancellationNotice">Attention: Last-minute cancellations must be made within 3 hours prior to game time. 'Cancel' button will not be available thereafter. Please do not message me to cancel. No show owes.</strong>
             <span id="announcementText">&nbsp;</span>
         </div>
     </div>
@@ -3144,6 +3144,7 @@ function updateCalculatedRating() {
             const bulletin = document.getElementById('announcementBulletin');
             const textEl = document.getElementById('announcementText');
             const thumbEl = document.getElementById('announcementThumb');
+            const rosterNoticeEl = document.getElementById('rosterCancellationNotice');
             if (!bulletin || !textEl || !thumbEl) return;
 
             const isRosterReleased = !!data.rosterReleased;
@@ -3164,6 +3165,13 @@ function updateCalculatedRating() {
                 ? generalText
                 : (isRosterAnnouncement ? (rosterText || defaultRosterText) : '');
             const shouldShow = hasGeneralAnnouncement || (isRosterAnnouncement && !!rawText);
+
+            // The predefined cancellation notice belongs only to the automatic
+            // roster-release announcement. A manually enabled announcement shows
+            // only the text/image entered in the Announcement control.
+            if (rosterNoticeEl) {
+                rosterNoticeEl.style.display = isRosterAnnouncement ? '' : 'none';
+            }
 
             if (!shouldShow) {
                 bulletin.classList.remove('active');
