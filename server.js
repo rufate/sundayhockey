@@ -4328,7 +4328,9 @@ function getRosterFirstName(player = {}) {
 function getReleasedRosterFirstName(player = {}) {
     const first = String(player.firstName || '').trim();
     const nickname = normalizeNickname(player.nickname);
-    return nickname ? `${first} '${nickname}'`.trim() : first;
+    // On the public released roster, an admin nickname supersedes the signup name.
+    // The player's real first/last name remains unchanged everywhere else.
+    return nickname || first;
 }
 
 function getRosterFullName(player = {}) {
@@ -5890,7 +5892,7 @@ function buildPublicRosterPayload() {
         return {
             id: p.id,
             firstName: getReleasedRosterFirstName(p),
-            lastName: p.lastName,
+            lastName: normalizeNickname(p.nickname) ? '' : p.lastName,
             isGoalie: !!p.isGoalie,
             cancelled,
             owes: cancelled,
