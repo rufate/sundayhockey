@@ -3227,11 +3227,20 @@ function updateCalculatedRating() {
                 /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
                 (email) => `<span class="announcement-copy-email" data-copy-email="${email}" role="button" tabindex="0" title="Copy email">${email}</span>`
             );
+            const wrapUrls = (safeLine) => safeLine.replace(
+                /https?:\/\/[^\s<]+/gi,
+                (url) => {
+                    const match = url.match(/^(.*?)([.,!?;:)]*)$/);
+                    const href = match ? match[1] : url;
+                    const trailing = match ? match[2] : '';
+                    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${href}</a>${trailing}`;
+                }
+            );
 
             const html = text
                 .split('\n')
                 .map((line) => {
-                    let safeLine = wrapEmails(escapeHtml(line));
+                    let safeLine = wrapUrls(wrapEmails(escapeHtml(line)));
                     safeLine = safeLine
                         .split(spotsToken)
                         .join(`<span class="announcement-spots ${spotsClass}">${escapeHtml(spotsText)}</span>`);
