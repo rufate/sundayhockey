@@ -4528,11 +4528,12 @@ function normalizePersistentPiaPayments(input = {}) {
         const value = rawValue && typeof rawValue === 'object' ? rawValue : {};
         const piaDate = normalizePiaDate(value.piaDate);
         if (!key || !piaDate || isPiaDateExpired(piaDate)) continue;
-        const paidAmount = toNumericOrNull(value.paidAmount);
         output[key] = {
             paymentStatus: 'pia',
             paid: true,
-            paidAmount: paidAmount == null ? 0 : Math.max(0, paidAmount),
+            // The amount entered when PIA is first marked belongs to that game/week only.
+            // Persist the PIA entitlement/date, but never carry that collected amount into a later roster.
+            paidAmount: 0,
             paymentMethod: normalizeCollectionPaymentMethod(value.paymentMethod, 'E-Transfer'),
             piaDate
         };
@@ -4563,11 +4564,12 @@ function rememberPersistentPiaPayment(player = {}, referenceDate = getCurrentETT
         return false;
     }
 
-    const paidAmount = toNumericOrNull(player.paidAmount);
     persistentPiaPayments[key] = {
         paymentStatus: 'pia',
         paid: true,
-        paidAmount: paidAmount == null ? 0 : Math.max(0, paidAmount),
+        // Keep PIA active through its expiry date, but do not carry the original payment
+        // amount forward when this player is restored/added to a later roster.
+        paidAmount: 0,
         paymentMethod: normalizeCollectionPaymentMethod(player.paymentMethod, 'E-Transfer'),
         piaDate
     };
