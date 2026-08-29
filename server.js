@@ -1505,7 +1505,9 @@ function canSafelyRunWeeklyReset(etTime = getCurrentETTime(), resetAt = resetWee
         };
     }
 
-    const configuredResetParts = parseDatetimeLocalToETDate(resetWeekAt);
+    const configuredResetParts = isManualScheduleMode()
+        ? getEffectiveManualResetTargetParts(etTime)
+        : parseDatetimeLocalToETDate(resetWeekAt);
     if (configuredResetParts && !isEtTimeOnOrAfterParts(etTime, configuredResetParts)) {
         return {
             ok: false,
@@ -1614,6 +1616,40 @@ function addMinutesToEtParts(parts, minutesToAdd = 0) {
     };
 }
 
+function getEffectiveManualResetTargetParts(etDate = getCurrentETTime()) {
+    const storedParts = parseDatetimeLocalToETDate(resetWeekAt);
+    if (!isManualScheduleMode() || !resetWeekSchedule || !resetWeekSchedule.enabled || !resetWeekSchedule.at) {
+        return storedParts;
+    }
+
+    const nowKey = nowETMinuteKey(etDate);
+    const storedKey = etPartsToMinuteKey(storedParts);
+    if (storedParts && Number.isFinite(storedKey) && storedKey >= nowKey) {
+        return storedParts;
+    }
+
+    // A stale persisted reset date must not cause an old weekly occurrence to
+    // fire against the new game cycle. Anchor the reset to the roster-release
+    // occurrence that belongs to the current/upcoming cycle.
+    if (rosterReleaseSchedule && rosterReleaseSchedule.enabled && rosterReleaseSchedule.at) {
+        const minutesAfterRelease = getForwardMinutesBetweenWeeklyPoints(rosterReleaseSchedule.at, resetWeekSchedule.at);
+        if (Number.isFinite(minutesAfterRelease) && minutesAfterRelease > 0) {
+            const latestRelease = getLatestOccurrenceEtParts(rosterReleaseSchedule.at, etDate);
+            const latestCandidate = latestRelease ? addMinutesToEtParts(latestRelease, minutesAfterRelease) : null;
+            const latestCandidateKey = etPartsToMinuteKey(latestCandidate);
+            if (latestCandidate && Number.isFinite(latestCandidateKey) && latestCandidateKey >= nowKey) {
+                return latestCandidate;
+            }
+
+            const nextRelease = getCurrentOrNextOccurrenceEtParts(rosterReleaseSchedule.at, etDate);
+            const nextCandidate = nextRelease ? addMinutesToEtParts(nextRelease, minutesAfterRelease) : null;
+            if (nextCandidate) return nextCandidate;
+        }
+    }
+
+    return getCurrentOrNextOccurrenceEtParts(resetWeekSchedule.at, etDate);
+}
+
 function getDynamicScheduleDatetimeLocalValues(etDate = getCurrentETTime()) {
     const values = {
         signupLockStartAt,
@@ -1641,11 +1677,11 @@ function getDynamicScheduleDatetimeLocalValues(etDate = getCurrentETTime()) {
     }
 
     if (resetWeekSchedule && resetWeekSchedule.enabled && resetWeekSchedule.at) {
-        // Keep showing the exact persisted reset target until a reset actually
-        // completes. Previously the admin UI immediately rolled the displayed
-        // date to the following week as soon as the scheduled minute passed,
-        // even if the reset never ran.
-        values.resetWeekAt = resetWeekAt || etPartsToDatetimeLocal(getCurrentOrNextOccurrenceEtParts(resetWeekSchedule.at, etDate));
+        // Repair stale manual reset targets by tying them to the roster-release
+        // cycle. This keeps Friday from remaining on an old date (for example
+        // 08/15) and prevents that stale date from triggering against a newer roster.
+        const effectiveResetParts = getEffectiveManualResetTargetParts(etDate);
+        values.resetWeekAt = etPartsToDatetimeLocal(effectiveResetParts) || resetWeekAt;
     }
 
     return values;
@@ -2194,7 +2230,7 @@ async function checkWeeklyReset() {
     // reset target. Manual Friday/Sunday schedules therefore keep the same
     // exact date on screen until the reset really happens.
     if (isManualScheduleMode()) {
-        const completedResetParts = parseDatetimeLocalToETDate(resetWeekAt);
+        const completedResetParts = getEffectiveManualResetTargetParts(etTime);
         if (completedResetParts) {
             resetWeekAt = etPartsToDatetimeLocal(addMinutesToEtParts(completedResetParts, 7 * 24 * 60));
         } else {
