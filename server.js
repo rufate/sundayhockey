@@ -859,6 +859,24 @@ function compareRosterTeamDisplayOrder(a = {}, b = {}) {
     return comparePlayersByFirstName(a, b);
 }
 
+// Released public roster: alphabetize by the name the player actually sees.
+// If an admin nickname exists it replaces the signup name, so use that nickname
+// as the alphabetical sort key. Goalies remain grouped first as before.
+function compareReleasedRosterTeamDisplayOrder(a = {}, b = {}) {
+    const aGoalie = !!a.isGoalie;
+    const bGoalie = !!b.isGoalie;
+    if (aGoalie && !bGoalie) return -1;
+    if (!aGoalie && bGoalie) return 1;
+
+    const releasedNameKey = (player = {}) => {
+        const first = getReleasedRosterFirstName(player);
+        const last = normalizeNickname(player.nickname) ? '' : String(player.lastName || '').trim();
+        return `${first} ${last}`.trim().toLowerCase();
+    };
+
+    return releasedNameKey(a).localeCompare(releasedNameKey(b));
+}
+
 function applyProtectedPlayerFlags(player = {}) {
     if (!player || typeof player !== 'object') return player;
     if (isLegacyPhanLyPlayer(player)) {
@@ -5880,7 +5898,7 @@ function isLateCancelledPlayer(player = {}) {
 }
 
 function buildPublicRosterPayload() {
-    const sortPlayers = compareRosterTeamDisplayOrder;
+    const sortPlayers = compareReleasedRosterTeamDisplayOrder;
 
     const cancellationTiming = getCancellationTimingStatus();
     const cancellationAllowedNow = !cancellationTiming.isLateCancelWindow;
