@@ -6485,6 +6485,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 <button class="control-btn" onclick="copySignupNamesAndPhones()" style="background:#4a90e2;">Copy Names + Phones</button>
 <button class="control-btn" onclick="copySignupIphoneNumbers()" style="background:#111827;">iPhone: Copy for Messages</button>
 <button class="control-btn" onclick="openSignupSmsDraft()" style="background:#8e44ad;">Android: Open Text</button>
+<button class="control-btn" onclick="openUnpaidPaymentReminderSmsDraft()" style="background:#c47f00;">Payment Reminder: Text Unpaid</button>
 <button class="control-btn" onclick="downloadSignupContactsCsv()" style="background:#546e7a;">Download CSV</button>
 </div>
 <textarea class="roster-text-export-preview" id="rosterTextExportPreview" placeholder="Signup contact export appears here after players sign up." readonly=""></textarea>
@@ -9000,6 +9001,33 @@ Cancellation cutoff: ${cancellationCutoffHours} hour${cancellationCutoffHours ==
             const portalLink = window.location.origin;
             const smsBody = `You're on game day roster. If you need to bail please do so before cancel window closes. Roster updates in real time for last-minute changes. Check again at rink.\n${portalLink}`;
             window.location.href = `sms:${registeredPhonesOnly}?body=${encodeURIComponent(smsBody)}`;
+        }
+
+        function isPlayerUnpaidForReminder(player) {
+            const paymentStatus = String(player?.paymentStatus || '').trim().toLowerCase();
+            if (paymentStatus === 'pia' || paymentStatus === 'paid_in_advance' || paymentStatus === 'paid') return false;
+            if (paymentStatus === 'owes' || paymentStatus === 'unpaid') return true;
+
+            const paidAmount = Number(player?.paidAmount);
+            if (Number.isFinite(paidAmount) && paidAmount > 0) return false;
+            return player?.paid !== true;
+        }
+
+        function openUnpaidPaymentReminderSmsDraft() {
+            const data = buildSignupMassTextExport();
+            const waitlistIds = new Set((adminWaitlist || []).map(player => String(player.id)));
+            const unpaidRegisteredContacts = (data.contacts || []).filter(player =>
+                !waitlistIds.has(String(player.id)) && isPlayerUnpaidForReminder(player)
+            );
+            const unpaidRegisteredPhones = unpaidRegisteredContacts.map(player => player.phoneDigits).join(',');
+
+            if (!unpaidRegisteredPhones) {
+                alert('No eligible unpaid registered players found. Paid players, PIA players, waitlist players, protected players, and goalies are excluded automatically.');
+                return;
+            }
+
+            const smsBody = `🏒 Payment Reminder: Please ET $15. If already paid, disregard. Thanks!`;
+            window.location.href = `sms:${unpaidRegisteredPhones}?body=${encodeURIComponent(smsBody)}`;
         }
 
         function downloadSignupContactsCsv() {
