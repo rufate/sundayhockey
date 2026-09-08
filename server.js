@@ -688,6 +688,15 @@ let currentWeekData = {
     darkTeam: []
 };
 
+// Once a roster is released, keep that week's venue fixed even if the admin
+// selects a different arena for the following week.
+function getCurrentRosterGameLocation() {
+    if (getEffectiveRosterReleasedState() && currentWeekData && String(currentWeekData.gameLocation || '').trim()) {
+        return String(currentWeekData.gameLocation).trim();
+    }
+    return gameLocation;
+}
+
 function normalizeCancellationCutoffHours(value, fallback = 3) {
     if (value === undefined || value === null || value === '') return fallback;
     const parsed = Number(value);
@@ -2019,6 +2028,7 @@ async function autoReleaseRoster() {
             year: year,
             releaseDate: new Date().toISOString(),
             rosterReleaseTime: Date.now(),
+            gameLocation: gameLocation,
             whiteTeam: teams.whiteTeam,
             darkTeam: teams.darkTeam
         };
@@ -5644,7 +5654,7 @@ async function saveWeekHistory(year, weekNumber, whiteTeam, darkTeam) {
                 weekNumber,
                 year,
                 new Date(),
-                gameLocation,
+                (currentWeekData && String(currentWeekData.gameLocation || '').trim()) || gameLocation,
                 gameTime,
                 gameDate,
                 JSON.stringify(whiteTeamWithPayment),
@@ -6060,7 +6070,7 @@ app.get('/api/status', (req, res) => {
         isLockedWindow: lockStatus.isLockedWindow,
         manualOverride: lockStatus.manualOverride,
         manualOverrideState: lockStatus.manualOverrideState,
-        location: gameLocation,
+        location: getCurrentRosterGameLocation(),
         time: gameTime,
         date: gameDate,
         formattedDate: formatGameDate(gameDate),
@@ -6126,7 +6136,7 @@ app.get('/api/waitlist', (req, res) => {
     res.json({
         waitlist: waitlistNames,
         totalWaitlist: waitlist.length,
-        location: gameLocation,
+        location: getCurrentRosterGameLocation(),
         time: gameTime,
         date: gameDate,
         formattedDate: formatGameDate(gameDate),
@@ -6157,7 +6167,7 @@ app.get('/api/roster', (req, res) => {
         cancellationPolicy: NO_SHOW_POLICY_TEXT,
         cancellationAllowedNow: !getCancellationTimingStatus().isLateCancelWindow,
         hoursUntilGame: getCancellationTimingStatus().hoursUntilGame,
-        location: gameLocation,
+        location: getCurrentRosterGameLocation(),
         time: gameTime,
         date: gameDate,
         formattedDate: formatGameDate(gameDate),
@@ -6948,6 +6958,11 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
                 }
             }
             if (selectedArena) {
+                // If this week's roster is already out, capture its current venue
+                // before changing the admin selection for the following week.
+                if (getEffectiveRosterReleasedState() && currentWeekData && !String(currentWeekData.gameLocation || '').trim()) {
+                    currentWeekData.gameLocation = gameLocation;
+                }
                 gameLocation = String(selectedArena || '').trim();
                 if (gameLocation && !arenaOptions.some(a => a.toLowerCase() === gameLocation.toLowerCase())) {
                     arenaOptions = normalizeArenaOptions([...arenaOptions, gameLocation]);
@@ -7938,7 +7953,12 @@ app.post('/api/admin/update-details', async (req, res) => {
     if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
     try {
         await runProtectedMutation('update-details', req, async () => {
-            if (location && location.trim().length > 0) gameLocation = location.trim();
+            if (location && location.trim().length > 0) {
+                if (getEffectiveRosterReleasedState() && currentWeekData && !String(currentWeekData.gameLocation || '').trim()) {
+                    currentWeekData.gameLocation = gameLocation;
+                }
+                gameLocation = location.trim();
+            }
             if (time && time.trim().length > 0) gameTime = time.trim();
             if (date && date.trim().length > 0) gameDate = date.trim();
         }, { location, time, date });
@@ -8957,7 +8977,7 @@ app.post('/api/admin/release-roster', async (req, res) => {
             syncScheduledActionRunMarker(rosterReleaseSchedule.at, 'release', etTime);
             announcementEnabled = true;
             announcementText = getRosterReleaseAnnouncementText();
-            currentWeekData = { weekNumber: week, year, releaseDate: new Date().toISOString(), rosterReleaseTime: Date.now(), whiteTeam: teams.whiteTeam, darkTeam: teams.darkTeam };
+            currentWeekData = { weekNumber: week, year, releaseDate: new Date().toISOString(), rosterReleaseTime: Date.now(), gameLocation: gameLocation, whiteTeam: teams.whiteTeam, darkTeam: teams.darkTeam };
         }, { week, year });
         await saveWeekHistory(year, week, teams.whiteTeam, teams.darkTeam);
         res.json({ success: true, message: "Roster released successfully. Reset arm is now ON.", whiteTeam: teams.whiteTeam, darkTeam: teams.darkTeam, whiteRating: teams.whiteRating.toFixed(1), darkRating: teams.darkRating.toFixed(1), signupLocked: requirePlayerCode, rosterReleased: true });
