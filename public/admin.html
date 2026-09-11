@@ -5977,6 +5977,15 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   cursor: pointer !important;
   pointer-events: auto !important;
 }
+
+<style>
+@media (max-width: 700px) {
+  #registeredBroadcastPreset { width: 100%; }
+  #registeredBroadcastPreset + #registeredBroadcastMessage { width: 100%; }
+  #registeredBroadcastPreset { grid-column: 1 / -1; }
+  #registeredBroadcastMessage { grid-column: 1 / -1; }
+}
+</style>
 </style>
 </head>
 <body class="admin-layout-option-1">
@@ -6481,14 +6490,26 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 <h4>📱 Mass Text Signup Players</h4>
 <p>Use this anytime to text the current signup list. Android can open a group text directly. iPhone users should copy the numbers, open Messages, tap To, then paste. Protected players and all goalies are automatically excluded.</p>
 <div class="roster-text-export-actions">
-<button class="control-btn" onclick="copySignupPhonesOnly()" style="background:#2e7d32;">Copy Phone Numbers</button>
-<button class="control-btn" onclick="copySignupNamesAndPhones()" style="background:#4a90e2;">Copy Names + Phones</button>
 <button class="control-btn" onclick="copySignupIphoneNumbers()" style="background:#111827;">iPhone: Copy for Messages</button>
-<button class="control-btn" onclick="openSignupSmsDraft()" style="background:#8e44ad;">Android: Open Text</button>
+<button class="control-btn" onclick="showAndroidTextComposer()" style="background:#8e44ad;">Android: Open Text</button>
 <button class="control-btn" onclick="openUnpaidPaymentReminderSmsDraft()" style="background:#c47f00;">Payment Reminder: Text Unpaid</button>
-<button class="control-btn" onclick="downloadSignupContactsCsv()" style="background:#546e7a;">Download CSV</button>
+</div>
+<div id="androidTextComposer" style="display:none; margin-top:10px; padding:12px; border:1px solid rgba(255,255,255,.18); border-radius:8px; background:rgba(0,0,0,.18);">
+<label for="androidTextPreset" style="display:block; font-weight:700; margin-bottom:6px;">Predefined Message</label>
+<select id="androidTextPreset" onchange="loadAndroidTextPreset()" aria-label="Android predefined text" style="width:100%; min-height:40px; padding:7px 9px; border-radius:6px; margin-bottom:8px;">
+<option value="gameDayRoster">Game Day Roster</option>
+<option value="gameReminder">Cancel Reminder</option>
+<option value="checkRoster">Roster Locked In</option>
+</select>
+<label for="androidTextMessage" style="display:block; font-weight:700; margin-bottom:6px;">Message</label>
+<textarea id="androidTextMessage" rows="5" style="width:100%; box-sizing:border-box; padding:9px; border-radius:6px; resize:vertical;" aria-label="Editable Android mass text message"></textarea>
+<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+<button class="control-btn" onclick="openSignupSmsDraft()" style="background:#8e44ad;">Open Group Text</button>
+<button class="control-btn" onclick="hideAndroidTextComposer()" style="background:#555;">Cancel</button>
+</div>
 </div>
 <textarea class="roster-text-export-preview" id="rosterTextExportPreview" placeholder="Signup contact export appears here after players sign up." readonly=""></textarea>
+
 </div>
 </div>
 
@@ -8955,6 +8976,7 @@ Cancellation cutoff: ${cancellationCutoffHours} hour${cancellationCutoffHours ==
             return { total: contacts.length, contacts, phoneOnly, namePhoneLines, csv };
         }
 
+
         function refreshMassTextPreview() {
             const preview = document.getElementById('rosterTextExportPreview');
             if (!preview) return;
@@ -8983,23 +9005,69 @@ Cancellation cutoff: ${cancellationCutoffHours} hour${cancellationCutoffHours ==
             await copyTextToClipboard(data.phoneOnly, `Copied ${data.total || 0} numbers. On iPhone, open Messages, start a new message, tap To, then paste.`);
         }
 
+        function getAndroidTextPresets() {
+            const portalLink = window.location.origin;
+            return {
+                gameDayRoster: `You're on game day roster. Emergency cancellation stays open 3hrs upon roster release. Roster updates in real time for last-minute changes. Check again at rink.\n${portalLink}`,
+                gameReminder: `You're on game day roster. Cancel if you must and not last minute. Be considerate to waitlisted players.\n${portalLink}`,
+                checkRoster: `Roster is locked and loaded. Let's GO!\n${portalLink}`
+            };
+        }
+
+        function loadAndroidTextPreset() {
+            const presetSelect = document.getElementById('androidTextPreset');
+            const messageBox = document.getElementById('androidTextMessage');
+            if (!messageBox) return;
+            const presetKey = presetSelect?.value || 'gameDayRoster';
+            messageBox.value = getAndroidTextPresets()[presetKey] || getAndroidTextPresets().gameDayRoster;
+        }
+
+        function showAndroidTextComposer() {
+            const composer = document.getElementById('androidTextComposer');
+            if (!composer) return;
+            composer.style.display = 'block';
+            loadAndroidTextPreset();
+            setTimeout(() => document.getElementById('androidTextMessage')?.focus(), 0);
+        }
+
+        function hideAndroidTextComposer() {
+            const composer = document.getElementById('androidTextComposer');
+            if (composer) composer.style.display = 'none';
+        }
+
         async function openSignupSmsDraft() {
-            const data = buildSignupMassTextExport();
-
-            // Android game-day roster text must go only to registered players.
-            // adminPlayersById also contains waitlist players, so explicitly remove
-            // anyone whose ID is currently present in adminWaitlist.
+            // Android mass text: registered players + goalies only.
+            // Excludes waitlist and Phan Ly. Protected players are included.
             const waitlistIds = new Set((adminWaitlist || []).map(player => String(player.id)));
-            const registeredContacts = (data.contacts || []).filter(player => !waitlistIds.has(String(player.id)));
-            const registeredPhonesOnly = registeredContacts.map(player => player.phoneDigits).join(',');
+            const seenPhones = new Set();
+            const registeredContacts = Object.values(adminPlayersById || {})
+                .map(player => ({
+                    ...player,
+                    phoneDigits: normalizePhoneDigitsClient(player.phone)
+                }))
+                .filter(player => {
+                    if (waitlistIds.has(String(player.id))) return false;
+                    if (isLegacyPhanLyPlayerAdmin(player)) return false;
+                    if (!player.phoneDigits || player.phoneDigits.length !== 10) return false;
+                    if (seenPhones.has(player.phoneDigits)) return false;
+                    seenPhones.add(player.phoneDigits);
+                    return true;
+                });
 
+            const registeredPhonesOnly = registeredContacts.map(player => player.phoneDigits).join(',');
             if (!registeredPhonesOnly) {
-                alert('No eligible registered player phone numbers available. Waitlist players, protected players, and goalies are excluded automatically.');
+                alert('No registered player or goalie phone numbers are available.');
                 return;
             }
 
-            const portalLink = window.location.origin;
-            const smsBody = `You're on game day roster. If you need to bail please do so before cancel window closes. Roster updates in real time for last-minute changes. Check again at rink.\n${portalLink}`;
+            const messageBox = document.getElementById('androidTextMessage');
+            const smsBody = String(messageBox?.value || '').trim();
+            if (!smsBody) {
+                alert('Enter a message before opening the group text.');
+                messageBox?.focus();
+                return;
+            }
+
             window.location.href = `sms:${registeredPhonesOnly}?body=${encodeURIComponent(smsBody)}`;
         }
 
@@ -9052,6 +9120,9 @@ Cancellation cutoff: ${cancellationCutoffHours} hour${cancellationCutoffHours ==
             const box = document.getElementById('rosterTextExportBox');
             if (box) box.style.display = 'block';
             refreshMassTextPreview();
+            const broadcastMessage = document.getElementById('registeredBroadcastMessage');
+            if (broadcastMessage && !broadcastMessage.value) applyRegisteredBroadcastPreset();
+            refreshRegisteredBroadcastCount();
             return null;
         }
 
@@ -9135,7 +9206,7 @@ ${portalLink}
             const rosterLink = `${window.location.origin}/roster`;
 
             const smsBody = `
-${firstName}, you’re in for ${gameLabel}.
+Hi ${firstName}, you’re in for ${gameLabel}.
 
 Check updated roster here:
 ${rosterLink}
