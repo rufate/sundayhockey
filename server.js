@@ -6110,6 +6110,7 @@ app.get('/api/status', (req, res) => {
         signupLockEndAt: dynamicScheduleDates.signupLockEndAt,
         rosterReleaseAtLocal: dynamicScheduleDates.rosterReleaseAt,
         resetWeekAt: dynamicScheduleDates.resetWeekAt,
+        resetWeekAtIso: etPartsToIso(parseDatetimeLocalToETDate(dynamicScheduleDates.resetWeekAt)),
         scheduleMode,
         cancellationCutoffHours,
         cancellationDeadlineLine: NO_SHOW_POLICY_TEXT,

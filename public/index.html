@@ -2964,6 +2964,7 @@
         let currentAnnouncementEnabled = false;
         let rosterCountdownTimer = null;
         let currentRosterReleaseAt = null;
+        let currentResetWeekAt = null;
         let currentGameDateValue = '';
         let previousVenueWaitlistIds = [];
         let seenPromotedRosterIds = {};
@@ -3969,32 +3970,38 @@ function updateCalculatedRating() {
             const countdownValue = document.getElementById('rosterCountdownValue');
             const countdownLabel = document.getElementById('rosterCountdownLabel');
             const placeholder = document.getElementById('rosterCountdownPlaceholder');
+            const headline = document.getElementById('rosterNoticeHeadline');
 
-            if (!currentRosterReleaseAt || rosterReleased) {
-                stopRosterCountdown();
-                countdownWrap.style.display = 'none';
-                placeholder.style.display = rosterReleased ? 'none' : 'block';
-                placeholder.textContent = rosterReleased
-                    ? ''
-                    : 'Countdown will appear once a roster release time is scheduled.';
-                return;
-            }
+            const targetIso = rosterReleased ? currentResetWeekAt : currentRosterReleaseAt;
+            const targetName = rosterReleased ? 'portal reset' : 'roster release';
 
-            const releaseMs = Date.parse(currentRosterReleaseAt);
-            if (!Number.isFinite(releaseMs)) {
+            if (headline) headline.innerText = rosterReleased ? 'PORTAL RESETS IN' : 'ROSTER RELEASE IN';
+
+            if (!targetIso) {
                 stopRosterCountdown();
                 countdownWrap.style.display = 'none';
                 placeholder.style.display = 'block';
-                placeholder.textContent = 'Countdown will appear once a roster release time is scheduled.';
+                placeholder.textContent = `Countdown will appear once a ${targetName} time is scheduled.`;
+                return;
+            }
+
+            const targetMs = Date.parse(targetIso);
+            if (!Number.isFinite(targetMs)) {
+                stopRosterCountdown();
+                countdownWrap.style.display = 'none';
+                placeholder.style.display = 'block';
+                placeholder.textContent = `Countdown will appear once a ${targetName} time is scheduled.`;
                 return;
             }
 
             const tick = () => {
-                const remaining = releaseMs - Date.now();
+                const remaining = targetMs - Date.now();
                 if (remaining <= 0) {
                     countdownWrap.style.display = 'none';
                     placeholder.style.display = 'block';
-                    placeholder.textContent = 'Roster release time has arrived. Refresh if teams are not shown yet.';
+                    placeholder.textContent = rosterReleased
+                        ? 'Portal reset time has arrived. Refresh if the new week is not shown yet.'
+                        : 'Roster release time has arrived. Refresh if teams are not shown yet.';
                     stopRosterCountdown();
                     return;
                 }
@@ -4244,6 +4251,7 @@ function updateCalculatedRating() {
                 isFull = data.isFull;
                 rosterReleased = data.rosterReleased;
                 currentRosterReleaseAt = data.rosterReleaseAt || null;
+                currentResetWeekAt = data.resetWeekAtIso || null;
                 const isLockedWindow = data.isLockedWindow;
                 
                 currentPlayers = data.players || [];
@@ -4252,10 +4260,11 @@ function updateCalculatedRating() {
                 document.getElementById('gameTime').innerText = '';
                 const cleanTime = currentTime.replace(/^[A-Za-z]+\s*/, '');
         document.getElementById('gameDate').innerText = currentDate + ' • ' + cleanTime;
-                document.getElementById('rosterNoticeHeadline').innerText = 'ROSTER RELEASE IN';
                 document.getElementById('countdownVenue').innerText = currentLocation || '';
+                const countdownTargetIso = rosterReleased ? currentResetWeekAt : currentRosterReleaseAt;
+                const countdownTargetFallback = rosterReleased ? 'Portal reset time to be announced' : 'Roster release time to be announced';
                 document.getElementById('rosterMeta').innerText =
-                    data.rosterReleaseAt
+                    countdownTargetIso
                         ? new Intl.DateTimeFormat('en-US', {
                             timeZone: PORTAL_TIMEZONE,
                             weekday: 'long',
@@ -4264,8 +4273,8 @@ function updateCalculatedRating() {
                             hour: 'numeric',
                             minute: '2-digit',
                             hour12: true
-                        }).format(new Date(data.rosterReleaseAt)).replace(' at ', ' • ') + ' ET'
-                        : 'Roster release time to be announced';
+                        }).format(new Date(countdownTargetIso)).replace(' at ', ' • ') + ' ET'
+                        : countdownTargetFallback;
                 renderRosterCountdown();
                 
                 if (rosterReleased) {
@@ -4330,6 +4339,23 @@ function updateCalculatedRating() {
                 } else {
                     document.getElementById('codeEntryBox').style.display = 'none';
                     document.getElementById('signupForm').style.display = 'block';
+                }
+
+                // Once the roster is released, the public signup/waitlist controls
+                // are no longer needed. Keep the released roster/countdown area visible,
+                // but hide every control that can start or refill a registration.
+                if (data.rosterReleased) {
+                    const postReleaseHideIds = [
+                        'waitlistMode',
+                        'codeSection',
+                        'quickReturnSection',
+                        'signupRulesReviewBanner',
+                        'signupForm'
+                    ];
+                    postReleaseHideIds.forEach((id) => {
+                        const el = document.getElementById(id);
+                        if (el) el.style.display = 'none';
+                    });
                 }
                 
             } catch (e) {
