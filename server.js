@@ -1637,6 +1637,33 @@ function getEffectiveManualResetTargetParts(etDate = getCurrentETTime()) {
         return storedParts;
     }
 
+    // IMPORTANT: keep a just-missed manual reset target authoritative during the
+    // scheduler catch-up window. Render/free-tier instances can sleep through the
+    // exact reset minute. Previously this function immediately advanced a past
+    // Sunday target to the following week; canSafelyRunWeeklyReset() then saw that
+    // future date and blocked the otherwise-valid catch-up reset.
+    //
+    // Only preserve the old target when it is the SAME weekly reset slot and is
+    // still inside the configured catch-up window. Truly stale dates continue to
+    // use the cycle-repair logic below, preserving the existing Friday behaviour.
+    if (storedParts && Number.isFinite(storedKey) && storedKey < nowKey) {
+        const storedDow = new Date(Date.UTC(storedParts.year, storedParts.month - 1, storedParts.day)).getUTCDay();
+        const matchesWeeklySlot =
+            Number(storedDow) === Number(resetWeekSchedule.at.dow) &&
+            Number(storedParts.hour) === Number(resetWeekSchedule.at.hour) &&
+            Number(storedParts.minute) === Number(resetWeekSchedule.at.minute);
+        const storedLagMinutes = minutesSinceEtParts(storedParts, etDate);
+
+        if (
+            matchesWeeklySlot &&
+            Number.isFinite(storedLagMinutes) &&
+            storedLagMinutes >= 0 &&
+            storedLagMinutes <= getWeeklyResetCatchupMinutes()
+        ) {
+            return storedParts;
+        }
+    }
+
     // A stale persisted reset date must not cause an old weekly occurrence to
     // fire against the new game cycle. Anchor the reset to the roster-release
     // occurrence that belongs to the current/upcoming cycle.
@@ -2232,6 +2259,8 @@ async function checkWeeklyReset() {
     remainingSkaterSpots = skaterCapacity;
     players = [];
     waitlist = [];
+    // Recent Cancellations are weekly data; start each new week with a clean list.
+    cancelledRegistrations = [];
     rosterReleased = false;
     collectorPageEnabled = false;
     resetArmed = false;
