@@ -1156,9 +1156,9 @@ function getRosterReleaseAnnouncementText() {
 }
 
 function clearAnnouncementState() {
-    announcementEnabled = false;
-    announcementText = '';
-    announcementImages = [];
+    // Announcements are admin-controlled and persistent. Weekly/manual resets must
+    // not turn them off or erase the saved text/image. They remain visible until
+    // the admin explicitly turns Announcement off or clears it in Admin.
 }
 
 // --- BACKUP GOALIES FOR SUBSTITUTION ---
@@ -2047,8 +2047,8 @@ async function autoReleaseRoster() {
         collectorPageEnabled = true;
         resetArmed = true;
 
-        announcementEnabled = true;
-        announcementText = getRosterReleaseAnnouncementText();
+        // Preserve the admin-controlled announcement state/text. The automatic
+        // roster-release information is rendered separately on the player page.
 
         currentWeekData = {
             weekNumber: week,
@@ -9010,8 +9010,8 @@ app.post('/api/admin/release-roster', async (req, res) => {
             collectorPageEnabled = true;
             resetArmed = true;
             syncScheduledActionRunMarker(rosterReleaseSchedule.at, 'release', etTime);
-            announcementEnabled = true;
-            announcementText = getRosterReleaseAnnouncementText();
+            // Preserve the admin-controlled announcement state/text. The automatic
+            // roster-release information is rendered separately on the player page.
             currentWeekData = { weekNumber: week, year, releaseDate: new Date().toISOString(), rosterReleaseTime: Date.now(), gameLocation: gameLocation, whiteTeam: teams.whiteTeam, darkTeam: teams.darkTeam };
         }, { week, year });
         await saveWeekHistory(year, week, teams.whiteTeam, teams.darkTeam);

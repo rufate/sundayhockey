@@ -1107,6 +1107,24 @@
             line-height: 1.22;
         }
 
+        @keyframes announcementFlashRed {
+            0%, 49% { color: #d00000; opacity: 1; }
+            50%, 100% { color: #d00000; opacity: 0.2; }
+        }
+
+        .announcement-line.custom-announcement {
+            color: #d00000 !important;
+            font-weight: 800;
+            animation: announcementFlashRed 1s steps(1, end) infinite;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .announcement-line.custom-announcement {
+                animation: none;
+                opacity: 1;
+            }
+        }
+
         .announcement-copy span {
             color: #2f2410;
             font-size: clamp(0.95rem, 3.7vw, 1.02rem);
@@ -3795,19 +3813,13 @@ function updateCalculatedRating() {
             const image = (generalEnabled && images.length) ? String(images[0] || '').trim() : '';
             const hasGeneralAnnouncement = generalEnabled && (!!generalText || !!image);
 
-            // General announcements are intentionally independent of roster release.
-            // If enabled, they can be posted before, during, or after roster release.
-            // When no general announcement is enabled, the automatic roster-release
-            // payment/spots message still appears after the roster is released.
-            const isRosterAnnouncement = !hasGeneralAnnouncement && isRosterReleased;
-            const rawText = hasGeneralAnnouncement
-                ? generalText
-                : (isRosterAnnouncement ? (rosterText || defaultRosterText) : '');
-            const shouldShow = hasGeneralAnnouncement || (isRosterAnnouncement && !!rawText);
+            // After roster release, always keep the automatic roster information visible.
+            // If Announcement is enabled, the admin-entered message is added to it
+            // and rendered separately as flashing red text.
+            const isRosterAnnouncement = isRosterReleased;
+            const rosterRawText = isRosterAnnouncement ? (rosterText || defaultRosterText) : '';
+            const shouldShow = isRosterAnnouncement || hasGeneralAnnouncement;
 
-            // The predefined cancellation notice belongs only to the automatic
-            // roster-release announcement. A manually enabled announcement shows
-            // only the text/image entered in the Announcement control.
             if (rosterNoticeEl) {
                 const cutoff = Number(data.cancellationCutoffHours);
                 if (Number.isFinite(cutoff)) {
@@ -3840,10 +3852,14 @@ function updateCalculatedRating() {
             const spotsClass = hasSpots ? 'available' : 'full';
             const spotsToken = '%%ANNOUNCEMENT_SPOTS_TOKEN%%';
 
-            let text = rawText
+            let rosterDisplayText = rosterRawText
                 .replace(/\r?\n/g, '\n')
                 .replace(/\n{2,}/g, '\n')
                 .trim();
+            let customDisplayText = generalEnabled ? generalText
+                .replace(/\r?\n/g, '\n')
+                .replace(/\n{2,}/g, '\n')
+                .trim() : '';
 
             // Roster-release announcement rule:
             // - Always show the dynamic spot count as "0 spots" when full.
@@ -3852,22 +3868,25 @@ function updateCalculatedRating() {
                 ? "'Join Game', recheck roster, see you at the rink."
                 : "'Join Waitlist', 1st on waitlist is guaranteed a spot if a player(s) cancels. Regular player(s) takes precedence over non-Regular player(s).";
 
-            const hadJoinMessagePlaceholder = text.includes('{joinMessage}');
-            text = text.split('{joinMessage}').join(joinMessage);
+            const hadJoinMessagePlaceholder = rosterDisplayText.includes('{joinMessage}');
+            rosterDisplayText = rosterDisplayText.split('{joinMessage}').join(joinMessage);
 
             if (isRosterAnnouncement && !hadJoinMessagePlaceholder) {
-                if (/You\s+can\s+still\s+['’‘"]?Join Game['’‘"]?/i.test(text)) {
-                    text = text
+                if (/You\s+can\s+still\s+['’‘"]?Join Game['’‘"]?/i.test(rosterDisplayText)) {
+                    rosterDisplayText = rosterDisplayText
                         .split('\n')
                         .map(line => /You\s+can\s+still\s+['’‘"]?Join Game['’‘"]?/i.test(line) ? joinMessage : line)
                         .join('\n')
                         .trim();
                 } else {
-                    text = `${text}\n${joinMessage}`.trim();
+                    rosterDisplayText = `${rosterDisplayText}\n${joinMessage}`.trim();
                 }
             }
 
-            text = text.split('{spots}').join(spotsToken);
+            rosterDisplayText = rosterDisplayText.split('{spots}').join(spotsToken);
+            customDisplayText = customDisplayText
+                .split('{spots}').join(spotsToken)
+                .split('{joinMessage}').join(joinMessage);
             const wrapEmails = (safeLine) => safeLine.replace(
                 /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
                 (email) => `<span class="announcement-copy-email" data-copy-email="${email}" role="button" tabindex="0" title="Copy email">${email}</span>`
@@ -3882,18 +3901,21 @@ function updateCalculatedRating() {
                 }
             );
 
-            const html = text
+            const renderLines = (value, extraClass = '') => value
                 .split('\n')
+                .filter((line) => line.length > 0)
                 .map((line) => {
                     let safeLine = wrapUrls(wrapEmails(escapeHtml(line)));
                     safeLine = safeLine
                         .split(spotsToken)
                         .join(`<span class="announcement-spots ${spotsClass}">${escapeHtml(spotsText)}</span>`);
-                    return `<div class="announcement-line">${safeLine || '&nbsp;'}</div>`;
+                    return `<div class="announcement-line${extraClass ? ` ${extraClass}` : ''}">${safeLine || '&nbsp;'}</div>`;
                 })
                 .join('');
 
-            textEl.innerHTML = html || 'Attention';
+            const rosterHtml = rosterDisplayText ? renderLines(rosterDisplayText) : '';
+            const customHtml = customDisplayText ? renderLines(customDisplayText, 'custom-announcement') : '';
+            textEl.innerHTML = `${rosterHtml}${customHtml}` || 'Attention';
 
             const handleEmailCopy = (event) => {
                 const target = event.target && event.target.closest
