@@ -9007,8 +9007,11 @@ Cancellation cutoff: ${cancellationCutoffHours} hour${cancellationCutoffHours ==
 
         function getAndroidTextPresets() {
             const portalLink = window.location.origin;
+            const cutoff = Number(document.getElementById('cancellationCutoffHoursInput')?.value ?? 3);
+            const cutoffText = Number.isInteger(cutoff) ? String(cutoff) : String(cutoff).replace(/\.0+$/, '');
+            const hourWord = cutoff === 1 ? 'hr' : 'hrs';
             return {
-                gameDayRoster: `You're on game day roster. Emergency cancellation closes 3hrs before game. Roster updates in real time for last-minute changes. Check again at rink.\n${portalLink}`,
+                gameDayRoster: `You're on game day roster. Emergency cancellation closes ${cutoffText}${hourWord} before game. Roster updates in real time for last-minute changes. Check again at rink.\n${portalLink}`,
                 gameReminder: `If you need to cancel, please do so. Not last minute. Be considerate to those on waitlist. Thx!\n${portalLink}`,
                 checkRoster: `Cancel window is closed. Roster is locked and loaded. Let's GO!\n${portalLink}`
             };

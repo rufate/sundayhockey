@@ -2540,7 +2540,7 @@
     <div class="announcement-bulletin" id="announcementBulletin">
         <img id="announcementThumb" class="announcement-thumb" alt="Announcement">
         <div class="announcement-copy">
-            <strong id="rosterCancellationNotice">Attention: Last-minute cancellations must be made within 3 hours prior to game time. 'Cancel' button will not be available thereafter. Please do not message me to cancel. No show owes.</strong>
+            <strong id="rosterCancellationNotice">Attention: Last-minute cancellations are subject to the cancellation cutoff set in Game Setup. 'Cancel' button will not be available thereafter. Please do not message me to cancel. No show owes.</strong>
             <span id="announcementText">&nbsp;</span>
         </div>
     </div>
@@ -3809,6 +3809,12 @@ function updateCalculatedRating() {
             // roster-release announcement. A manually enabled announcement shows
             // only the text/image entered in the Announcement control.
             if (rosterNoticeEl) {
+                const cutoff = Number(data.cancellationCutoffHours);
+                if (Number.isFinite(cutoff)) {
+                    const cutoffText = Number.isInteger(cutoff) ? String(cutoff) : String(cutoff).replace(/\.0+$/, '');
+                    const hourWord = cutoff === 1 ? 'hour' : 'hours';
+                    rosterNoticeEl.textContent = `Attention: Last-minute cancellations must be made at least ${cutoffText} ${hourWord} before game time. 'Cancel' button will not be available thereafter. Please do not message me to cancel. No show owes.`;
+                }
                 rosterNoticeEl.style.display = isRosterAnnouncement ? '' : 'none';
             }
 
@@ -4341,22 +4347,10 @@ function updateCalculatedRating() {
                     document.getElementById('signupForm').style.display = 'block';
                 }
 
-                // Once the roster is released, the public signup/waitlist controls
-                // are no longer needed. Keep the released roster/countdown area visible,
-                // but hide every control that can start or refill a registration.
-                if (data.rosterReleased) {
-                    const postReleaseHideIds = [
-                        'waitlistMode',
-                        'codeSection',
-                        'quickReturnSection',
-                        'signupRulesReviewBanner',
-                        'signupForm'
-                    ];
-                    postReleaseHideIds.forEach((id) => {
-                        const el = document.getElementById(id);
-                        if (el) el.style.display = 'none';
-                    });
-                }
+                // Keep signup available after roster release so players can still
+                // use Join Game (or Join Waitlist) when spots open up. The released
+                // roster remains visible while the normal signup controls continue
+                // to follow the current lock/availability state above.
                 
             } catch (e) {
                 console.error("Error fetching status", e);

@@ -1143,7 +1143,7 @@ function isLegacyAutoRosterAnnouncement(text = '') {
     if (!value) return true;
     return (
         /Please\s+E-?transfer/i.test(value) ||
-        /3-hour\s+cancel\s+window/i.test(value) ||
+        /\d+(?:\.\d+)?-hour\s+cancel\s+window/i.test(value) ||
         /Contact\s+Phan\s+to\s+join\s+if\s+spots\s+are\s+available/i.test(value) ||
         /You\s+can\s+['’‘"]?Join Game['’‘"]?\s+if\s+spots\s+are\s+available/i.test(value)
     );
@@ -1682,7 +1682,13 @@ function getDynamicScheduleDatetimeLocalValues(etDate = getCurrentETTime()) {
     }
 
     if (rosterReleaseSchedule && rosterReleaseSchedule.enabled && rosterReleaseSchedule.at) {
-        values.rosterReleaseAt = etPartsToDatetimeLocal(getCurrentOrNextOccurrenceEtParts(rosterReleaseSchedule.at, etDate));
+        // Manual schedules keep the exact saved release target visible until
+        // that release actually succeeds. Do not silently jump the display to
+        // next Sunday when the current Sunday's release was missed.
+        const storedReleaseParts = parseDatetimeLocalToETDate(rosterReleaseAt);
+        values.rosterReleaseAt = (isManualScheduleMode() && storedReleaseParts)
+            ? etPartsToDatetimeLocal(storedReleaseParts)
+            : etPartsToDatetimeLocal(getCurrentOrNextOccurrenceEtParts(rosterReleaseSchedule.at, etDate));
     }
 
     if (resetWeekSchedule && resetWeekSchedule.enabled && resetWeekSchedule.at) {
@@ -1999,13 +2005,34 @@ async function autoReleaseRoster() {
         return false;
     }
 
-    const releaseCheck = shouldRunScheduledAction(
-        rosterReleaseSchedule.at,
-        lastExactRosterReleaseRunAt,
-        etTime,
-        Number(process.env.ROSTER_RELEASE_CATCHUP_MINUTES || (31 * 60))
-    );
-    if (!releaseCheck.shouldRun) return false;
+    const releaseCatchupMinutes = Number(process.env.ROSTER_RELEASE_CATCHUP_MINUTES || (31 * 60));
+    let releaseCheck;
+
+    if (isManualScheduleMode() && configuredReleaseParts) {
+        // For an admin-saved manual schedule, the exact saved date/time is the
+        // authoritative release target. A stale weekly occurrence marker must
+        // not suppress this target. This also permits catch-up when Render was
+        // asleep at the exact minute.
+        const lagMinutes = minutesSinceEtParts(configuredReleaseParts, etTime);
+        if (!Number.isFinite(lagMinutes) || lagMinutes < 0 || lagMinutes > releaseCatchupMinutes) {
+            return false;
+        }
+        releaseCheck = {
+            shouldRun: true,
+            reason: lagMinutes === 0 ? 'exact_manual_target' : 'manual_target_catchup',
+            occurrenceKey: getOccurrenceKeyFromEtParts(rosterReleaseSchedule.at, configuredReleaseParts),
+            minuteKey: String(nowETMinuteKey(etTime)),
+            lagMinutes
+        };
+    } else {
+        releaseCheck = shouldRunScheduledAction(
+            rosterReleaseSchedule.at,
+            lastExactRosterReleaseRunAt,
+            etTime,
+            releaseCatchupMinutes
+        );
+        if (!releaseCheck.shouldRun) return false;
+    }
 
     lastExactRosterReleaseRunAt = releaseCheck.occurrenceKey;
     lastExactRosterReleaseMinuteKey = releaseCheck.minuteKey;
@@ -2048,6 +2075,13 @@ async function autoReleaseRoster() {
                 'INSERT INTO app_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
                 ['announcementText', announcementText]
             );
+        }
+
+        // Advance the manual target only after a successful release. This makes
+        // the admin date reflect what actually happened rather than merely what
+        // the recurring weekday calculation predicts.
+        if (isManualScheduleMode() && configuredReleaseParts) {
+            rosterReleaseAt = etPartsToDatetimeLocal(addMinutesToEtParts(configuredReleaseParts, 7 * 24 * 60));
         }
 
         await saveData();
