@@ -2036,20 +2036,37 @@ async function autoReleaseRoster() {
     let releaseCheck;
 
     if (isManualScheduleMode() && configuredReleaseParts) {
-        // For an admin-saved manual schedule, the exact saved date/time is the
-        // authoritative release target. A stale weekly occurrence marker must
-        // not suppress this target. This also permits catch-up when Render was
-        // asleep at the exact minute.
-        const lagMinutes = minutesSinceEtParts(configuredReleaseParts, etTime);
+        // The saved datetime is the FIRST allowed manual target, while the
+        // weekday/time schedule repeats every week. Previously, if one Friday
+        // release was missed by more than the catch-up window, the stale saved
+        // date remained authoritative forever and every later Friday was
+        // rejected. Use the latest weekly occurrence once the original anchor
+        // has been reached so the schedule can recover on following weeks.
+        const latestWeeklyParts = getLatestOccurrenceEtParts(rosterReleaseSchedule.at, etTime);
+        const configuredKey = etPartsToMinuteKey(configuredReleaseParts);
+        const latestWeeklyKey = etPartsToMinuteKey(latestWeeklyParts);
+        const targetParts = (
+            latestWeeklyParts &&
+            Number.isFinite(configuredKey) &&
+            Number.isFinite(latestWeeklyKey) &&
+            latestWeeklyKey >= configuredKey
+        ) ? latestWeeklyParts : configuredReleaseParts;
+
+        const lagMinutes = minutesSinceEtParts(targetParts, etTime);
         if (!Number.isFinite(lagMinutes) || lagMinutes < 0 || lagMinutes > releaseCatchupMinutes) {
             return false;
         }
+
+        const occurrenceKey = getOccurrenceKeyFromEtParts(rosterReleaseSchedule.at, targetParts);
+        if (lastExactRosterReleaseRunAt === occurrenceKey) return false;
+
         releaseCheck = {
             shouldRun: true,
-            reason: lagMinutes === 0 ? 'exact_manual_target' : 'manual_target_catchup',
-            occurrenceKey: getOccurrenceKeyFromEtParts(rosterReleaseSchedule.at, configuredReleaseParts),
+            reason: lagMinutes === 0 ? 'manual_weekly_target' : 'manual_weekly_catchup',
+            occurrenceKey,
             minuteKey: String(nowETMinuteKey(etTime)),
-            lagMinutes
+            lagMinutes,
+            targetParts
         };
     } else {
         releaseCheck = shouldRunScheduledAction(
@@ -2108,7 +2125,8 @@ async function autoReleaseRoster() {
         // the admin date reflect what actually happened rather than merely what
         // the recurring weekday calculation predicts.
         if (isManualScheduleMode() && configuredReleaseParts) {
-            rosterReleaseAt = etPartsToDatetimeLocal(addMinutesToEtParts(configuredReleaseParts, 7 * 24 * 60));
+            const releasedTargetParts = (releaseCheck && releaseCheck.targetParts) || configuredReleaseParts;
+            rosterReleaseAt = etPartsToDatetimeLocal(addMinutesToEtParts(releasedTargetParts, 7 * 24 * 60));
         }
 
         await saveData();
