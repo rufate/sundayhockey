@@ -8372,23 +8372,27 @@ app.post('/api/admin/swap-released-roster-waitlist', async (req, res) => {
         subbedInForName: outgoingName,
         subbedInAt: nowIso
     });
-    const returnedToWaitlist = hydratePlayerRatingProfile({
-        ...outgoing,
-        team: null,
-        joinedAt: nowIso,
-        bypassAutoPromote: false,
-        promotedFromWaitlist: false,
-        lateAddedAfterRelease: false,
-        subbedInForPlayerId: null,
-        subbedInForName: null,
-        subbedInAt: null
-    });
-
     try {
         await runProtectedMutation('swap-released-roster-waitlist', req, async () => {
-            // True one-for-one swap. Deliberately DO NOT call rebalanceReleasedRoster().
+            // Replace the released-roster player in-place with the selected waitlist player.
+            // The outgoing player is treated as cancelled/removed and is NOT returned to the waitlist.
+            // Deliberately DO NOT call rebalanceReleasedRoster().
             players.splice(rosterIndex, 1, replacement);
-            waitlist.splice(waitlistIndex, 1, returnedToWaitlist);
+            waitlist.splice(waitlistIndex, 1);
+            appendCancellationLog({
+                id: outgoing.id,
+                firstName: outgoing.firstName,
+                lastName: outgoing.lastName,
+                phone: outgoing.phone,
+                rating: outgoing.rating,
+                isGoalie: outgoing.isGoalie,
+                paymentMethod: outgoing.paymentMethod,
+                source: 'players',
+                action: 'cancelled',
+                cancelledBy: 'admin-swap',
+                cancelledAt: nowIso,
+                notes: `Replaced on released roster by ${incomingName}; not returned to waitlist.`
+            });
             syncCurrentWeekTeamsFromPlayers();
         }, {
             rosterPlayerId: outgoing.id,
@@ -8410,6 +8414,43 @@ app.post('/api/admin/swap-released-roster-waitlist', async (req, res) => {
         outgoing: { id: outgoing.id, firstName: outgoing.firstName, lastName: outgoing.lastName },
         incoming: { id: replacement.id, firstName: replacement.firstName, lastName: replacement.lastName }
     });
+});
+
+app.post('/api/admin/add-waitlist-to-released-roster-no-rebalance', async (req, res) => {
+    const { waitlistId, assignTeam } = req.body || {};
+    if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
+    if (!getEffectiveRosterReleasedState()) return res.status(409).json({ error: "Roster must be released before adding a waitlist player directly." });
+
+    const team = assignTeam === 'White' || assignTeam === 'Dark' ? assignTeam : null;
+    if (!team) return res.status(400).json({ error: "Choose Team White or Team Dark." });
+    const index = waitlist.findIndex(p => String(p.id) === String(waitlistId));
+    if (index === -1) return res.status(404).json({ error: "Player not found in waitlist." });
+
+    const player = waitlist[index];
+    if (player.isGoalie && !isGoalieSpotsAvailable()) {
+        return res.status(400).json({ error: "Goalie spots are full (maximum 2)." });
+    }
+    const nowIso = new Date().toISOString();
+    const newPlayer = buildPromotedRosterPlayer(player, team, {
+        promotedFromWaitlist: true,
+        lateAddedAfterRelease: true,
+        subbedInAt: nowIso
+    });
+
+    try {
+        await runProtectedMutation('add-waitlist-to-released-roster-no-rebalance', req, async () => {
+            // Direct add only. Deliberately DO NOT call rebalanceReleasedRoster().
+            waitlist.splice(index, 1);
+            players.push(newPlayer);
+            if (!player.isGoalie) remainingSkaterSpots = Math.max(0, remainingSkaterSpots - 1);
+            syncCurrentWeekTeamsFromPlayers();
+        }, { waitlistId, promotedPlayerId: newPlayer.id, assignTeam: team, rebalanced: false });
+    } catch (err) {
+        console.error('Error adding waitlist player to released roster without rebalance:', err);
+        return res.status(500).json({ error: "Failed to add waitlist player safely." });
+    }
+
+    return res.json({ success: true, player: newPlayer, team, rebalanced: false });
 });
 
 app.post('/api/admin/promote-waitlist', async (req, res) => {

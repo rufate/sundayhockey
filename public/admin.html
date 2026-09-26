@@ -6519,32 +6519,6 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 <div class="late-team-hint" id="lateRosterTeamHint">Suggested team: —</div>
 </div>
 
-<div class="waitlist-to-roster-panel" id="waitlistToRosterPanel">
-<h3>📋 Move Waitlist Player to Released Roster</h3>
-<p>Pick any player from the waitlist, choose Team White or Team Dark, then add them directly to the posted roster. They are removed from the waitlist automatically.</p>
-<div class="waitlist-to-roster-grid">
-<div>
-<label style="display:block; color:#d9ecff; font-weight:700; margin-bottom:6px;">Waitlist player</label>
-<select id="waitlistRosterSelect">
-<option value="">No waitlist players available</option>
-</select>
-</div>
-<div>
-<label style="display:block; color:#d9ecff; font-weight:700; margin-bottom:6px;">Team</label>
-<select id="waitlistRosterTeam">
-<option value="">Auto-suggest</option>
-<option value="White">Team White</option>
-<option value="Dark">Team Dark</option>
-</select>
-</div>
-</div>
-<div class="waitlist-to-roster-hint" id="waitlistRosterHint">Suggested team: —</div>
-<div class="waitlist-to-roster-actions">
-<button class="control-btn" onclick="applyWaitlistRosterSuggestedTeam()" style="background:#546e7a;">Use Suggested Team</button>
-<button class="control-btn" onclick="promoteSelectedWaitlistToRoster()" style="background:#2e7d32;">Add Selected Waitlist Player to Roster</button>
-</div>
-</div>
-
 <div class="waitlist-to-roster-panel" id="releasedRosterSwapPanel">
 <h3>🔄 Swap Released Roster Player with Waitlist</h3>
 <p>Replace one released-roster player with one waitlist player. The incoming player takes the outgoing player’s exact White/Dark team slot. No team rebalancing is performed.</p>
@@ -6561,6 +6535,17 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 <div class="waitlist-to-roster-hint" id="swapRosterHint">Skaters can swap with skaters; goalies can swap with goalies.</div>
 <div class="waitlist-to-roster-actions">
 <button class="control-btn" onclick="swapReleasedRosterWithWaitlist()" style="background:#c56a00;">Swap Players — No Rebalance</button>
+</div>
+<div style="margin-top:16px; padding-top:14px; border-top:1px solid rgba(255,255,255,.18);">
+<label style="display:block; color:#d9ecff; font-weight:700; margin-bottom:6px;">Add selected waitlist player directly to</label>
+<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+<select id="addWaitlistNoRebalanceTeam" style="min-width:180px; flex:1;">
+<option value="White">Team White</option>
+<option value="Dark">Team Dark</option>
+</select>
+<button class="control-btn" onclick="addWaitlistPlayerNoRebalance()" style="background:#218838;">Add to Roster — No Rebalance</button>
+</div>
+<div class="waitlist-to-roster-hint" style="margin-top:10px;">Uses the waitlist player selected above. The player is removed from the waitlist and added to the selected team. No other roster player is moved.</div>
 </div>
 </div>
 
@@ -9476,7 +9461,6 @@ ${rosterLink}
                 updateLatePlayerTeamUI();
                 latestAdminPlayers = Array.isArray(data.players) ? data.players : [];
                 renderTeamRebalanceControls();
-                renderWaitlistRosterPicker();
                 renderReleasedRosterSwapPicker();
 
                 const serverRegularMap = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
@@ -10623,64 +10607,6 @@ function todayDateInputValue(){
             if (whiteRating <= darkRating) return { team: 'White', reason: `Teams are even; White has lower/equal rating total (${whiteRating.toFixed(1)} vs ${darkRating.toFixed(1)})` };
             return { team: 'Dark', reason: `Teams are even; Dark has lower rating total (${darkRating.toFixed(1)} vs ${whiteRating.toFixed(1)})` };
         }
-        function renderWaitlistRosterPicker() {
-            const select = document.getElementById('waitlistRosterSelect');
-            if (!select) return;
-            const list = Array.isArray(adminWaitlist) ? adminWaitlist : [];
-            if (!list.length) {
-                select.innerHTML = '<option value="">No waitlist players available</option>';
-            } else {
-                select.innerHTML = '<option value="">-- Select waitlist player --</option>' + list.map((p, index) => {
-                    const rating = parseFloat(Number(p.finalRating ?? p.rating ?? 5).toFixed(1)).toString();
-                    const goalie = p.isGoalie ? ' - GOALIE' : '';
-                    return `<option value="${p.id}">#${index + 1} - ${p.firstName} ${p.lastName}${goalie} - Rating ${rating}</option>`;
-                }).join('');
-            }
-            updateWaitlistRosterHint();
-        }
-
-        function updateWaitlistRosterHint() {
-            const hint = document.getElementById('waitlistRosterHint');
-            const teamSelect = document.getElementById('waitlistRosterTeam');
-            if (!hint) return;
-            if (!currentRosterReleased) {
-                hint.textContent = 'This option appears after roster release.';
-                return;
-            }
-            const suggested = getLatePlayerSuggestedTeam();
-            hint.textContent = `Suggested team: Team ${suggested.team} — ${suggested.reason}`;
-            if (teamSelect && !teamSelect.value) teamSelect.value = suggested.team;
-        }
-
-        function applyWaitlistRosterSuggestedTeam() {
-            const teamSelect = document.getElementById('waitlistRosterTeam');
-            if (!teamSelect) return;
-            const suggested = getLatePlayerSuggestedTeam();
-            teamSelect.value = suggested.team;
-            updateWaitlistRosterHint();
-        }
-
-        async function promoteSelectedWaitlistToRoster() {
-            const playerSelect = document.getElementById('waitlistRosterSelect');
-            const teamSelect = document.getElementById('waitlistRosterTeam');
-            if (!playerSelect || !teamSelect) return;
-            const waitlistId = playerSelect.value;
-            let assignTeam = teamSelect.value;
-            if (!waitlistId) {
-                alert('Select a waitlist player first.');
-                return;
-            }
-            if (assignTeam !== 'White' && assignTeam !== 'Dark') {
-                assignTeam = getLatePlayerSuggestedTeam().team;
-                teamSelect.value = assignTeam;
-            }
-            const player = (adminWaitlist || []).find(p => String(p.id) === String(waitlistId));
-            const name = player ? `${player.firstName} ${player.lastName}` : 'this waitlist player';
-            if (!confirm(`Add ${name} to Team ${assignTeam} and remove them from the waitlist?`)) return;
-            await promotePlayer(waitlistId, assignTeam);
-        }
-
-
         function renderReleasedRosterSwapPicker() {
             const rosterSelect = document.getElementById('swapRosterPlayerSelect');
             const waitSelect = document.getElementById('swapWaitlistPlayerSelect');
@@ -10743,12 +10669,46 @@ function todayDateInputValue(){
             }
         }
 
+        async function addWaitlistPlayerNoRebalance() {
+            const waitSelect = document.getElementById('swapWaitlistPlayerSelect');
+            const teamSelect = document.getElementById('addWaitlistNoRebalanceTeam');
+            if (!waitSelect || !teamSelect) return;
+            const waitlistId = waitSelect.value;
+            const assignTeam = teamSelect.value;
+            if (!waitlistId) {
+                alert('Select a waitlist player first.');
+                return;
+            }
+            const incoming = (adminWaitlist || []).find(p => String(p.id) === String(waitlistId));
+            if (!incoming) {
+                alert('The selected waitlist player is no longer available. Refreshing the roster.');
+                await loadData();
+                return;
+            }
+            const incomingName = `${incoming.firstName} ${incoming.lastName}`;
+            if (!confirm(`Add ${incomingName} directly to Team ${assignTeam}?\n\nThe player will be removed from the waitlist. No team rebalancing will be performed.`)) return;
+            try {
+                const res = await fetch(`${API_URL}/api/admin/add-waitlist-to-released-roster-no-rebalance`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken, waitlistId, assignTeam })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.success === false) throw new Error(data.error || 'Add failed');
+                alert(`✅ ${incomingName} added to Team ${data.team}.\n\nNo rebalancing was performed.`);
+                await loadData();
+                await loadReleasedRosterPreview();
+            } catch (err) {
+                console.error('Waitlist direct-add error:', err);
+                alert(`❌ ${err.message || 'Failed to add waitlist player.'}`);
+            }
+        }
+
         function updateLatePlayerTeamUI() {
             const wrap = document.getElementById('latePlayerTeamWrap');
             const waitlistBox = document.getElementById('addToWaitlist');
             const teamSelect = document.getElementById('latePlayerTeam');
             const panel = document.getElementById('lateRosterAdminPanel');
-            const waitlistPanel = document.getElementById('waitlistToRosterPanel');
             const hint = document.getElementById('lateRosterTeamHint');
             const heading = document.getElementById('manualAddPlayerHeading');
             const button = document.getElementById('manualAddPlayerBtn');
@@ -10756,7 +10716,6 @@ function todayDateInputValue(){
             const show = !!currentRosterReleased && !(waitlistBox && waitlistBox.checked);
             wrap.style.display = show ? 'block' : 'none';
             if (panel) panel.classList.toggle('active', !!currentRosterReleased);
-            if (waitlistPanel) waitlistPanel.classList.toggle('active', !!currentRosterReleased);
             if (heading) heading.textContent = currentRosterReleased ? '🚀 Add Late Player to Roster' : '➕ Add Player Manually';
             if (button) button.textContent = currentRosterReleased && !show ? 'Add Player to Waitlist' : (currentRosterReleased ? 'Add Late Player to Roster' : 'Add Player');
             if (show) {
