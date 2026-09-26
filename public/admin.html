@@ -6545,6 +6545,25 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 </div>
 </div>
 
+<div class="waitlist-to-roster-panel" id="releasedRosterSwapPanel">
+<h3>🔄 Swap Released Roster Player with Waitlist</h3>
+<p>Replace one released-roster player with one waitlist player. The incoming player takes the outgoing player’s exact White/Dark team slot. No team rebalancing is performed.</p>
+<div class="waitlist-to-roster-grid">
+<div>
+<label style="display:block; color:#d9ecff; font-weight:700; margin-bottom:6px;">Roster player to replace</label>
+<select id="swapRosterPlayerSelect"><option value="">-- Select roster player --</option></select>
+</div>
+<div>
+<label style="display:block; color:#d9ecff; font-weight:700; margin-bottom:6px;">Waitlist replacement</label>
+<select id="swapWaitlistPlayerSelect"><option value="">-- Select waitlist player --</option></select>
+</div>
+</div>
+<div class="waitlist-to-roster-hint" id="swapRosterHint">Skaters can swap with skaters; goalies can swap with goalies.</div>
+<div class="waitlist-to-roster-actions">
+<button class="control-btn" onclick="swapReleasedRosterWithWaitlist()" style="background:#c56a00;">Swap Players — No Rebalance</button>
+</div>
+</div>
+
 <div class="released-roster-preview" id="releasedRosterPreview">
 <div class="preview-header">
 <h3>🏒 Released Roster</h3>
@@ -9458,6 +9477,7 @@ ${rosterLink}
                 latestAdminPlayers = Array.isArray(data.players) ? data.players : [];
                 renderTeamRebalanceControls();
                 renderWaitlistRosterPicker();
+                renderReleasedRosterSwapPicker();
 
                 const serverRegularMap = normalizeRegularDayBucketMap(data.regularSkatersByDay || {});
                 currentRegularSkatersByDay = serverRegularMap;
@@ -10660,6 +10680,68 @@ function todayDateInputValue(){
             await promotePlayer(waitlistId, assignTeam);
         }
 
+
+        function renderReleasedRosterSwapPicker() {
+            const rosterSelect = document.getElementById('swapRosterPlayerSelect');
+            const waitSelect = document.getElementById('swapWaitlistPlayerSelect');
+            const panel = document.getElementById('releasedRosterSwapPanel');
+            if (!rosterSelect || !waitSelect) return;
+            if (panel) panel.classList.toggle('active', !!currentRosterReleased);
+
+            const rosterPlayers = (latestAdminPlayers || []).filter(p => p && (p.team === 'White' || p.team === 'Dark'));
+            rosterSelect.innerHTML = '<option value="">-- Select roster player --</option>' + rosterPlayers.map(p => {
+                const goalie = p.isGoalie ? ' - GOALIE' : '';
+                return `<option value="${p.id}">${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)} - Team ${p.team}${goalie}</option>`;
+            }).join('');
+
+            const list = Array.isArray(adminWaitlist) ? adminWaitlist : [];
+            waitSelect.innerHTML = '<option value="">-- Select waitlist player --</option>' + list.map((p, index) => {
+                const goalie = p.isGoalie ? ' - GOALIE' : '';
+                return `<option value="${p.id}">#${index + 1} - ${escapeHtml(p.firstName)} ${escapeHtml(p.lastName)}${goalie}</option>`;
+            }).join('');
+        }
+
+        async function swapReleasedRosterWithWaitlist() {
+            const rosterSelect = document.getElementById('swapRosterPlayerSelect');
+            const waitSelect = document.getElementById('swapWaitlistPlayerSelect');
+            if (!rosterSelect || !waitSelect) return;
+            const rosterPlayerId = rosterSelect.value;
+            const waitlistId = waitSelect.value;
+            if (!rosterPlayerId || !waitlistId) {
+                alert('Select both the roster player to replace and the waitlist replacement.');
+                return;
+            }
+            const outgoing = (latestAdminPlayers || []).find(p => String(p.id) === String(rosterPlayerId));
+            const incoming = (adminWaitlist || []).find(p => String(p.id) === String(waitlistId));
+            if (!outgoing || !incoming) {
+                alert('One of the selected players is no longer available. Refreshing the roster.');
+                await loadData();
+                return;
+            }
+            if (!!outgoing.isGoalie !== !!incoming.isGoalie) {
+                alert('Swap must be skater-for-skater or goalie-for-goalie.');
+                return;
+            }
+            const outgoingName = `${outgoing.firstName} ${outgoing.lastName}`;
+            const incomingName = `${incoming.firstName} ${incoming.lastName}`;
+            if (!confirm(`Swap ${outgoingName} (Team ${outgoing.team}) with ${incomingName}?\n\n${incomingName} will take the exact Team ${outgoing.team} slot. ${outgoingName} will move to the waitlist. Teams will NOT be rebalanced.`)) return;
+
+            try {
+                const res = await fetch(`${API_URL}/api/admin/swap-released-roster-waitlist`, {
+                    method: 'POST',
+                    headers: getAdminHeaders(),
+                    body: JSON.stringify({ sessionToken, rosterPlayerId, waitlistId })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.success === false) throw new Error(data.error || 'Swap failed');
+                alert(`✅ Swap complete.\n\n${incomingName} is now on Team ${data.team}.\n${outgoingName} moved to the waitlist.\nNo rebalancing was performed.`);
+                await loadData();
+                await loadReleasedRosterPreview();
+            } catch (err) {
+                console.error('Released roster swap error:', err);
+                alert(`❌ ${err.message || 'Failed to swap players.'}`);
+            }
+        }
 
         function updateLatePlayerTeamUI() {
             const wrap = document.getElementById('latePlayerTeamWrap');

@@ -8344,6 +8344,74 @@ app.post('/api/admin/toggle-waitlist-bypass', async (req, res) => {
     return res.json({ success: true, waitlistId, bypassAutoPromote: nextValue });
 });
 
+app.post('/api/admin/swap-released-roster-waitlist', async (req, res) => {
+    const { rosterPlayerId, waitlistId } = req.body || {};
+    if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
+    if (!getEffectiveRosterReleasedState()) return res.status(409).json({ error: "Roster must be released before swapping players." });
+
+    const rosterIndex = players.findIndex(p => String(p.id) === String(rosterPlayerId));
+    const waitlistIndex = waitlist.findIndex(p => String(p.id) === String(waitlistId));
+    if (rosterIndex === -1) return res.status(404).json({ error: "Roster player not found." });
+    if (waitlistIndex === -1) return res.status(404).json({ error: "Waitlist player not found." });
+
+    const outgoing = players[rosterIndex];
+    const incoming = waitlist[waitlistIndex];
+    const assignedTeam = outgoing && (outgoing.team === 'White' || outgoing.team === 'Dark') ? outgoing.team : null;
+    if (!assignedTeam) return res.status(409).json({ error: "Selected roster player is not assigned to White or Dark." });
+    if (!!outgoing.isGoalie !== !!incoming.isGoalie) {
+        return res.status(409).json({ error: "Swap must be skater-for-skater or goalie-for-goalie." });
+    }
+
+    const outgoingName = `${outgoing.firstName || ''} ${outgoing.lastName || ''}`.trim();
+    const incomingName = `${incoming.firstName || ''} ${incoming.lastName || ''}`.trim();
+    const nowIso = new Date().toISOString();
+    const replacement = buildPromotedRosterPlayer(incoming, assignedTeam, {
+        promotedFromWaitlist: true,
+        lateAddedAfterRelease: true,
+        subbedInForPlayerId: outgoing.id,
+        subbedInForName: outgoingName,
+        subbedInAt: nowIso
+    });
+    const returnedToWaitlist = hydratePlayerRatingProfile({
+        ...outgoing,
+        team: null,
+        joinedAt: nowIso,
+        bypassAutoPromote: false,
+        promotedFromWaitlist: false,
+        lateAddedAfterRelease: false,
+        subbedInForPlayerId: null,
+        subbedInForName: null,
+        subbedInAt: null
+    });
+
+    try {
+        await runProtectedMutation('swap-released-roster-waitlist', req, async () => {
+            // True one-for-one swap. Deliberately DO NOT call rebalanceReleasedRoster().
+            players.splice(rosterIndex, 1, replacement);
+            waitlist.splice(waitlistIndex, 1, returnedToWaitlist);
+            syncCurrentWeekTeamsFromPlayers();
+        }, {
+            rosterPlayerId: outgoing.id,
+            waitlistId: incoming.id,
+            assignedTeam,
+            outgoingName,
+            incomingName,
+            rebalanced: false
+        });
+    } catch (err) {
+        console.error('Error swapping released roster player with waitlist:', err);
+        return res.status(500).json({ error: "Failed to swap players safely." });
+    }
+
+    return res.json({
+        success: true,
+        rebalanced: false,
+        team: assignedTeam,
+        outgoing: { id: outgoing.id, firstName: outgoing.firstName, lastName: outgoing.lastName },
+        incoming: { id: replacement.id, firstName: replacement.firstName, lastName: replacement.lastName }
+    });
+});
+
 app.post('/api/admin/promote-waitlist', async (req, res) => {
     const { password, sessionToken, waitlistId, assignTeam } = req.body;
     if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
