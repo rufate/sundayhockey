@@ -275,7 +275,15 @@
             margin-top: 2px;
             color: var(--accent);
         }
-        #gameLocationTime { display: none; }
+        #gameLocationTime {
+            display: none;
+            margin-top: 3px;
+            font-size: clamp(0.88rem, 2.6vw, 1.05rem);
+            font-weight: 800;
+            letter-spacing: 0.35px;
+            color: var(--accent);
+            line-height: 1.3;
+        }
         @media (max-width: 420px) {
             #gameDate { font-size: 0.86rem; letter-spacing: 0.15px; }
         }
@@ -562,20 +570,46 @@
 
             const timeText = String(gameTimeValue || '').replace(/^[A-Za-z]+\s+/, '').replace(/\s+/g, ' ').trim();
             const dateTimeText = [dateText, timeText].filter(Boolean).join(' • ');
-            // Never render arena/location in the roster header.
-            return escapeHtml(dateTimeText);
+            const locationText = String(locationValue || '').trim();
+            const locationLine = locationText
+                ? `<span class="roster-location-line">${escapeHtml(locationText)}</span>`
+                : '';
+            return `<span class="roster-date-time-line">${escapeHtml(dateTimeText)}</span>${locationLine}`;
         }
 
         async function loadRoster() {
             try {
-                const res = await fetch(`${API_URL}/api/roster`);
+                const res = await fetch(`${API_URL}/api/roster`, { cache: 'no-store' });
                 const data = await res.json();
 
-                if (data.time) {
-                    // Roster header/countdown shows only the game date and time.
-                    // Arena remains stored in game data but is intentionally not displayed here.
-                    document.getElementById('gameDate').innerHTML = formatRosterHeaderHtml(data.date, data.formattedDate, data.time, '');
-                    document.getElementById('gameLocationTime').innerText = '';
+                const gameDateEl = document.getElementById('gameDate');
+                const arenaEl = document.getElementById('gameLocationTime');
+
+                if (data.time && gameDateEl) {
+                    // Date/time stays on the first line. Arena has its own dedicated line directly underneath.
+                    gameDateEl.textContent = formatPremiumRosterLine(data.date, data.formattedDate, data.time);
+                }
+
+                if (arenaEl) {
+                    if (data.released) {
+                        // /api/roster returns the locked released-week arena via getCurrentRosterGameLocation().
+                        // If an older record somehow lacks it, /api/status supplies the same server-side fallback.
+                        let rosterLocation = String(data.location || '').trim();
+                        if (!rosterLocation) {
+                            try {
+                                const statusRes = await fetch(`${API_URL}/api/status`, { cache: 'no-store' });
+                                const statusData = await statusRes.json();
+                                rosterLocation = String(statusData.location || '').trim();
+                            } catch (locationErr) {
+                                console.warn('Could not load arena for released roster', locationErr);
+                            }
+                        }
+                        arenaEl.textContent = rosterLocation;
+                        arenaEl.style.display = rosterLocation ? 'block' : 'none';
+                    } else {
+                        arenaEl.textContent = '';
+                        arenaEl.style.display = 'none';
+                    }
                 }
 
                 if (!data.released) {

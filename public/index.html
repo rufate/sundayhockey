@@ -2568,9 +2568,9 @@
         
         <div id="gameInfoHome"></div>
         <div class="game-info" id="gameInfoCard">
-            <div class="game-date" id="gameDate">Loading...</div>
-            <div class="game-location" id="gameLocation">Loading...</div>
-            <div class="game-time" id="gameTime">Loading...</div>
+            <div class="game-date" id="gameDate" style="display:none;">Loading...</div>
+            <div class="game-location" id="gameLocation" style="display:none;">Loading...</div>
+            <div class="game-time" id="gameTime" style="display:none;">Loading...</div>
         
             <div class="hero-join-wrap">
                 <button type="button" class="hero-join-btn" id="heroJoinBtn">🏒 Join Game</button>
@@ -3704,8 +3704,11 @@ function updateCalculatedRating() {
 
             const timeText = String(gameTimeValue || '').replace(/^[A-Za-z]+\s+/, '').replace(/\s+/g, ' ').trim();
             const dateTimeText = [dateText, timeText].filter(Boolean).join(' • ');
-            // Never render arena/location in the roster header.
-            return escapeHtml(dateTimeText);
+            const locationText = String(locationValue || '').trim();
+            const locationLine = locationText
+                ? `<span class="roster-location-line">${escapeHtml(locationText)}</span>`
+                : '';
+            return `<span class="roster-date-time-line">${escapeHtml(dateTimeText)}</span>${locationLine}`;
         }
 
         async function loadAndDisplayRoster() {
@@ -3722,7 +3725,7 @@ function updateCalculatedRating() {
                     data.date || currentGameDateValue,
                     data.formattedDate || currentDate,
                     data.time || currentTime,
-                    ''
+                    data.location || currentLocation
                 );
 
                 document.getElementById('whiteCount').innerText = data.whiteActiveCount ?? (Array.isArray(data.whiteTeam) ? data.whiteTeam.filter(p => !p.cancelled).length : 0);
@@ -4285,6 +4288,14 @@ function updateCalculatedRating() {
                 document.getElementById('gameTime').innerText = '';
                 const cleanTime = currentTime.replace(/^[A-Za-z]+\s*/, '');
         document.getElementById('gameDate').innerText = currentDate + ' • ' + cleanTime;
+
+                // Show game date/time + arena in the Join Game card only BEFORE roster release.
+                // After release, those details are already shown in the Team Roster header.
+                const joinGameDateEl = document.getElementById('gameDate');
+                const joinGameLocationEl = document.getElementById('gameLocation');
+                if (joinGameDateEl) joinGameDateEl.style.display = rosterReleased ? 'none' : 'block';
+                if (joinGameLocationEl) joinGameLocationEl.style.display = rosterReleased ? 'none' : 'block';
+
                 const countdownTargetIso = rosterReleased ? currentResetWeekAt : currentRosterReleaseAt;
                 const countdownTargetFallback = rosterReleased ? 'Portal reset time to be announced' : 'Roster release time to be announced';
                 document.getElementById('rosterMeta').innerText =
