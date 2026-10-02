@@ -4558,11 +4558,14 @@ function getGameStartEtDate() {
 }
 
 function getCancellationTimingStatus(etNow = getCurrentETTime()) {
+    // Cancellation cutoff follows the scheduled game start time.
     const gameStart = getGameStartEtDate();
-    if (!gameStart) {
+    if (!gameStart || Number.isNaN(gameStart.getTime())) {
         return {
             gameStart: null,
+            rosterRelease: null,
             hoursUntilGame: null,
+            hoursUntilRosterRelease: null,
             isLateCancelWindow: false
         };
     }
@@ -4570,7 +4573,9 @@ function getCancellationTimingStatus(etNow = getCurrentETTime()) {
     const hoursUntilGame = (gameStart.getTime() - etNow.getTime()) / (1000 * 60 * 60);
     return {
         gameStart,
+        rosterRelease: null,
         hoursUntilGame,
+        hoursUntilRosterRelease: null,
         isLateCancelWindow: hoursUntilGame < cancellationCutoffHours
     };
 }

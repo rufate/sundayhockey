@@ -6088,7 +6088,7 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 <label for="cancellationCutoffHoursInput">Cancellation cutoff</label>
 <div style="display:flex; align-items:center; gap:8px;">
 <input class="control-input" id="cancellationCutoffHoursInput" min="0" max="72" step="0.5" type="number" value="3" style="max-width:120px;"/>
-<span class="custom-title-note" style="margin:0;">hours before game</span>
+<span class="custom-title-note" style="margin:0;">hours before game time</span>
 </div>
 </div>
 </div>
@@ -8046,7 +8046,7 @@ Title: ${newTitle}
 Arena: ${arena}
 Time: ${formatEtDateTimeLocal(buildDatetimeLocal(parts.dateVal, parts.hour24, parts.minute))}
 Date: ${selectedGameDate}
-Cancellation cutoff: ${cancellationCutoffHours} hour${cancellationCutoffHours === 1 ? '' : 's'} before game`);
+Cancellation cutoff: ${cancellationCutoffHours} hour${cancellationCutoffHours === 1 ? '' : 's'} before game time`);
                         await loadSettings();
                     } else {
                         alert(result.error || 'Failed to update game setup');
@@ -9015,7 +9015,7 @@ Cancellation cutoff: ${cancellationCutoffHours} hour${cancellationCutoffHours ==
             const cutoffText = Number.isInteger(cutoff) ? String(cutoff) : String(cutoff).replace(/\.0+$/, '');
             const hourWord = cutoff === 1 ? 'hr' : 'hrs';
             return {
-                gameDayRoster: `You're on game day roster. Emergency cancellation closes ${cutoffText}${hourWord} before game. Roster updates in real time for last-minute changes. Check again at rink.\n${portalLink}`,
+                gameDayRoster: `You're on game day roster. Emergency cancellation closes ${cutoffText}${hourWord} before game time. Roster updates in real time for last-minute changes. Check again at rink.\n${portalLink}`,
                 gameReminder: `If you need to cancel, please do so. Not last minute. Be considerate to those on waitlist. Thx!\n${portalLink}`,
                 checkRoster: `Cancel window is closed. Roster is locked and loaded. Let's GO!\n${portalLink}`
             };
