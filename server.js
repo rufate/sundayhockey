@@ -688,13 +688,27 @@ let currentWeekData = {
     darkTeam: []
 };
 
-// Once a roster is released, keep that week's venue fixed even if the admin
-// selects a different arena for the following week.
+// Once a roster is released, keep that week's game details fixed even if the admin
+// changes Game Setup for the following week.
 function getCurrentRosterGameLocation() {
     if (getEffectiveRosterReleasedState() && currentWeekData && String(currentWeekData.gameLocation || '').trim()) {
         return String(currentWeekData.gameLocation).trim();
     }
     return gameLocation;
+}
+
+function getCurrentRosterGameTime() {
+    if (getEffectiveRosterReleasedState() && currentWeekData && String(currentWeekData.gameTime || '').trim()) {
+        return String(currentWeekData.gameTime).trim();
+    }
+    return gameTime;
+}
+
+function getCurrentRosterGameDate() {
+    if (getEffectiveRosterReleasedState() && currentWeekData && String(currentWeekData.gameDate || '').trim()) {
+        return String(currentWeekData.gameDate).trim();
+    }
+    return gameDate;
 }
 
 function normalizeCancellationCutoffHours(value, fallback = 3) {
@@ -1785,6 +1799,35 @@ function minutesSinceEtParts(occurrenceParts, etDate = getCurrentETTime()) {
     return Math.floor((etDate.getTime() - occurrence.getTime()) / 60000);
 }
 
+function shouldRunManualResetTarget(etDate = getCurrentETTime()) {
+    if (!isManualScheduleMode()) return null;
+
+    const targetParts = parseDatetimeLocalToETDate(resetWeekAt);
+    if (!targetParts || !resetWeekSchedule || !resetWeekSchedule.at) return null;
+
+    const lagMinutes = minutesSinceEtParts(targetParts, etDate);
+    const occurrenceKey = getOccurrenceKeyFromEtParts(resetWeekSchedule.at, targetParts);
+    const minuteKey = String(nowETMinuteKey(etDate));
+
+    if (!Number.isFinite(lagMinutes) || lagMinutes < 0) {
+        return { shouldRun: false, reason: 'before_saved_reset_target', occurrenceKey, minuteKey, lagMinutes };
+    }
+    if (lagMinutes > getWeeklyResetCatchupMinutes()) {
+        return { shouldRun: false, reason: 'outside_catchup_window', occurrenceKey, minuteKey, lagMinutes };
+    }
+    if (lastExactResetRunAt === occurrenceKey) {
+        return { shouldRun: false, reason: 'already_ran_occurrence', occurrenceKey, minuteKey, lagMinutes };
+    }
+
+    return {
+        shouldRun: true,
+        reason: lagMinutes === 0 ? 'exact_minute' : 'catchup',
+        occurrenceKey,
+        minuteKey,
+        lagMinutes
+    };
+}
+
 function shouldRunScheduledAction(scheduleAt, lastRunOccurrenceKey, etDate = getCurrentETTime(), maxCatchUpMinutes = 360, options = {}) {
     if (!scheduleAt) {
         return { shouldRun: false, reason: 'missing_schedule', occurrenceKey: '', minuteKey: '', lagMinutes: null };
@@ -2100,6 +2143,8 @@ async function autoReleaseRoster() {
             releaseDate: new Date().toISOString(),
             rosterReleaseTime: Date.now(),
             gameLocation: gameLocation,
+            gameTime: gameTime,
+            gameDate: gameDate,
             whiteTeam: teams.whiteTeam,
             darkTeam: teams.darkTeam
         };
@@ -2228,12 +2273,23 @@ async function checkWeeklyReset() {
     if (!resetWeekSchedule || !resetWeekSchedule.enabled) return false;
     if (!resetWeekSchedule.at) return false;
 
-    const resetCheck = shouldRunScheduledAction(
-        resetWeekSchedule.at,
-        lastExactResetRunAt,
-        etTime,
-        getWeeklyResetCatchupMinutes()
-    );
+    // Manual schedules are anchored to the exact saved reset datetime.  Do not
+    // derive Sunday's pending reset from the recurring weekday first, because
+    // that can roll the target to the following Sunday before this reset runs.
+    // resetWeekAt advances only after a successful reset below.
+    const resetCheck = isManualScheduleMode()
+        ? (shouldRunManualResetTarget(etTime) || shouldRunScheduledAction(
+            resetWeekSchedule.at,
+            lastExactResetRunAt,
+            etTime,
+            getWeeklyResetCatchupMinutes()
+        ))
+        : shouldRunScheduledAction(
+            resetWeekSchedule.at,
+            lastExactResetRunAt,
+            etTime,
+            getWeeklyResetCatchupMinutes()
+        );
     if (!resetCheck.shouldRun) return false;
 
     const resetSafety = canSafelyRunWeeklyReset(etTime, resetWeekSchedule.at, resetCheck);
@@ -4491,13 +4547,13 @@ function normalizePhoneDigits(phone) {
 }
 
 function getGameStartEtDate() {
-    const safeDate = String(gameDate || '').trim();
+    const safeDate = String(getCurrentRosterGameDate() || '').trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(safeDate)) return null;
 
     const [year, month, day] = safeDate.split('-').map(value => parseInt(value, 10));
     if (![year, month, day].every(Number.isFinite)) return null;
 
-    const parsedTime = parseGameTimeString(gameTime);
+    const parsedTime = parseGameTimeString(getCurrentRosterGameTime());
     return new Date(year, month - 1, day, parsedTime.hour24, parsedTime.minute, 0, 0);
 }
 
@@ -5605,9 +5661,9 @@ async function savePaymentReportSnapshot(triggerSource = 'manual') {
                 reportName,
                 csvContent,
                 triggerSource,
-                gameLocation,
-                gameTime,
-                safeGameDate,
+                getCurrentRosterGameLocation(),
+                getCurrentRosterGameTime(),
+                getEffectiveRosterReleasedState() ? getCurrentRosterGameDate() : safeGameDate,
                 rosterReleased,
                 activeWeek,
                 activeYear,
@@ -5735,9 +5791,9 @@ async function saveWeekHistory(year, weekNumber, whiteTeam, darkTeam) {
                 weekNumber,
                 year,
                 new Date(),
-                (currentWeekData && String(currentWeekData.gameLocation || '').trim()) || gameLocation,
-                gameTime,
-                gameDate,
+                getCurrentRosterGameLocation(),
+                getCurrentRosterGameTime(),
+                getCurrentRosterGameDate(),
                 JSON.stringify(whiteTeamWithPayment),
                 JSON.stringify(darkTeamWithPayment),
                 whiteAvg,
@@ -6152,9 +6208,9 @@ app.get('/api/status', (req, res) => {
         manualOverride: lockStatus.manualOverride,
         manualOverrideState: lockStatus.manualOverrideState,
         location: getCurrentRosterGameLocation(),
-        time: gameTime,
-        date: gameDate,
-        formattedDate: formatGameDate(gameDate),
+        time: getCurrentRosterGameTime(),
+        date: getCurrentRosterGameDate(),
+        formattedDate: formatGameDate(getCurrentRosterGameDate()),
         rosterReleased: getEffectiveRosterReleasedState(),
         resetArmed: resetArmed,
         cancellationCutoffHours,
@@ -6219,9 +6275,9 @@ app.get('/api/waitlist', (req, res) => {
         waitlist: waitlistNames,
         totalWaitlist: waitlist.length,
         location: getCurrentRosterGameLocation(),
-        time: gameTime,
-        date: gameDate,
-        formattedDate: formatGameDate(gameDate),
+        time: getCurrentRosterGameTime(),
+        date: getCurrentRosterGameDate(),
+        formattedDate: formatGameDate(getCurrentRosterGameDate()),
         rosterReleased
     });
 });
@@ -6250,9 +6306,9 @@ app.get('/api/roster', (req, res) => {
         cancellationAllowedNow: !getCancellationTimingStatus().isLateCancelWindow,
         hoursUntilGame: getCancellationTimingStatus().hoursUntilGame,
         location: getCurrentRosterGameLocation(),
-        time: gameTime,
-        date: gameDate,
-        formattedDate: formatGameDate(gameDate),
+        time: getCurrentRosterGameTime(),
+        date: getCurrentRosterGameDate(),
+        formattedDate: formatGameDate(getCurrentRosterGameDate()),
         weekNumber: currentWeekData.weekNumber,
         year: currentWeekData.year
     });
@@ -7026,6 +7082,11 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
                 arenaOptions = normalizeArenaOptions(newArenaOptions);
             }
             if (selectedDayTime) {
+                // Preserve this released game's day/time before changing Game Setup for next week.
+                if (getEffectiveRosterReleasedState() && currentWeekData) {
+                    if (!String(currentWeekData.gameTime || '').trim()) currentWeekData.gameTime = gameTime;
+                    if (!String(currentWeekData.gameDate || '').trim()) currentWeekData.gameDate = gameDate;
+                }
                 gameTime = selectedDayTime;
                 if (canAutoRebuildSchedules()) {
                     gameDate = newGameDate || calculateNextGameDate();
@@ -7042,8 +7103,10 @@ app.post('/api/admin/update-app-settings', async (req, res) => {
             if (selectedArena) {
                 // If this week's roster is already out, capture its current venue
                 // before changing the admin selection for the following week.
-                if (getEffectiveRosterReleasedState() && currentWeekData && !String(currentWeekData.gameLocation || '').trim()) {
-                    currentWeekData.gameLocation = gameLocation;
+                if (getEffectiveRosterReleasedState() && currentWeekData) {
+                    if (!String(currentWeekData.gameLocation || '').trim()) currentWeekData.gameLocation = gameLocation;
+                    if (!String(currentWeekData.gameTime || '').trim()) currentWeekData.gameTime = gameTime;
+                    if (!String(currentWeekData.gameDate || '').trim()) currentWeekData.gameDate = gameDate;
                 }
                 gameLocation = String(selectedArena || '').trim();
                 if (gameLocation && !arenaOptions.some(a => a.toLowerCase() === gameLocation.toLowerCase())) {
@@ -8035,12 +8098,12 @@ app.post('/api/admin/update-details', async (req, res) => {
     if (!isAuthorizedAdminRequest(req)) return res.status(401).send("Unauthorized");
     try {
         await runProtectedMutation('update-details', req, async () => {
-            if (location && location.trim().length > 0) {
-                if (getEffectiveRosterReleasedState() && currentWeekData && !String(currentWeekData.gameLocation || '').trim()) {
-                    currentWeekData.gameLocation = gameLocation;
-                }
-                gameLocation = location.trim();
+            if (getEffectiveRosterReleasedState() && currentWeekData) {
+                if (!String(currentWeekData.gameLocation || '').trim()) currentWeekData.gameLocation = gameLocation;
+                if (!String(currentWeekData.gameTime || '').trim()) currentWeekData.gameTime = gameTime;
+                if (!String(currentWeekData.gameDate || '').trim()) currentWeekData.gameDate = gameDate;
             }
+            if (location && location.trim().length > 0) gameLocation = location.trim();
             if (time && time.trim().length > 0) gameTime = time.trim();
             if (date && date.trim().length > 0) gameDate = date.trim();
         }, { location, time, date });
@@ -9168,7 +9231,7 @@ app.post('/api/admin/release-roster', async (req, res) => {
             syncScheduledActionRunMarker(rosterReleaseSchedule.at, 'release', etTime);
             // Preserve the admin-controlled announcement state/text. The automatic
             // roster-release information is rendered separately on the player page.
-            currentWeekData = { weekNumber: week, year, releaseDate: new Date().toISOString(), rosterReleaseTime: Date.now(), gameLocation: gameLocation, whiteTeam: teams.whiteTeam, darkTeam: teams.darkTeam };
+            currentWeekData = { weekNumber: week, year, releaseDate: new Date().toISOString(), rosterReleaseTime: Date.now(), gameLocation: gameLocation, gameTime: gameTime, gameDate: gameDate, whiteTeam: teams.whiteTeam, darkTeam: teams.darkTeam };
         }, { week, year });
         await saveWeekHistory(year, week, teams.whiteTeam, teams.darkTeam);
         res.json({ success: true, message: "Roster released successfully. Reset arm is now ON.", whiteTeam: teams.whiteTeam, darkTeam: teams.darkTeam, whiteRating: teams.whiteRating.toFixed(1), darkRating: teams.darkRating.toFixed(1), signupLocked: requirePlayerCode, rosterReleased: true });

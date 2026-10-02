@@ -536,8 +536,8 @@
                 dateText = dateText.replace(/,?\s*\d{4}\b/g, '').replace(/,/g, '').trim().toUpperCase();
             }
             const timeText = String(gameTimeValue || '').replace(/^[A-Za-z]+\s+/, '').replace(/\s+/g, ' ').trim();
-            const locationText = String(locationValue || '').trim();
-            return [dateText, timeText, locationText].filter(Boolean).join(' • ');
+            // Arena/location intentionally omitted from roster-facing game info.
+            return [dateText, timeText].filter(Boolean).join(' • ');
         }
 
         function escapeHtml(value) {
@@ -561,11 +561,9 @@
             }
 
             const timeText = String(gameTimeValue || '').replace(/^[A-Za-z]+\s+/, '').replace(/\s+/g, ' ').trim();
-            const locationText = String(locationValue || '').trim();
             const dateTimeText = [dateText, timeText].filter(Boolean).join(' • ');
-
-            if (!locationText) return escapeHtml(dateTimeText);
-            return `<span class="roster-date-time-line">${escapeHtml(dateTimeText)}</span><span class="roster-location-line">${escapeHtml(locationText)}</span>`;
+            // Never render arena/location in the roster header.
+            return escapeHtml(dateTimeText);
         }
 
         async function loadRoster() {
@@ -573,8 +571,10 @@
                 const res = await fetch(`${API_URL}/api/roster`);
                 const data = await res.json();
 
-                if (data.location && data.time) {
-                    document.getElementById('gameDate').innerHTML = formatRosterHeaderHtml(data.date, data.formattedDate, data.time, data.location);
+                if (data.time) {
+                    // Roster header/countdown shows only the game date and time.
+                    // Arena remains stored in game data but is intentionally not displayed here.
+                    document.getElementById('gameDate').innerHTML = formatRosterHeaderHtml(data.date, data.formattedDate, data.time, '');
                     document.getElementById('gameLocationTime').innerText = '';
                 }
 

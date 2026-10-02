@@ -9210,13 +9210,12 @@ ${portalLink}
 
             const firstName = String(player.firstName || '').trim() || 'there';
             const gameLabel = getCurrentGameLabelForSms();
-            const rosterLink = `${window.location.origin}/roster`;
+            const portalLink = window.location.origin;
 
             const smsBody = `
 Hi ${firstName}, you’re in for ${gameLabel}.
 
-Check updated roster here:
-${rosterLink}
+${portalLink}
 `.trim();
 
             window.location.href = `sms:${phoneDigits}?body=${encodeURIComponent(smsBody)}`;

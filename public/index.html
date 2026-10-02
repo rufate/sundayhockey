@@ -2679,7 +2679,6 @@
                     <div class="roster-countdown-placeholder" id="rosterCountdownPlaceholder" style="display:none;">Countdown will appear once a roster release time is scheduled.</div>
                     <div class="countdown-details">
                         <div class="roster-meta" id="rosterMeta">Roster release time to be announced</div>
-                        <div class="countdown-venue" id="countdownVenue"></div>
                     </div>
                     <a href="/history" class="roster-link">View Past Weeks →</a>
                 </div>
@@ -3679,8 +3678,8 @@ function updateCalculatedRating() {
                 dateText = dateText.replace(/,?\s*\d{4}\b/g, '').replace(/,/g, '').trim().toUpperCase();
             }
             const timeText = String(gameTimeValue || '').replace(/^[A-Za-z]+\s+/, '').replace(/\s+/g, ' ').trim();
-            const locationText = String(locationValue || '').trim();
-            return [dateText, timeText, locationText].filter(Boolean).join(' • ');
+            // Arena/location intentionally omitted from roster-facing game info.
+            return [dateText, timeText].filter(Boolean).join(' • ');
         }
 
         function escapeHtml(value) {
@@ -3704,11 +3703,9 @@ function updateCalculatedRating() {
             }
 
             const timeText = String(gameTimeValue || '').replace(/^[A-Za-z]+\s+/, '').replace(/\s+/g, ' ').trim();
-            const locationText = String(locationValue || '').trim();
             const dateTimeText = [dateText, timeText].filter(Boolean).join(' • ');
-
-            if (!locationText) return escapeHtml(dateTimeText);
-            return `<span class="roster-date-time-line">${escapeHtml(dateTimeText)}</span><span class="roster-location-line">${escapeHtml(locationText)}</span>`;
+            // Never render arena/location in the roster header.
+            return escapeHtml(dateTimeText);
         }
 
         async function loadAndDisplayRoster() {
@@ -3725,7 +3722,7 @@ function updateCalculatedRating() {
                     data.date || currentGameDateValue,
                     data.formattedDate || currentDate,
                     data.time || currentTime,
-                    data.location || currentLocation
+                    ''
                 );
 
                 document.getElementById('whiteCount').innerText = data.whiteActiveCount ?? (Array.isArray(data.whiteTeam) ? data.whiteTeam.filter(p => !p.cancelled).length : 0);
@@ -4288,7 +4285,6 @@ function updateCalculatedRating() {
                 document.getElementById('gameTime').innerText = '';
                 const cleanTime = currentTime.replace(/^[A-Za-z]+\s*/, '');
         document.getElementById('gameDate').innerText = currentDate + ' • ' + cleanTime;
-                document.getElementById('countdownVenue').innerText = currentLocation || '';
                 const countdownTargetIso = rosterReleased ? currentResetWeekAt : currentRosterReleaseAt;
                 const countdownTargetFallback = rosterReleased ? 'Portal reset time to be announced' : 'Roster release time to be announced';
                 document.getElementById('rosterMeta').innerText =
