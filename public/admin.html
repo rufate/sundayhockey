@@ -9127,10 +9127,10 @@ Cancellation cutoff: ${cancellationCutoffHours} hour${cancellationCutoffHours ==
             const box = document.getElementById('rosterTextExportBox');
             if (box) box.style.display = 'block';
             refreshMassTextPreview();
-            const broadcastMessage = document.getElementById('registeredBroadcastMessage');
-            if (broadcastMessage && !broadcastMessage.value) applyRegisteredBroadcastPreset();
-            refreshRegisteredBroadcastCount();
-            return null;
+            // The old Registered Broadcast controls were removed from the admin UI.
+            // Do not call their retired helper functions here; doing so caused a
+            // successful roster swap/rebalance to be reported as "blocked".
+            return buildSignupMassTextExport();
         }
 
         async function ensureRosterContactExport() {
