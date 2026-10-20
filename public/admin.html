@@ -9725,7 +9725,7 @@ ${portalLink}
         }
 
         async function removePlayer(id) {
-            if (!confirm("Remove this player?")) return;
+            if (!confirm("Remove this player? If the roster is released, all other team assignments will remain unchanged and no waitlist player will be promoted.")) return;
             try {
                 const res = await fetch(`${API_URL}/api/admin/remove-player`, {
                     method: 'POST',

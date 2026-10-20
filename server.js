@@ -1678,26 +1678,10 @@ function getEffectiveManualResetTargetParts(etDate = getCurrentETTime()) {
         }
     }
 
-    // A stale persisted reset date must not cause an old weekly occurrence to
-    // fire against the new game cycle. Anchor the reset to the roster-release
-    // occurrence that belongs to the current/upcoming cycle.
-    if (rosterReleaseSchedule && rosterReleaseSchedule.enabled && rosterReleaseSchedule.at) {
-        const minutesAfterRelease = getForwardMinutesBetweenWeeklyPoints(rosterReleaseSchedule.at, resetWeekSchedule.at);
-        if (Number.isFinite(minutesAfterRelease) && minutesAfterRelease > 0) {
-            const latestRelease = getLatestOccurrenceEtParts(rosterReleaseSchedule.at, etDate);
-            const latestCandidate = latestRelease ? addMinutesToEtParts(latestRelease, minutesAfterRelease) : null;
-            const latestCandidateKey = etPartsToMinuteKey(latestCandidate);
-            if (latestCandidate && Number.isFinite(latestCandidateKey) && latestCandidateKey >= nowKey) {
-                return latestCandidate;
-            }
-
-            const nextRelease = getCurrentOrNextOccurrenceEtParts(rosterReleaseSchedule.at, etDate);
-            const nextCandidate = nextRelease ? addMinutesToEtParts(nextRelease, minutesAfterRelease) : null;
-            if (nextCandidate) return nextCandidate;
-        }
-    }
-
-    return getCurrentOrNextOccurrenceEtParts(resetWeekSchedule.at, etDate);
+    // A missed occurrence must not be silently advanced by display calculations.
+    // Keep the saved target until a successful reset (or an explicit admin edit).
+    // This is independent of weekday and prevents the Sunday date from jumping.
+    return storedParts || getCurrentOrNextOccurrenceEtParts(resetWeekSchedule.at, etDate);
 }
 
 function getDynamicScheduleDatetimeLocalValues(etDate = getCurrentETTime()) {
@@ -2278,18 +2262,14 @@ async function checkWeeklyReset() {
     // that can roll the target to the following Sunday before this reset runs.
     // resetWeekAt advances only after a successful reset below.
     const resetCheck = isManualScheduleMode()
-        ? (shouldRunManualResetTarget(etTime) || shouldRunScheduledAction(
-            resetWeekSchedule.at,
-            lastExactResetRunAt,
-            etTime,
-            getWeeklyResetCatchupMinutes()
-        ))
+        ? shouldRunManualResetTarget(etTime)
         : shouldRunScheduledAction(
             resetWeekSchedule.at,
             lastExactResetRunAt,
             etTime,
             getWeeklyResetCatchupMinutes()
         );
+    if (!resetCheck) return false;
     if (!resetCheck.shouldRun) return false;
 
     const resetSafety = canSafelyRunWeeklyReset(etTime, resetWeekSchedule.at, resetCheck);
@@ -2377,8 +2357,10 @@ async function checkWeeklyReset() {
     // reset target. Manual Friday/Sunday schedules therefore keep the same
     // exact date on screen until the reset really happens.
     if (isManualScheduleMode()) {
-        const completedResetParts = getEffectiveManualResetTargetParts(etTime);
+        const completedResetParts = parseDatetimeLocalToETDate(resetWeekAt);
         if (completedResetParts) {
+            // Advance from the occurrence actually completed, not from a
+            // recalculated future display target.
             resetWeekAt = etPartsToDatetimeLocal(addMinutesToEtParts(completedResetParts, 7 * 24 * 60));
         } else {
             const nextResetParts = getNextOccurrenceEtParts(resetWeekSchedule.at, etTime);
@@ -8647,31 +8629,18 @@ app.post('/api/admin/remove-player', async (req, res) => {
             appendCancellationLog({ id: removedPlayer.id, firstName: removedPlayer.firstName, lastName: removedPlayer.lastName, phone: removedPlayer.phone, rating: removedPlayer.rating, isGoalie: removedPlayer.isGoalie, paymentMethod: removedPlayer.paymentMethod, source: 'players', action: 'removed', cancelledBy: 'admin', cancelledAt: new Date().toISOString() });
             if (!removedPlayer.isGoalie) remainingSkaterSpots = Math.min(skaterCapacity, remainingSkaterSpots + 1);
 
-            if (rosterReleased) {
-                const replacement = extractWaitlistPlayerToPromote({ preferGoalie: !!removedPlayer.isGoalie });
-                if (replacement) {
-                    autoPromotedPlayer = buildPromotedRosterPlayer(
-                        replacement,
-                        removedPlayer.team === 'White' || removedPlayer.team === 'Dark' ? removedPlayer.team : null,
-                        {
-                            promotedFromWaitlist: true,
-                            lateAddedAfterRelease: true,
-                            subbedInForPlayerId: removedPlayer.id,
-                            subbedInForName: `${removedPlayer.firstName || ''} ${removedPlayer.lastName || ''}`.trim(),
-                            subbedInAt: new Date().toISOString()
-                        }
-                    );
-                    players.push(autoPromotedPlayer);
-                    if (!autoPromotedPlayer.isGoalie) remainingSkaterSpots = Math.max(0, remainingSkaterSpots - 1);
-                }
-                rebalanceReleasedRoster(autoPromotedPlayer ? 'admin-remove-player-waitlist-auto-promotion' : 'admin-remove-player-open-spot');
+            // Admin removal is a direct deletion, including after roster release.
+            // Do not promote a waitlisted player or rebalance the remaining teams.
+            // Rebuild the published team lists from unchanged player team assignments.
+            if (getEffectiveRosterReleasedState()) {
+                syncCurrentWeekTeamsFromPlayers();
             }
         }, { playerId: idToRemove, rosterReleased, removedTeam: player.team || null });
     } catch (err) {
         console.error('Error removing player:', err);
         return res.status(500).json({ error: "Failed to remove player safely" });
     }
-    res.json({ success: true, spots: remainingSkaterSpots, removedPlayer: player, autoPromotedPlayer, rosterReleased });
+    res.json({ success: true, spots: remainingSkaterSpots, removedPlayer: player, autoPromotedPlayer, rosterReleased, rebalanced: false });
 });
 
 app.post('/api/admin/update-spots', async (req, res) => {
@@ -9369,7 +9338,17 @@ app.get('/api/admin/export-payments', async (req, res) => {
     try {
         const csvContent = buildPaymentReportCsv();
         res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', `attachment; filename="hockey-payments-${gameDate || 'current'}.csv"`);
+        // Prefix the CSV with the weekday of the game date (e.g. sunday-hockey-payments-2026-10-18.csv).
+        // Parse as UTC to avoid timezone shifts changing the weekday.
+        const exportDate = /^\d{4}-\d{2}-\d{2}$/.test(gameDate || '')
+            ? gameDate
+            : new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit'
+            }).format(new Date());
+        const exportWeekday = new Intl.DateTimeFormat('en-US', {
+            weekday: 'long', timeZone: 'UTC'
+        }).format(new Date(`${exportDate}T12:00:00Z`)).toLowerCase();
+        res.setHeader('Content-Disposition', `attachment; filename="${exportWeekday}-hockey-payments-${exportDate}.csv"`);
         res.send(csvContent);
     } catch (err) {
         console.error('Export error:', err);
