@@ -2288,6 +2288,26 @@ async function checkWeeklyReset() {
         console.error('[ET SCHEDULER] Payment snapshot failed before weekly reset; continuing reset:', err);
     }
 
+    // SAFETY: A weekly reset clears the active roster. Require a durable, restorable
+    // PostgreSQL snapshot BEFORE changing any in-memory or database state.
+    // Never silently reset while the database is disconnected or snapshots fail.
+    if (!pool) {
+        console.error('[ET SCHEDULER] Weekly reset BLOCKED: database unavailable for pre-reset snapshot.');
+        return false;
+    }
+    const beforeWeeklyReset = buildFullDataSnapshot();
+    try {
+        const preResetBackup = await insertDatabaseSnapshot(beforeWeeklyReset, 'pre-weekly-reset', pool);
+        if (!preResetBackup || !preResetBackup.ok || !preResetBackup.id) {
+            console.error('[ET SCHEDULER] Weekly reset BLOCKED: no durable pre-reset snapshot was created.', preResetBackup);
+            return false;
+        }
+        console.log(`[ET SCHEDULER] Pre-reset database snapshot saved: ${preResetBackup.id}`);
+    } catch (err) {
+        console.error('[ET SCHEDULER] Weekly reset BLOCKED: pre-reset snapshot failed:', err);
+        return false;
+    }
+
     // Preserve persistent player profile fields before clearing the weekly roster.
     rememberCurrentAdminRatings();
     rememberCurrentPlayerNicknames();
@@ -2342,15 +2362,8 @@ async function checkWeeklyReset() {
 
     // Keep weekly schedule run markers intact so the same scheduled release cannot fire twice.
 
-    if (pool) {
-        try {
-            await pool.query('DELETE FROM players');
-            await pool.query('DELETE FROM waitlist');
-        } catch (err) {
-            console.error('Error clearing data during scheduled reset:', err);
-        }
-    }
-
+    // Do not delete tables separately here. saveData() replaces both rosters
+    // within a single PostgreSQL transaction; a failed write rolls back both.
     await addAutoPlayers(weeklyAutoAdds);
 
     // A successful reset is the only event allowed to advance the persisted
@@ -2370,7 +2383,14 @@ async function checkWeeklyReset() {
 
     lastExactResetRunAt = resetCheck.occurrenceKey;
     lastExactResetMinuteKey = resetCheck.minuteKey;
-    await saveData();
+    const resetSave = await saveData('weekly-reset');
+    if (!resetSave || !resetSave.ok || (pool && (!resetSave.database || !resetSave.database.ok))) {
+        // The pre-reset DB snapshot is still available for recovery. Restore the
+        // live process state so an unsuccessful reset does not appear successful.
+        applySnapshotToMemory(beforeWeeklyReset);
+        console.error('[ET SCHEDULER] Weekly reset NOT completed: database persistence failed.', resetSave);
+        return false;
+    }
     console.log(`[ET SCHEDULER] Weekly reset completed successfully; next stored reset target: ${resetWeekAt || 'auto schedule'}`);
     return true;
 }
@@ -2454,6 +2474,7 @@ async function runSchedulerTick() {
         checkMaintenanceModeSchedule();
         checkAutoLock();
         await autoReleaseRoster();
+        await createDailyPreMidnightSnapshot(etTime);
         await checkWeeklyReset();
         const afterSnapshot = buildFullDataSnapshot();
         const afterFingerprint = buildPersistedStateFingerprint(afterSnapshot);
@@ -2998,7 +3019,7 @@ const DATA_FILE = './data.json';
 const SETTINGS_BACKUP_FILE = './app-settings.backup.json';
 const SNAPSHOT_DIR = './data-backups';
 const SNAPSHOT_RETENTION = Number(process.env.LOCAL_SNAPSHOT_RETENTION || 100);
-const DB_SNAPSHOT_RETENTION = Number(process.env.DB_SNAPSHOT_RETENTION || 100);
+const DB_SNAPSHOT_RETENTION = Number(process.env.DB_SNAPSHOT_RETENTION || 365);
 const DB_SNAPSHOT_FORCE_ON_EVERY_SAVE = String(process.env.DB_SNAPSHOT_FORCE_ON_EVERY_SAVE || 'false').toLowerCase() === 'true';
 const REQUEST_SNAPSHOT_ENABLED = String(process.env.REQUEST_SNAPSHOT_ENABLED || 'false').toLowerCase() === 'true';
 const REQUEST_SNAPSHOT_MIN_INTERVAL_MS = Number(process.env.REQUEST_SNAPSHOT_MIN_INTERVAL_MS || 60000);
@@ -3019,6 +3040,7 @@ const DURABLE_SNAPSHOT_REASONS = new Set([
     'player-signup',
     'player-cancel',
     'manual-create-snapshot',
+    'daily-pre-midnight',
     'pre-restore-safety'
 ]);
 
@@ -3216,6 +3238,35 @@ async function insertDatabaseSnapshot(snapshot, reason = 'saveData', clientOrPoo
     await pruneDatabaseSnapshotsIfNeeded(clientOrPool);
     const row = result.rows && result.rows[0] ? result.rows[0] : {};
     return { ok: true, id: row.id || null, createdAt: row.created_at || null, metadata };
+}
+
+// Daily durable Quick Restore checkpoint, Eastern time, once per calendar day.
+// The scheduler retries on subsequent ticks between 11:55 PM and midnight if Neon fails.
+async function createDailyPreMidnightSnapshot(etTime = getCurrentETTime()) {
+    if (!pool) return; // Never treat Render's ephemeral filesystem as a durable daily backup.
+    const hour = etTime.getHours();
+    const minute = etTime.getMinutes();
+    if (hour !== 23 || minute < 55) return;
+
+    const day = getETDateString(etTime);
+    const reason = `daily-pre-midnight:${day}`;
+    // Database uniqueness across restarts, and advisory lock across multiple instances.
+    const client = await pool.connect();
+    let locked = false;
+    try {
+        const lock = await client.query('SELECT pg_try_advisory_lock($1, $2) AS locked', [20261023, 2355]);
+        locked = !!lock.rows[0]?.locked;
+        if (!locked) return;
+        const existing = await client.query('SELECT id FROM data_snapshots WHERE snapshot_reason = $1 LIMIT 1', [reason]);
+        if (existing.rowCount) return;
+        const snapshot = buildFullDataSnapshot();
+        const result = await insertDatabaseSnapshot(snapshot, reason, client);
+        if (!result.ok) throw new Error('Daily database snapshot was not saved');
+        console.log(`[DAILY SNAPSHOT] ${day} saved to Neon snapshot ID ${result.id}`);
+    } finally {
+        if (locked) await client.query('SELECT pg_advisory_unlock($1, $2)', [20261023, 2355]).catch(err => console.error('Snapshot unlock failed:', err));
+        client.release();
+    }
 }
 
 async function getLatestDatabaseSnapshot() {
