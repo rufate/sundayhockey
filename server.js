@@ -165,10 +165,23 @@ app.use(helmet({
     contentSecurityPolicy: false,
     crossOriginResourcePolicy: false
 }));
-app.use(cors());
+// Same-origin browser requests by default. Set CORS_ALLOWED_ORIGINS only if needed.
+const allowedCorsOrigins = new Set(String(process.env.CORS_ALLOWED_ORIGINS || '').split(',').map(v => v.trim()).filter(Boolean));
+app.use(cors({ origin(origin, callback) {
+    if (!origin || allowedCorsOrigins.has(origin)) return callback(null, true);
+    return callback(null, false);
+}}));
+// Never cache sensitive API responses or administrative pages.
+app.use((req, res, next) => {
+    if (req.path.startsWith('/api/admin/') || req.path === '/admin' || req.path.endsWith('/admin.html')) {
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Pragma', 'no-cache');
+    }
+    next();
+});
 app.use(express.json({ limit: '12mb' }));
 app.use(express.urlencoded({ extended: true, limit: '12mb' }));
-app.use(express.static('public'));
+app.use(express.static('public', { dotfiles: 'deny', index: false }));
 
 function shouldTriggerSchedulerOnRequest(req) {
     const method = String(req.method || '').toUpperCase();
@@ -549,7 +562,10 @@ function hasConfiguredAdminPassword() {
 }
 
 function isValidAdminPassword(password) {
-    return hasConfiguredAdminPassword() && String(password || '').trim() === ADMIN_PASSWORD;
+    if (!hasConfiguredAdminPassword() || typeof password !== 'string') return false;
+    const supplied = Buffer.from(password.trim(), 'utf8');
+    const expected = Buffer.from(ADMIN_PASSWORD, 'utf8');
+    return supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
 }
 
 let adminSessionState = {
@@ -591,10 +607,6 @@ function pruneAdminSessionState() {
 }
 
 function getClientIp(req) {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string' && forwarded.trim()) {
-        return forwarded.split(',')[0].trim();
-    }
     return req.ip || req.socket?.remoteAddress || 'unknown';
 }
 
@@ -3036,18 +3048,29 @@ let latestLocalSnapshotMeta = { exists: false, savedAt: null, file: null, player
 let saveQueue = Promise.resolve();
 let recentDataAudit = [];
 
+// All meaningful, changed portal saves receive a durable Neon snapshot.
+// Routine startup/shutdown maintenance is excluded to avoid backup churn.
 const DURABLE_SNAPSHOT_REASONS = new Set([
-    'player-signup',
-    'player-cancel',
-    'manual-create-snapshot',
-    'daily-pre-midnight',
-    'pre-restore-safety'
+    'player-signup', 'player-cancel', 'manual-create-snapshot',
+    'daily-pre-midnight', 'pre-restore-safety'
 ]);
-
+const NON_MUTATION_SNAPSHOT_PREFIXES = [
+    'startup-', 'shutdown-', 'self-heal-', 'reconcile-best-local-snapshot'
+];
 function shouldCreateDurableSnapshot(reason = '') {
+    const normalized = String(reason || 'saveData').trim().toLowerCase();
+    if (DB_SNAPSHOT_FORCE_ON_EVERY_SAVE) return true;
+    if (NON_MUTATION_SNAPSHOT_PREFIXES.some(prefix => normalized.startsWith(prefix))) return false;
+    // Daily and manual restore points are always durable; all other actual
+    // state mutations are captured after the fingerprint check in saveData.
+    return true;
+}
+function mustPersistWithoutStateChange(reason = '') {
     const normalized = String(reason || '').trim().toLowerCase();
-    if (!normalized) return !!DB_SNAPSHOT_FORCE_ON_EVERY_SAVE;
-    return DURABLE_SNAPSHOT_REASONS.has(normalized) || normalized.startsWith('pre-') || normalized.includes('pre-mutation') || DB_SNAPSHOT_FORCE_ON_EVERY_SAVE;
+    return normalized === 'manual-create-snapshot' ||
+        normalized.startsWith('daily-pre-midnight') ||
+        normalized.startsWith('pre-') ||
+        normalized.includes('pre-mutation');
 }
 
 
@@ -4071,7 +4094,7 @@ async function replaceDatabaseStateFromMemory(reason = 'saveData', snapshot = nu
 async function saveData(reason = 'saveData', options = {}) {
     const snapshot = options.snapshot || buildFullDataSnapshot();
     const fingerprint = options.fingerprint || buildPersistedStateFingerprint(snapshot);
-    const forcePersist = !!options.forcePersist || shouldCreateDurableSnapshot(reason);
+    const forcePersist = !!options.forcePersist || mustPersistWithoutStateChange(reason);
 
     saveQueue = saveQueue.then(async () => {
         if (!forcePersist && fingerprint && fingerprint === lastPersistedStateFingerprint) {
@@ -7667,6 +7690,22 @@ async function replacePortalHistoryFromBackup(historyRows = []) {
         client.release();
     }
 }
+
+// Read-only change marker for the admin's optional device backup reminder.
+// A SHA-256 digest avoids exposing player data in the status response.
+app.post('/api/admin/backup-change-status', (req, res) => {
+    if (!isAuthorizedAdminRequest(req)) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+        const crypto = require('crypto');
+        const fingerprint = buildPersistedStateFingerprint();
+        const version = crypto.createHash('sha256').update(fingerprint).digest('hex');
+        res.setHeader('Cache-Control', 'no-store');
+        return res.json({ version });
+    } catch (err) {
+        console.error('Backup change status failed:', err);
+        return res.status(500).json({ error: 'Unable to check backup changes' });
+    }
+});
 
 app.post('/api/admin/download-backup', async (req, res) => {
     const { sessionToken } = req.body || {};
