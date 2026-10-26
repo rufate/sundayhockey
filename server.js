@@ -3243,6 +3243,25 @@ async function insertDatabaseSnapshot(snapshot, reason = 'saveData', clientOrPoo
     }
 
     const metadata = buildSnapshotMetadata(snapshot, reason);
+    // Avoid filling Neon with identical restore points. A pre-mutation snapshot
+    // is still retained whenever the last durable snapshot represents different data.
+    // Explicit manual, daily and reset/restore safety checkpoints are exempt.
+    const reasonKey = String(reason || '').toLowerCase();
+    const mandatoryCheckpoint = reasonKey === 'manual-create-snapshot' ||
+        reasonKey.startsWith('daily-pre-midnight') ||
+        reasonKey.includes('weekly-reset') ||
+        reasonKey.includes('restore');
+    if (!mandatoryCheckpoint) {
+        const latest = await clientOrPool.query(
+            'SELECT snapshot_json FROM data_snapshots ORDER BY id DESC LIMIT 1'
+        );
+        if (latest.rows.length) {
+            const previous = latest.rows[0].snapshot_json;
+            if (buildPersistedStateFingerprint(previous) === buildPersistedStateFingerprint(snapshot)) {
+                return { ok: true, skipped: true, reason: 'identical-to-latest-snapshot' };
+            }
+        }
+    }
     const result = await clientOrPool.query(
         `INSERT INTO data_snapshots (
             snapshot_name,
