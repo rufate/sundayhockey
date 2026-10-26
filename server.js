@@ -2117,16 +2117,13 @@ async function autoReleaseRoster() {
         if (!releaseCheck.shouldRun) return false;
     }
 
-    lastExactRosterReleaseRunAt = releaseCheck.occurrenceKey;
-    lastExactRosterReleaseMinuteKey = releaseCheck.minuteKey;
-    await saveData();
-
+    // Commit the occurrence marker only after the release is persisted.
+    // A failed attempt must remain eligible for the next scheduler tick.
     try {
         const { week, year } = getWeekNumber(etTime);
         const teams = generateFairTeams();
 
         rosterReleased = true;
-       collectorPageEnabled = true;
         collectorPageEnabled = true;
         resetArmed = true;
 
@@ -2170,10 +2167,19 @@ async function autoReleaseRoster() {
             rosterReleaseAt = etPartsToDatetimeLocal(addMinutesToEtParts(releasedTargetParts, 7 * 24 * 60));
         }
 
+        const releaseSave = await saveData();
+        if (releaseSave === false || (releaseSave && releaseSave.success === false)) {
+            throw new Error('Roster release persistence failed');
+        }
+        lastExactRosterReleaseRunAt = releaseCheck.occurrenceKey;
+        lastExactRosterReleaseMinuteKey = releaseCheck.minuteKey;
         await saveData();
+        console.log(`[ET SCHEDULER] Automatic roster released for ${releaseCheck.occurrenceKey}`);
         return true;
     } catch (error) {
         console.error('Auto-release error:', error);
+        // Re-read durable state on a future scheduler tick rather than
+        // permanently marking an unsuccessful attempt as complete.
         return false;
     }
 }
@@ -8359,10 +8365,17 @@ app.post('/api/admin/update-schedules', async (req, res) => {
             resetWeekSchedule.at = resetWeekAt ? parseDatetimeLocalToDowTime(resetWeekAt) : null;
 
             const guardTime = getCurrentETTime();
+            // A newly saved future release must NOT be pre-marked as executed.
+            // Keep the marker only when it corresponds to an actual released roster.
             const rosterGuard = armScheduleGuardForCurrentWeek(rosterReleaseSchedule.at, guardTime);
             const resetGuard = armScheduleGuardForCurrentWeek(resetWeekSchedule.at, guardTime);
-            lastExactRosterReleaseRunAt = rosterGuard.occurrenceKey;
-            lastExactRosterReleaseMinuteKey = rosterGuard.minuteKey;
+            if (!rosterReleased) {
+                lastExactRosterReleaseRunAt = '';
+                lastExactRosterReleaseMinuteKey = '';
+            } else if (rosterGuard.occurrenceKey && !lastExactRosterReleaseRunAt) {
+                lastExactRosterReleaseRunAt = rosterGuard.occurrenceKey;
+                lastExactRosterReleaseMinuteKey = rosterGuard.minuteKey;
+            }
             lastExactResetRunAt = resetGuard.occurrenceKey;
             lastExactResetMinuteKey = resetGuard.minuteKey;
         }, { signupLockEnabled, rosterReleaseEnabled, resetWeekEnabled });
