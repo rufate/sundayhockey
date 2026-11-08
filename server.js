@@ -7013,7 +7013,7 @@ app.post('/api/admin/check-session', (req, res) => {
     });
 });
 
-app.post('/api/admin/login', adminLoginLimiter, (req, res) => {
+app.post('/api/admin/login', (req, res) => {
     const { password, rememberMe } = req.body || {};
 
     if (!hasConfiguredAdminPassword()) {

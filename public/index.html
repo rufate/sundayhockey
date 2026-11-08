@@ -1204,6 +1204,12 @@
             display: inline;
         }
 
+
+/* Flash available places only after roster release; respect reduced motion. */
+@keyframes hockeySpotFlash { 0%,49.9% { opacity:1; } 50%,100% { opacity:0; } }
+.announcement-spots.spots-flash { animation:hockeySpotFlash 1s steps(1,end) infinite; }
+@media (prefers-reduced-motion:reduce) { .announcement-spots.spots-flash { animation:none; } }
+
         .announcement-spots.available {
             color: #2e7d32;
         }
@@ -3908,7 +3914,7 @@ function updateCalculatedRating() {
                     let safeLine = wrapUrls(wrapEmails(escapeHtml(line)));
                     safeLine = safeLine
                         .split(spotsToken)
-                        .join(`<span class="announcement-spots ${spotsClass}">${escapeHtml(spotsText)}</span>`);
+                        .join(`<span class="announcement-spots ${spotsClass}${isRosterAnnouncement && hasSpots ? ' spots-flash' : ''}">${escapeHtml(spotsText)}</span>`);
                     return `<div class="announcement-line${extraClass ? ` ${extraClass}` : ''}">${safeLine || '&nbsp;'}</div>`;
                 })
                 .join('');

@@ -13630,67 +13630,60 @@ white-space:pre-wrap !important;
 
 
 
-<script id="hp-optional-device-backup-v1">
+<script id="hp-intelligent-device-backup-v3">
 (function () {
     'use strict';
-    const key = 'hp-device-backup-version-v1:' + location.origin;
+    const panel = document.getElementById('adminPanel');
+    if (!panel) return;
+    const storageKey = 'hp-device-backup-version-v3:' + location.origin;
+    let checkedThisOpen = false;
     let latestVersion = null;
-    let dismissedVersion = null;
-    let checking = false;
     let dialog = null;
-    function removePrompt() { if (dialog) { dialog.remove(); dialog = null; } }
-    function showPrompt(version) {
-        if (dialog || document.hidden || !sessionToken || dismissedVersion === version) return;
-        dialog = document.createElement('div');
-        dialog.setAttribute('role', 'dialog');
-        dialog.setAttribute('aria-modal', 'true');
-        dialog.setAttribute('aria-label', 'Hockey Portal backup available');
-        dialog.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2147483640;display:flex;align-items:center;justify-content:center;padding:18px';
-        const panel = document.createElement('div');
-        panel.style.cssText = 'background:#18283c;color:white;padding:24px;border-radius:14px;max-width:420px;width:100%;box-shadow:0 12px 40px #0008;font:16px Arial,sans-serif';
-        const heading = document.createElement('h2'); heading.textContent = 'Hockey Portal Backup'; heading.style.marginTop = '0';
-        const msg = document.createElement('p'); msg.textContent = 'Portal information has changed since your last device backup. Download an updated backup now?';
-        const actions = document.createElement('div'); actions.style.cssText = 'display:flex;gap:12px;flex-wrap:wrap';
-        const download = document.createElement('button'); download.type = 'button'; download.textContent = '⬇ Download Backup';
-        download.style.cssText = 'background:#258b47;color:white;border:0;border-radius:8px;padding:13px;cursor:pointer;flex:1';
-        const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Cancel';
-        cancel.style.cssText = 'background:#596679;color:white;border:0;border-radius:8px;padding:13px;cursor:pointer';
-        cancel.onclick = function () { dismissedVersion = version; removePrompt(); };
-        download.onclick = async function () {
-            download.disabled = true;
-            try { await downloadBackup(); } finally { download.disabled = false; }
-        };
-        actions.append(download, cancel); panel.append(heading, msg, actions); dialog.append(panel); document.body.append(dialog);
-    }
+    function isOpen() { return panel.style.display === 'block' && !document.hidden && !!sessionToken; }
+    function close() { if (dialog) { dialog.remove(); dialog = null; } }
     window.markPortalBackupDownloaded = function () {
-        if (latestVersion) {
-            try { localStorage.setItem(key, latestVersion); } catch (_) {}
-            dismissedVersion = latestVersion;
-        }
-        removePrompt();
+        if (latestVersion) { try { localStorage.setItem(storageKey, latestVersion); } catch (_) {} }
+        close();
     };
     async function check() {
-        if (checking || !sessionToken || document.hidden) return;
-        checking = true;
+        if (!isOpen()) { checkedThisOpen = false; close(); return; }
+        if (checkedThisOpen) return;
+        checkedThisOpen = true;
         try {
-            const response = await fetch(`${API_URL}/api/admin/backup-change-status`, {
-                method: 'POST', headers: getAdminHeaders(),
-                body: JSON.stringify({ sessionToken }), cache: 'no-store'
+            const response = await adminFetch(`${API_URL}/api/admin/backup-change-status`, {
+                method: 'POST', body: JSON.stringify({ sessionToken }), cache: 'no-store'
             });
             if (!response.ok) return;
             const data = await response.json();
-            if (!/^[a-f0-9]{64}$/.test(data.version || '')) return;
+            if (!/^[a-f0-9]{64}$/i.test(data.version || '')) return;
             latestVersion = data.version;
             let saved = null;
-            try { saved = localStorage.getItem(key); } catch (_) {}
-            if (saved !== latestVersion) showPrompt(latestVersion);
+            try { saved = localStorage.getItem(storageKey); } catch (_) {}
+            if (saved === latestVersion || !isOpen()) return;
+            dialog = document.createElement('div');
+            dialog.setAttribute('role', 'dialog');
+            dialog.setAttribute('aria-modal', 'true');
+            dialog.style.cssText = 'position:fixed;inset:0;z-index:2147483640;background:#000b;display:flex;align-items:center;justify-content:center;padding:18px';
+            const box = document.createElement('div');
+            box.style.cssText = 'background:#18283c;color:white;padding:24px;border-radius:14px;max-width:420px;width:100%;font:16px Arial,sans-serif';
+            const heading = document.createElement('h2'); heading.textContent = 'Hockey Portal Backup';
+            const message = document.createElement('p'); message.textContent = 'Portal information has changed since your last device backup. Download an updated backup now?';
+            const buttons = document.createElement('div'); buttons.style.cssText = 'display:flex;gap:12px;margin-top:20px';
+            const save = document.createElement('button'); save.type = 'button'; save.textContent = 'Download Backup';
+            save.style.cssText = 'background:#258b47;color:white;border:0;padding:12px;border-radius:8px;flex:1;cursor:pointer';
+            const skip = document.createElement('button'); skip.type = 'button'; skip.textContent = 'Not Now';
+            skip.style.cssText = 'background:#596679;color:white;border:0;padding:12px;border-radius:8px;cursor:pointer';
+            // Not Now suppresses this version on this device; future changes prompt again.
+            skip.onclick = window.markPortalBackupDownloaded;
+            save.onclick = async function () { save.disabled = true; try { await downloadBackup(); } finally { save.disabled = false; } };
+            buttons.append(save, skip); box.append(heading, message, buttons); dialog.append(box); document.body.append(dialog);
         } catch (err) { console.warn('Backup reminder check failed:', err); }
-        finally { checking = false; }
     }
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
-    window.addEventListener('focus', check);
-    setInterval(check, 60000);
-    setTimeout(check, 2500);
+    new MutationObserver(check).observe(panel, { attributes: true, attributeFilter: ['style'] });
+    document.addEventListener('visibilitychange', check);
+    // Login and display transitions may occur after page load.
+    document.addEventListener('click', function () { setTimeout(check, 0); });
+    check();
 })();
 </script>
 </body>
